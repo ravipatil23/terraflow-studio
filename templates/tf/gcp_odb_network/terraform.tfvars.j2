@@ -1,0 +1,24 @@
+# modules/{{ module_name }}/terraform.tfvars
+
+odb_network_id      = "{{ odb_network_id }}"
+location            = "{{ location }}"
+network             = "{{ network }}"
+{% if project %}
+project             = "{{ project }}"
+{% else %}
+# project             = "my-gcp-project"
+{% endif %}
+{% if gcp_oracle_zone %}
+gcp_oracle_zone     = "{{ gcp_oracle_zone }}"
+{% else %}
+# gcp_oracle_zone     = "us-east4-b-r1"
+{% endif %}
+deletion_protection = {{ deletion_protection }}
+
+labels = {
+{% for k, v in labels.items() %}
+  "{{ k }}" = "{{ v }}"
+{% else %}
+  "managed-by" = "terraform"
+{% endfor %}
+}

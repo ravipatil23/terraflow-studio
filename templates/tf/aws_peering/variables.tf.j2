@@ -1,0 +1,50 @@
+# modules/{{ module_name }}/variables.tf
+
+variable "display_name" {
+  type = string
+{% if display_name %}
+  default = "{{ display_name }}"
+{% endif %}
+}
+
+variable "odb_network_id" {
+  description = "ID of the source ODB network — auto-wired from module.{{ mn0 }}.network_id in root."
+  type        = string
+{% if odb_network_id and not odb_network_id_is_ref %}
+  default     = "{{ odb_network_id }}"
+{% else %}
+  # wired from module.{{ mn0 }}.network_id in root main.tf
+{% endif %}
+}
+
+variable "peer_network_id" {
+  description = "ID of the peer VPC."
+  type        = string
+{% if peer_network_id and not peer_network_id_is_ref %}
+  default     = "{{ peer_network_id }}"
+{% else %}
+  # supply from caller
+{% endif %}
+}
+
+variable "region" {
+  type    = string
+  default = "{{ region }}"
+}
+
+variable "additional_peer_network_cidrs" {
+  description = "Extra CIDRs from the peered VPC."
+  type        = list(string)
+  default     = [{{ cidrs | map("tojson") | join(", ") }}]
+}
+
+variable "tags" {
+  type = map(string)
+  default = {
+{% for k, v in tags.items() %}
+    "{{ k }}" = "{{ v }}"
+{% else %}
+    "ManagedBy" = "Terraform"
+{% endfor %}
+  }
+}

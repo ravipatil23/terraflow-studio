@@ -1,0 +1,32 @@
+# modules/{{ module_name }}/terraform.tfvars
+
+display_name          = "{{ display_name }}"
+availability_zone_id  = "{{ availability_zone_id }}"
+client_subnet_cidr    = "{{ client_subnet_cidr }}"
+backup_subnet_cidr    = "{{ backup_subnet_cidr }}"
+s3_access             = "{{ s3_access }}"
+zero_etl_access       = "{{ zero_etl_access }}"
+{% if availability_zone %}
+availability_zone     = "{{ availability_zone }}"
+{% else %}
+# availability_zone     = "us-east-1a"
+{% endif %}
+{% if region %}
+region                = "{{ region }}"
+{% else %}
+# region                = "us-east-1"
+{% endif %}
+{% if default_dns_prefix %}
+default_dns_prefix    = "{{ default_dns_prefix }}"
+{% else %}
+# default_dns_prefix    = "myodb"
+{% endif %}
+delete_associated_resources = {{ delete_associated_resources }}
+
+tags = {
+{% for k, v in tags.items() %}
+  "{{ k }}" = "{{ v }}"
+{% else %}
+  "ManagedBy" = "Terraform"
+{% endfor %}
+}

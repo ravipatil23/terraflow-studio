@@ -1,0 +1,94 @@
+# modules/{{ module_name }}/terraform.tfvars
+#
+# NOTE: odb_network, odb_subnet, backup_odb_subnet, and exadata_infrastructure
+# are supplied from root main.tf module outputs — no need to set them here.
+# They are wired automatically:
+#   odb_network           = module.{{ mn0 }}.odb_network_name
+#   odb_subnet            = module.{{ mn1 }}.odb_subnet_name
+#   backup_odb_subnet     = module.{{ mn2 }}.odb_subnet_name
+#   exadata_infrastructure = module.{{ mn3 }}.infra_name
+
+exadb_vm_cluster_id = "{{ exadb_vm_cluster_id }}"
+display_name        = "{{ display_name }}"
+location            = "{{ location }}"
+{% if gcp_oracle_zone %}
+gcp_oracle_zone     = "{{ gcp_oracle_zone }}"
+{% else %}
+# gcp_oracle_zone     = "us-east4-b-r1"
+{% endif %}
+{% if project %}
+project             = "{{ project }}"
+{% else %}
+# project             = "my-gcp-project"
+{% endif %}
+deletion_protection = {{ deletion_protection }}
+
+# ── properties ────────────────────────────────────────────────────────────────
+gi_version                      = "{{ gi_version }}"
+hostname_prefix                 = "{{ hostname_prefix }}"
+license_type                    = "{{ license_type }}"
+node_count                      = {{ node_count }}
+enabled_ecpu_count_per_node     = {{ enabled_ecpu_count_per_node }}
+additional_ecpu_count_per_node  = {{ additional_ecpu_count_per_node }}
+vm_file_system_storage_size_gbs = {{ vm_file_system_storage_size_gbs }}
+{% if cluster_name %}
+cluster_name   = "{{ cluster_name }}"
+{% else %}
+# cluster_name   = "my-cluster"   # max 11 chars
+{% endif %}
+{% if time_zone %}
+time_zone      = "{{ time_zone }}"
+{% else %}
+# time_zone      = "UTC"
+{% endif %}
+{% if system_version %}
+system_version = "{{ system_version }}"
+{% else %}
+# system_version = ""
+{% endif %}
+{% if memory_per_node_in_gbs %}
+memory_per_node_in_gbs = {{ memory_per_node_in_gbs }}
+{% else %}
+# memory_per_node_in_gbs = null  # min 30 GiB
+{% endif %}
+{% if db_node_storage_size_per_vm_in_gbs %}
+db_node_storage_size_per_vm_in_gbs = {{ db_node_storage_size_per_vm_in_gbs }}
+{% else %}
+# db_node_storage_size_per_vm_in_gbs = null  # 60–900 GiB
+{% endif %}
+{% if data_storage_size_in_tbs %}
+data_storage_size_in_tbs = {{ data_storage_size_in_tbs }}
+{% else %}
+# data_storage_size_in_tbs = null  # 2–238 TiB
+{% endif %}
+{% if spare_snapshot_space_in_gbs %}
+spare_snapshot_space_in_gbs = {{ spare_snapshot_space_in_gbs }}
+{% else %}
+# spare_snapshot_space_in_gbs = null
+{% endif %}
+{% if disk_redundancy %}
+disk_redundancy = "{{ disk_redundancy }}"
+{% else %}
+# disk_redundancy = ""  # HIGH or NORMAL
+{% endif %}
+
+ssh_public_keys = [
+{% for k in ssh_public_keys %}
+  "{{ k }}",
+{% else %}
+  # "ssh-rsa AAAA...",
+{% endfor %}
+]
+
+# ── diagnostics ───────────────────────────────────────────────────────────────
+dco_diagnostics   = {{ dco_diagnostics }}
+dco_health        = {{ dco_health }}
+dco_incident_logs = {{ dco_incident_logs }}
+
+labels = {
+{% for k, v in labels.items() %}
+  "{{ k }}" = "{{ v }}"
+{% else %}
+  "managed-by" = "terraform"
+{% endfor %}
+}

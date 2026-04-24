@@ -1,0 +1,36 @@
+# modules/{{ module_name }}/main.tf
+
+terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = ">= 6.15.0" }
+  }
+}
+
+resource "aws_odb_cloud_exadata_infrastructure" "this" {
+  display_name         = var.display_name
+  shape                = var.shape
+  compute_count        = var.compute_count
+  storage_count        = var.storage_count
+  availability_zone_id = var.availability_zone_id
+
+  availability_zone    = var.availability_zone != "" ? var.availability_zone : null
+  region               = var.region != "" ? var.region : null
+  database_server_type = var.database_server_type != "" ? var.database_server_type : null
+  storage_server_type  = var.storage_server_type != "" ? var.storage_server_type : null
+
+  customer_contacts_to_send_to_oci = length(var.customer_contacts) > 0 ? var.customer_contacts : null
+
+  maintenance_window {
+    preference                       = var.maintenance_window.preference
+    patching_mode                    = var.maintenance_window.patching_mode
+    is_custom_action_timeout_enabled = var.maintenance_window.is_custom_action_timeout_enabled
+    custom_action_timeout_in_mins    = var.maintenance_window.custom_action_timeout_in_mins
+    lead_time_in_weeks               = var.maintenance_window.lead_time_in_weeks
+    days_of_week                     = var.maintenance_window.days_of_week
+    months                           = var.maintenance_window.months
+    hours_of_day                     = var.maintenance_window.hours_of_day
+    weeks_of_month                   = var.maintenance_window.weeks_of_month
+  }
+
+  tags = var.tags
+}

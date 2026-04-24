@@ -1,0 +1,19 @@
+# modules/{{ module_name }}/main.tf
+
+terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = ">= 6.15.0" }
+  }
+}
+
+resource "aws_odb_network_peering_connection" "this" {
+  display_name    = var.display_name
+  odb_network_id  = var.odb_network_id
+  peer_network_id = var.peer_network_id
+
+  region = var.region != "" ? var.region : null
+
+  additional_peer_network_cidrs = length(var.additional_peer_network_cidrs) > 0 ? var.additional_peer_network_cidrs : null
+
+  tags = var.tags
+}

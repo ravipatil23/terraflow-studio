@@ -1,0 +1,127 @@
+# modules/{{ module_name }}/variables.tf
+
+variable "cloud_exadata_infrastructure_id" {
+  type = string
+{% if cloud_exadata_infrastructure_id %}
+  default = "{{ cloud_exadata_infrastructure_id }}"
+{% endif %}
+}
+
+variable "location" {
+  type = string
+{% if location %}
+  default = "{{ location }}"
+{% endif %}
+}
+
+variable "display_name" {
+  type    = string
+  default = "{{ display_name }}"
+}
+
+variable "gcp_oracle_zone" {
+  type    = string
+  default = "{{ gcp_oracle_zone }}"
+}
+
+variable "project" {
+  type    = string
+  default = "{{ project }}"
+}
+
+variable "deletion_protection" {
+  type    = bool
+  default = {{ deletion_protection }}
+}
+
+# properties block
+variable "shape" {
+  description = "Exadata shape, e.g. Exadata.X9M, Exadata.X10M, Exadata.X11M."
+  type        = string
+  default     = "{{ shape }}"
+}
+
+variable "compute_count" {
+  type    = number
+  default = {{ compute_count }}
+}
+
+variable "storage_count" {
+  type    = number
+  default = {{ storage_count }}
+}
+
+variable "total_storage_size_gb" {
+  type    = number
+  default = {{ total_storage_size_gb }}
+}
+
+variable "customer_contacts" {
+  type    = list(string)
+  default = [{{ customer_contacts | map("tojson") | join(", ") }}]
+}
+
+# maintenance_window
+variable "mw_preference" {
+  type    = string
+  default = "{{ mw_preference }}"
+}
+
+variable "mw_patching_mode" {
+  type    = string
+  default = "{{ mw_patching_mode }}"
+}
+
+variable "mw_is_custom_action_timeout_enabled" {
+  type    = bool
+  default = {{ mw_is_custom_action_timeout_enabled }}
+}
+
+variable "mw_custom_action_timeout_mins" {
+  type    = number
+  default = {{ mw_custom_action_timeout_mins }}
+}
+
+variable "mw_lead_time_week" {
+  type    = number
+  default = {{ mw_lead_time_week if mw_lead_time_week else "null" }}
+}
+
+# days_of_week — plain string list e.g. ["MONDAY", "TUESDAY"]
+variable "mw_days_of_week" {
+  description = "Days for maintenance e.g. [\"MONDAY\", \"SUNDAY\"]"
+  type        = list(string)
+  default     = [{{ mw_days_of_week | map("tojson") | join(", ") }}]
+}
+
+# months — plain string list e.g. ["JANUARY", "APRIL"]
+variable "mw_months" {
+  description = "Months for maintenance e.g. [\"JANUARY\", \"OCTOBER\"]"
+  type        = list(string)
+  default     = [{{ mw_months | map("tojson") | join(", ") }}]
+}
+
+# hours_of_day — number list e.g. [0, 4, 8]
+variable "mw_hours_of_day" {
+  description = "Hours of day (0, 4, 8, 12, 16, or 20 UTC)"
+  type        = list(number)
+  default     = [{{ mw_hours_of_day | join(", ") }}]
+}
+
+# weeks_of_month — number list e.g. [1, 2]
+variable "mw_weeks_of_month" {
+  description = "Weeks of month (1–4)"
+  type        = list(number)
+  default     = [{{ mw_weeks_of_month | join(", ") }}]
+}
+
+variable "labels" {
+  type = map(string)
+  default = {
+{% for k, v in labels.items() %}
+    "{{ k }}" = "{{ v }}"
+{% else %}
+    "managed-by" = "terraform"
+{% endfor %}
+  }
+}

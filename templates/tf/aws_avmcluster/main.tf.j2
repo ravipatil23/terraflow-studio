@@ -1,0 +1,65 @@
+# modules/{{ module_name }}/main.tf
+
+terraform {
+  required_providers {
+    aws = { source = "hashicorp/aws", version = ">= 6.15.0" }
+  }
+}
+
+{% if db_servers_mode == 'auto' %}
+# Auto-discover DB servers from the Exadata Infrastructure (recommended)
+data "aws_odb_db_servers" "{{ module_name }}" {
+  cloud_exadata_infrastructure_id = var.cloud_exadata_infrastructure_id
+}
+
+{% endif %}
+resource "aws_odb_cloud_autonomous_vm_cluster" "this" {
+  display_name                          = var.display_name
+  autonomous_data_storage_size_in_tbs   = var.autonomous_data_storage_size_in_tbs
+  cpu_core_count_per_node               = var.cpu_core_count_per_node
+  memory_per_oracle_compute_unit_in_gbs = var.memory_per_oracle_compute_unit_in_gbs
+  total_container_databases             = var.total_container_databases
+  scan_listener_port_non_tls            = var.scan_listener_port_non_tls
+  scan_listener_port_tls                = var.scan_listener_port_tls
+
+  # Required — ID pair
+  cloud_exadata_infrastructure_id = var.cloud_exadata_infrastructure_id
+  odb_network_id                  = var.odb_network_id
+
+  # Optional — ARN pair (used when infra/network are in a different account/stack)
+  cloud_exadata_infrastructure_arn = var.cloud_exadata_infrastructure_arn != "" ? var.cloud_exadata_infrastructure_arn : null
+  odb_network_arn                  = var.odb_network_arn != "" ? var.odb_network_arn : null
+
+{% if db_servers_mode == 'auto' %}
+  db_servers = data.aws_odb_db_servers.{{ module_name }}.db_servers[*].id
+{% elif db_servers and db_servers | length > 0 %}
+  db_servers = var.db_servers
+{% endif %}
+
+  license_model              = var.license_model
+  is_mtls_enabled_vm_cluster = var.is_mtls_enabled_vm_cluster
+
+{% if description %}
+  description = var.description
+{% endif %}
+{% if time_zone %}
+  time_zone   = var.time_zone
+{% endif %}
+
+  maintenance_window {
+    preference    = var.maintenance_window.preference
+    patching_mode = var.maintenance_window.patching_mode
+
+    is_custom_action_timeout_enabled = var.maintenance_window.is_custom_action_timeout_enabled
+    custom_action_timeout_in_mins    = var.maintenance_window.custom_action_timeout_in_mins
+{% if maintenance_window_has_schedule %}
+    days_of_week       = var.maintenance_window.days_of_week
+    hours_of_day       = var.maintenance_window.hours_of_day
+    lead_time_in_weeks = var.maintenance_window.lead_time_in_weeks
+    months             = var.maintenance_window.months
+    weeks_of_month     = var.maintenance_window.weeks_of_month
+{% endif %}
+  }
+
+  tags = var.tags
+}

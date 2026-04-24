@@ -1,0 +1,45 @@
+# modules/{{ module_name }}/terraform.tfvars
+#
+# ID pair (required) — auto-wired in root main.tf:
+#   cloud_exadata_infrastructure_id = module.{{ mn1 }}.infra_id
+#   odb_network_id                  = module.{{ mn0 }}.network_id
+#
+# ARN pair (optional, cross-account) — also wired in root:
+#   cloud_exadata_infrastructure_arn = module.{{ mn1 }}.infra_arn
+#   odb_network_arn                  = module.{{ mn0 }}.network_arn
+
+display_name                          = "{{ display_name }}"
+autonomous_data_storage_size_in_tbs   = {{ autonomous_data_storage_size_in_tbs }}
+cpu_core_count_per_node               = {{ cpu_core_count_per_node }}
+memory_per_oracle_compute_unit_in_gbs = {{ memory_per_oracle_compute_unit_in_gbs }}
+total_container_databases             = {{ total_container_databases }}
+scan_listener_port_non_tls            = {{ scan_listener_port_non_tls }}
+scan_listener_port_tls                = {{ scan_listener_port_tls }}
+license_model                         = "{{ license_model }}"
+is_mtls_enabled_vm_cluster            = {{ is_mtls_enabled_vm_cluster }}
+{% if description %}
+description                           = "{{ description }}"
+{% endif %}
+{% if time_zone %}
+time_zone                             = "{{ time_zone }}"
+{% endif %}
+
+# These are left empty — wired from module outputs in root main.tf
+cloud_exadata_infrastructure_id  = ""
+odb_network_id                   = ""
+cloud_exadata_infrastructure_arn = ""
+odb_network_arn                  = ""
+
+{% if db_servers_mode == 'manual' and db_servers %}
+db_servers = [{% for s in db_servers %}"{{ s }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+{% else %}
+# db_servers = []  # auto-discovered via data.aws_odb_db_servers at plan time
+{% endif %}
+
+tags = {
+{% for k, v in tags.items() %}
+  "{{ k }}" = "{{ v }}"
+{% else %}
+  "ManagedBy" = "Terraform"
+{% endfor %}
+}

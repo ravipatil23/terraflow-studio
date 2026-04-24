@@ -1,0 +1,192 @@
+# modules/{{ module_name }}/variables.tf
+
+variable "exadb_vm_cluster_id" {
+  type = string
+{% if exadb_vm_cluster_id %}
+  default = "{{ exadb_vm_cluster_id }}"
+{% endif %}
+}
+
+variable "display_name" {
+  type = string
+{% if display_name %}
+  default = "{{ display_name }}"
+{% endif %}
+}
+
+variable "location" {
+  type = string
+{% if location %}
+  default = "{{ location }}"
+{% endif %}
+}
+
+variable "gcp_oracle_zone" {
+  type    = string
+  default = "{{ gcp_oracle_zone }}"
+}
+
+variable "odb_network" {
+  description = "Full ODB Network resource path — wired from module.{{ mn0 }}.odb_network_name in root."
+  type        = string
+{% if odb_network %}
+  default     = "{{ odb_network }}"
+{% endif %}
+}
+
+variable "odb_subnet" {
+  description = "Full client ODB Subnet path — wired from module.{{ mn1 }}.odb_subnet_name in root."
+  type        = string
+{% if odb_subnet %}
+  default     = "{{ odb_subnet }}"
+{% endif %}
+}
+
+variable "backup_odb_subnet" {
+  description = "Full backup ODB Subnet path — wired from module.{{ mn2 }}.odb_subnet_name in root."
+  type        = string
+{% if backup_odb_subnet %}
+  default     = "{{ backup_odb_subnet }}"
+{% endif %}
+}
+
+variable "exadata_infrastructure" {
+  description = "Full Exadata Infrastructure path — wired from module.{{ mn3 }}.infra_name in root."
+  type        = string
+{% if exadata_infrastructure %}
+  default     = "{{ exadata_infrastructure }}"
+{% endif %}
+}
+
+variable "project" {
+  type    = string
+  default = "{{ project }}"
+}
+
+variable "deletion_protection" {
+  type    = bool
+  default = {{ deletion_protection }}
+}
+
+# ── properties block ──────────────────────────────────────────────────────────
+
+variable "gi_version" {
+  description = "Oracle Grid Infrastructure version e.g. 23.0.0.0."
+  type = string
+{% if gi_version %}
+  default = "{{ gi_version }}"
+{% endif %}
+}
+
+variable "hostname_prefix" {
+  description = "Hostname prefix — max 12 chars, letters/numbers/hyphens, must start with a letter."
+  type = string
+{% if hostname_prefix %}
+  default = "{{ hostname_prefix }}"
+{% endif %}
+}
+
+variable "license_type" {
+  type    = string
+  default = "{{ license_type }}"
+  validation {
+    condition     = contains(["LICENSE_INCLUDED", "BRING_YOUR_OWN_LICENSE"], var.license_type)
+    error_message = "Must be LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE."
+  }
+}
+
+variable "node_count" {
+  description = "Number of VM nodes (minimum 2)."
+  type    = number
+  default = {{ node_count }}
+}
+
+variable "enabled_ecpu_count_per_node" {
+  description = "Enabled ECPUs per node — min 8, must be a multiple of 4."
+  type    = number
+  default = {{ enabled_ecpu_count_per_node }}
+}
+
+variable "additional_ecpu_count_per_node" {
+  description = "Reserved ECPUs per node — 0–192, must be a multiple of 4."
+  type    = number
+  default = {{ additional_ecpu_count_per_node }}
+}
+
+variable "vm_file_system_storage_size_gbs" {
+  description = "Local file-system storage per node in GiB (60–900)."
+  type    = number
+  default = {{ vm_file_system_storage_size_gbs }}
+}
+
+variable "ssh_public_keys" {
+  description = "SSH public keys for cluster node access."
+  type    = list(string)
+  default = [{{ ssh_public_keys | map("tojson") | join(", ") }}]
+}
+
+variable "cluster_name" {
+  type    = string
+  default = "{{ cluster_name }}"
+}
+
+variable "time_zone" {
+  type    = string
+  default = "{{ time_zone }}"
+}
+
+variable "system_version" {
+  type    = string
+  default = "{{ system_version }}"
+}
+
+variable "memory_per_node_in_gbs" {
+  type    = number
+  default = {{ memory_per_node_in_gbs if memory_per_node_in_gbs else "null" }}
+}
+
+variable "db_node_storage_size_per_vm_in_gbs" {
+  type    = number
+  default = {{ db_node_storage_size_per_vm_in_gbs if db_node_storage_size_per_vm_in_gbs else "null" }}
+}
+
+variable "data_storage_size_in_tbs" {
+  type    = number
+  default = {{ data_storage_size_in_tbs if data_storage_size_in_tbs else "null" }}
+}
+
+variable "spare_snapshot_space_in_gbs" {
+  type    = number
+  default = {{ spare_snapshot_space_in_gbs if spare_snapshot_space_in_gbs else "null" }}
+}
+
+variable "disk_redundancy" {
+  type    = string
+  default = "{{ disk_redundancy }}"
+}
+
+variable "dco_diagnostics" {
+  type    = bool
+  default = {{ dco_diagnostics }}
+}
+
+variable "dco_health" {
+  type    = bool
+  default = {{ dco_health }}
+}
+
+variable "dco_incident_logs" {
+  type    = bool
+  default = {{ dco_incident_logs }}
+}
+
+variable "labels" {
+  type = map(string)
+  default = {
+{% for k, v in labels.items() %}
+    "{{ k }}" = "{{ v }}"
+{% else %}
+    "managed-by" = "terraform"
+{% endfor %}
+  }
+}

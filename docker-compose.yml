@@ -1,0 +1,76 @@
+services:
+
+  # ── CouchDB ───────────────────────────────────────────────────────────────────
+  couchdb:
+    image: couchdb:3.3
+    container_name: terraflow-couchdb
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:-changeme}
+    ports:
+      - "5984:5984"
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+      - ./docker/couchdb/local.ini:/opt/couchdb/etc/local.d/local.ini:ro
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5984/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # ── CouchDB init (runs once, creates the database) ───────────────────────────
+  couchdb-init:
+    image: curlimages/curl:latest
+    container_name: terraflow-couchdb-init
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    environment:
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:-changeme}
+      COUCHDB_DB: ${COUCHDB_DB:-terraflow_studio_configs}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "Creating database $$COUCHDB_DB ..." &&
+        STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+          "http://$$COUCHDB_USER:$$COUCHDB_PASSWORD@couchdb:5984/$$COUCHDB_DB") &&
+        if [ "$$STATUS" = "201" ]; then
+          echo "Database created successfully."
+        elif [ "$$STATUS" = "412" ]; then
+          echo "Database already exists — OK."
+        else
+          echo "Unexpected status: $$STATUS" && exit 1
+        fi
+    restart: "no"
+
+  # ── Terraflow Studio ──────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: terraflow-studio:5.1
+    container_name: terraflow-studio
+    depends_on:
+      couchdb:
+        condition: service_healthy
+      couchdb-init:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    environment:
+      COUCHDB_URL: http://${COUCHDB_USER:-admin}:${COUCHDB_PASSWORD:-changeme}@couchdb:5984
+      COUCHDB_DB: ${COUCHDB_DB:-terraflow_studio_configs}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  couchdb-data:

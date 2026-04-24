@@ -1,0 +1,81 @@
+# modules/{{ module_name }}/variables.tf
+
+variable "display_name" {
+  description = "User-friendly name for the ODB network."
+  type        = string
+{% if display_name %}
+  default     = "{{ display_name }}"
+{% endif %}
+}
+
+variable "availability_zone_id" {
+  description = "AZ ID where the ODB network is located."
+  type        = string
+{% if availability_zone_id %}
+  default     = "{{ availability_zone_id }}"
+{% endif %}
+}
+
+variable "client_subnet_cidr" {
+  type = string
+{% if client_subnet_cidr %}
+  default = "{{ client_subnet_cidr }}"
+{% endif %}
+}
+
+variable "backup_subnet_cidr" {
+  type = string
+{% if backup_subnet_cidr %}
+  default = "{{ backup_subnet_cidr }}"
+{% endif %}
+}
+
+variable "s3_access" {
+  type    = string
+  default = "{{ s3_access }}"
+  validation {
+    condition     = contains(["ENABLED", "DISABLED"], var.s3_access)
+    error_message = "Must be ENABLED or DISABLED."
+  }
+}
+
+variable "zero_etl_access" {
+  type    = string
+  default = "{{ zero_etl_access }}"
+  validation {
+    condition     = contains(["ENABLED", "DISABLED"], var.zero_etl_access)
+    error_message = "Must be ENABLED or DISABLED."
+  }
+}
+
+variable "availability_zone" {
+  type    = string
+  default = "{{ availability_zone }}"
+}
+
+variable "region" {
+  type    = string
+  default = "{{ region }}"
+}
+
+variable "default_dns_prefix" {
+  type    = string
+  default = "{{ default_dns_prefix }}"
+}
+
+variable "delete_associated_resources" {
+  type    = bool
+  default = {{ delete_associated_resources }}
+}
+
+variable "tags" {
+  description = "Resource tags."
+  type        = map(string)
+  default = {
+{% for k, v in tags.items() %}
+    "{{ k }}" = "{{ v }}"
+{% else %}
+    "ManagedBy" = "Terraform"
+{% endfor %}
+  }
+}

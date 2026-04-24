@@ -1,0 +1,129 @@
+# modules/{{ module_name }}/variables.tf
+
+variable "display_name" {
+  type = string
+{% if display_name %}
+  default = "{{ display_name }}"
+{% endif %}
+}
+
+variable "shape" {
+  type    = string
+  default = "{{ shape }}"
+}
+
+variable "compute_count" {
+  type    = number
+  default = {{ compute_count }}
+}
+
+variable "storage_count" {
+  type    = number
+  default = {{ storage_count }}
+}
+
+variable "availability_zone_id" {
+  type = string
+{% if availability_zone_id %}
+  default = "{{ availability_zone_id }}"
+{% endif %}
+}
+
+variable "availability_zone" {
+  type    = string
+  default = "{{ availability_zone }}"
+}
+
+variable "region" {
+  type    = string
+  default = "{{ region }}"
+}
+
+variable "database_server_type" {
+  type    = string
+  default = "{{ database_server_type }}"
+}
+
+variable "storage_server_type" {
+  type    = string
+  default = "{{ storage_server_type }}"
+}
+
+variable "customer_contacts" {
+  description = "OCI notification contacts — list of objects with an email attribute."
+  type = list(object({
+    email = string
+  }))
+  default = [
+{% for c in customer_contacts %}
+    { email = "{{ c }}" },
+{% else %}
+    # { email = "admin@example.com" },
+{% endfor %}
+  ]
+}
+
+variable "maintenance_window" {
+  description = "Maintenance window configuration for the Exadata Infrastructure."
+  type = object({
+    preference                       = string
+    patching_mode                    = string
+    is_custom_action_timeout_enabled = bool
+    custom_action_timeout_in_mins    = number
+    days_of_week  = optional(set(object({ name = string })))
+    hours_of_day  = optional(set(number))
+    lead_time_in_weeks = optional(number)
+    months        = optional(set(object({ name = string })))
+    weeks_of_month = optional(set(number))
+  })
+  default = {
+    preference                       = "{{ mw_preference }}"
+    patching_mode                    = "{{ mw_patching_mode }}"
+    is_custom_action_timeout_enabled = {{ mw_is_custom_action_timeout_enabled }}
+    custom_action_timeout_in_mins    = {{ mw_custom_action_timeout_in_mins }}
+{% if mw_lead_time_in_weeks %}
+    lead_time_in_weeks = {{ mw_lead_time_in_weeks }}
+{% else %}
+    lead_time_in_weeks = null
+{% endif %}
+{% if mw_days_of_week %}
+    days_of_week = [
+{% for d in mw_days_of_week %}
+      { name = "{{ d }}" },
+{% endfor %}
+    ]
+{% else %}
+    days_of_week = null
+{% endif %}
+{% if mw_months %}
+    months = [
+{% for m in mw_months %}
+      { name = "{{ m }}" },
+{% endfor %}
+    ]
+{% else %}
+    months = null
+{% endif %}
+{% if mw_hours_of_day %}
+    hours_of_day   = [{{ mw_hours_of_day | join(", ") }}]
+{% else %}
+    hours_of_day   = null
+{% endif %}
+{% if mw_weeks_of_month %}
+    weeks_of_month = [{{ mw_weeks_of_month | join(", ") }}]
+{% else %}
+    weeks_of_month = null
+{% endif %}
+  }
+}
+
+variable "tags" {
+  type = map(string)
+  default = {
+{% for k, v in tags.items() %}
+    "{{ k }}" = "{{ v }}"
+{% else %}
+    "ManagedBy" = "Terraform"
+{% endfor %}
+  }
+}

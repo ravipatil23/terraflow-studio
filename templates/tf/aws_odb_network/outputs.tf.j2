@@ -1,0 +1,21 @@
+# modules/{{ module_name }}/outputs.tf
+
+output "network_id" {
+  description = "Unique identifier of the ODB network."
+  value       = aws_odb_network.this.id
+}
+
+output "network_arn" {
+  description = "ARN of the ODB network."
+  value       = aws_odb_network.this.arn
+}
+
+output "oci_network_anchor_id" {
+  description = "OCI network anchor ID."
+  value       = aws_odb_network.this.oci_network_anchor_id
+}
+
+output "oci_vcn_id" {
+  description = "OCI VCN identifier."
+  value       = aws_odb_network.this.oci_vcn_id
+}
