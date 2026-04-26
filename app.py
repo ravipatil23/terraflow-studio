@@ -23,7 +23,11 @@ except ImportError:
 
 import io
 import json
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 import zipfile
 from flask import Flask, render_template, request, jsonify, send_file, make_response
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
@@ -74,8 +78,12 @@ def tf_bool(v) -> str:
 #  AWS MODULE 0 — aws_odb_network
 # ─────────────────────────────────────────────
 
-def mod0_main(mn):
-    return render_tf('aws_odb_network/main.tf.j2', module_name=mn)
+def mod0_main(mn, d):
+    return render_tf('aws_odb_network/main.tf.j2',
+        module_name=mn,
+        custom_domain_name=d.get('custom_domain_name', ''),
+        default_dns_prefix=d.get('default_dns_prefix', ''),
+    )
 
 def _s3_val(v):
     """Normalise s3_access / zero_etl_access to ENABLED or DISABLED string."""
@@ -94,6 +102,7 @@ def mod0_vars(mn, d):
         availability_zone=d.get('availability_zone', ''),
         region=d.get('region', ''),
         default_dns_prefix=d.get('default_dns_prefix', ''),
+        custom_domain_name=d.get('custom_domain_name', ''),
         delete_associated_resources=tf_bool(d.get('delete_associated_resources', False)),
         tags=d.get('tags', {}),
     )
@@ -113,6 +122,7 @@ def mod0_tfvars(mn, d):
         availability_zone=d.get('availability_zone', ''),
         region=d.get('region', ''),
         default_dns_prefix=d.get('default_dns_prefix', ''),
+        custom_domain_name=d.get('custom_domain_name', ''),
         delete_associated_resources=tf_bool(d.get('delete_associated_resources', False)),
         tags=d.get('tags', {}),
     )
@@ -183,7 +193,7 @@ def _mod2_ctx(d, mn0, defaults=False):
         peer_network_id_is_ref=is_ref(peer),
         mn0=mn0,
         region=d.get('region', ''),
-        cidrs=d.get('additional_peer_network_cidrs', []),
+        cidrs=d.get('peer_network_cidrs', []),
         tags=d.get('tags', {}),
     )
 
@@ -205,12 +215,12 @@ def mod2_tfvars(mn, d, mn0):
 # ─────────────────────────────────────────────
 
 def _mod3_ctx(d, mn0='', mn1='', defaults=False):
-    infraid  = d.get('cloud_exadata_infrastructure_id', '')
-    netid    = d.get('odb_network_id', '')
-    ds  = d.get('data_storage_size_in_tbs', '')
-    dng = d.get('db_node_storage_size_in_gbs', '')
-    mem = d.get('memory_size_in_gbs', '')
-    sc  = d.get('scan_listener_port_tcp', '')
+    infraid = d.get('cloud_exadata_infrastructure_id', '')
+    netid   = d.get('odb_network_id', '')
+    ds      = d.get('data_storage_size_in_tbs', '')  or 'null'
+    dng     = d.get('db_node_storage_size_in_gbs', '') or 'null'
+    mem     = d.get('memory_size_in_gbs', '')          or 'null'
+    sc      = d.get('scan_listener_port_tcp', '')      or 'null'
     # Auto-resolve to module refs when user left fields empty
     infraid = infraid or (f'module.{mn1}.infra_id' if mn1 else '')
     netid   = netid   or (f'module.{mn0}.network_id' if mn0 else '')
@@ -224,15 +234,12 @@ def _mod3_ctx(d, mn0='', mn1='', defaults=False):
         license_model=d.get('license_model', 'LICENSE_INCLUDED'),
         cloud_exadata_infrastructure_id=infraid,
         odb_network_id=netid,
-        cloud_exadata_infrastructure_arn=d.get('cloud_exadata_infrastructure_arn', ''),
-        odb_network_arn=d.get('odb_network_arn', ''),
         infra_id=infra_val,
         net_id=net_val,
         mn0=mn0, mn1=mn1,
         ssh_public_keys=d.get('ssh_public_keys', []),
         db_servers=d.get('db_servers', []),
         db_servers_mode=d.get('db_servers_mode', 'auto'),
-        vm_mode=d.get('vm_mode', 'arn'),
         dco_is_diagnostics_events_enabled=tf_bool(d.get('dco_is_diagnostics_events_enabled', True)),
         dco_is_health_monitoring_enabled=tf_bool(d.get('dco_is_health_monitoring_enabled', True)),
         dco_is_incident_logs_enabled=tf_bool(d.get('dco_is_incident_logs_enabled', True)),
@@ -242,10 +249,8 @@ def _mod3_ctx(d, mn0='', mn1='', defaults=False):
         db_node_storage_size_in_gbs=dng,
         memory_size_in_gbs=mem,
         scan_listener_port_tcp=sc,
-        system_version=d.get('system_version', ''),
         is_local_backup_enabled=tf_bool(d.get('is_local_backup_enabled', False)),
         is_sparse_diskgroup_enabled=tf_bool(d.get('is_sparse_diskgroup_enabled', False)),
-        region=d.get('region', ''),
         tags=d.get('tags', {}),
     )
 
@@ -330,6 +335,24 @@ _AWS_TO_OCI_REGION = {
     'ap-northeast-1': 'ap-tokyo-1',
 }
 
+_GCP_TO_OCI_REGION = {
+    'us-east4':                'us-ashburn-1',
+    'us-central1':             'us-desmoines-1',
+    'us-west3':                'us-saltlake-2',
+    'northamerica-northeast1': 'ca-montreal-1',
+    'northamerica-northeast2': 'ca-toronto-1',
+    'europe-west3':            'eu-frankfurt-1',
+    'europe-west2':            'uk-london-1',
+    'europe-west8':            'eu-milan-1',
+    'asia-south2':             'ap-delhi-1',
+    'australia-southeast2':    'ap-melbourne-1',
+    'asia-south1':             'ap-mumbai-1',
+    'asia-northeast2':         'ap-osaka-1',
+    'australia-southeast1':    'ap-sydney-1',
+    'asia-northeast1':         'ap-tokyo-1',
+    'southamerica-east1':      'sa-saopaulo-1',
+}
+
 def _oci_db_defaults(d, first_cluster_name=''):
     return {**d,
         'module_name':          d.get('module_name') or 'oci_database',
@@ -406,6 +429,15 @@ def build_root_main(networks, infras, peerings, clusters, avmclusters=None, oci_
         oci_databases=oci_databases or [],
         oci_region=oci_region,
         iac_tool=iac_tool)
+
+def build_root_vars(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None):
+    aws_region = 'us-east-1'
+    for n in (networks or []):
+        if n.get('region'): aws_region = n['region']; break
+    oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
+    return render_tf('aws_root/variables.tf.j2',
+        aws_region=aws_region, oci_region=oci_region,
+        oci_databases=oci_databases or [])
 
 def build_root_tfvars(networks, infras, peerings, clusters, avmclusters=None, iac_tool='terraform'):
     avmclusters = avmclusters or []
@@ -605,8 +637,21 @@ def gcp1_tfvars(mn, d, mn0='', mn1='', mn2='', mn3=''):
 #  GCP ROOT
 # ═════════════════════════════════════════════
 
-def gcp_build_root_main(networks, infras, clusters, iac_tool='terraform'):
-    return render_tf('gcp_root/main.tf.j2', networks=networks, infras=infras, clusters=clusters, iac_tool=iac_tool)
+def gcp_build_root_vars(networks, infras, clusters, oci_databases=None, oci_region='us-ashburn-1'):
+    gcp_project = 'my-gcp-project'
+    gcp_region  = 'us-east4'
+    for n in (networks or []):
+        if n.get('project'): gcp_project = n['project']; break
+    for items in [networks, infras, clusters]:
+        for item in items:
+            if item.get('location'): gcp_region = item['location']; break
+    return render_tf('gcp_root/variables.tf.j2',
+        gcp_project=gcp_project, gcp_region=gcp_region,
+        oci_databases=oci_databases or [], oci_region=oci_region)
+
+def gcp_build_root_main(networks, infras, clusters, oci_databases=None, oci_region='us-ashburn-1', iac_tool='terraform'):
+    return render_tf('gcp_root/main.tf.j2', networks=networks, infras=infras, clusters=clusters,
+                     oci_databases=oci_databases or [], oci_region=oci_region, iac_tool=iac_tool)
 
 def gcp_build_root_tfvars(networks, infras, clusters):
     proj = 'my-gcp-project'
@@ -630,6 +675,7 @@ def gcp_build_root_tfvars(networks, infras, clusters):
 
 def _aws_net_defaults(d):
     """Ensure required fields have defaults for tfvars rendering."""
+    cdn = d.get('custom_domain_name', '')
     return {**d,
         'display_name': d.get('display_name') or 'odb-network',
         'availability_zone_id': d.get('availability_zone_id') or 'use1-az6',
@@ -638,6 +684,9 @@ def _aws_net_defaults(d):
         's3_access': 'ENABLED' if d.get('s3_access') else 'DISABLED',
         'zero_etl_access': 'ENABLED' if d.get('zero_etl_access') else 'DISABLED',
         'region': d.get('region', ''),
+        'custom_domain_name': cdn,
+        # clear default_dns_prefix when custom_domain_name is set (mutually exclusive)
+        'default_dns_prefix': '' if cdn else d.get('default_dns_prefix', ''),
     }
 
 def _aws_infra_defaults(d):
@@ -747,6 +796,7 @@ def generate_all(data: dict) -> dict:
         raw_nets    = data.get('gcp_networks', [])
         raw_infras  = data.get('gcp_infras', [])
         raw_clusters = data.get('gcp_clusters', [])
+        raw_oci_dbs  = data.get('gcp_oci_databases', [])
 
         # Default module names when not provided
         if not raw_nets:
@@ -766,8 +816,18 @@ def generate_all(data: dict) -> dict:
         infras    = [_gcp_infra_defaults(i) for i in raw_infras]
         clusters  = [_gcp_cluster_defaults(c, networks[0] if networks else None, infras[0] if infras else None) for c in raw_clusters]
 
+        first_cl_name = clusters[0]['module_name'] if clusters else ''
+        oci_dbs = [_oci_db_defaults(db, first_cl_name) for db in raw_oci_dbs]
+
+        gcp_region = 'us-east4'
+        for n in networks:
+            if n.get('location'): gcp_region = n['location']; break
+        oci_region = _GCP_TO_OCI_REGION.get(gcp_region, 'us-ashburn-1')
+
+        iac_tool = data.get('iac_tool', 'terraform')
         files = {
-            'main.tf':          gcp_build_root_main(networks, infras, clusters, iac_tool=data.get('iac_tool','terraform')),
+            'main.tf':          gcp_build_root_main(networks, infras, clusters, oci_dbs, oci_region, iac_tool),
+            'variables.tf':     gcp_build_root_vars(networks, infras, clusters, oci_dbs, oci_region),
             'terraform.tfvars': gcp_build_root_tfvars(networks, infras, clusters),
         }
         # ODB Networks + subnets
@@ -805,6 +865,24 @@ def generate_all(data: dict) -> dict:
             files[f'modules/{mn}/variables.tf']    = gcp1_vars(mn, cl, net_mn, clsn_mn, bksn_mn, inf_mn)
             files[f'modules/{mn}/outputs.tf']      = gcp1_outputs(mn)
             files[f'modules/{mn}/terraform.tfvars']= gcp1_tfvars(mn, cl, net_mn, clsn_mn, bksn_mn, inf_mn)
+        # OCI DB Home / CDB / PDB
+        for db in oci_dbs:
+            base = db['module_name']
+            vcr  = db.get('vmcluster_ref', first_cl_name)
+            mn_h = _mn_dbhome(base); mn_c = _mn_cdb(base); mn_p = _mn_pdb(base)
+            files[f'modules/{mn_h}/main.tf']          = oci_dbhome_main(mn_h, db, vcr)
+            files[f'modules/{mn_h}/variables.tf']     = oci_dbhome_vars(mn_h, db, vcr)
+            files[f'modules/{mn_h}/outputs.tf']       = oci_dbhome_outputs(mn_h)
+            files[f'modules/{mn_h}/terraform.tfvars'] = oci_dbhome_tfvars(mn_h, db, vcr)
+            files[f'modules/{mn_c}/main.tf']          = oci_cdb_main(mn_c, db, mn_h)
+            files[f'modules/{mn_c}/variables.tf']     = oci_cdb_vars(mn_c, db, mn_h)
+            files[f'modules/{mn_c}/outputs.tf']       = oci_cdb_outputs(mn_c)
+            files[f'modules/{mn_c}/terraform.tfvars'] = oci_cdb_tfvars(mn_c, db, mn_h)
+            if db.get('create_pdb') and db.get('pdb_name'):
+                files[f'modules/{mn_p}/main.tf']          = oci_pdb_main(mn_p, db, mn_c)
+                files[f'modules/{mn_p}/variables.tf']     = oci_pdb_vars(mn_p, db, mn_c)
+                files[f'modules/{mn_p}/outputs.tf']       = oci_pdb_outputs(mn_p)
+                files[f'modules/{mn_p}/terraform.tfvars'] = oci_pdb_tfvars(mn_p, db, mn_c)
         return files
 
     # ── Multi-instance AWS ──────────────────────────────────────────────────
@@ -848,11 +926,12 @@ def generate_all(data: dict) -> dict:
 
     files = {
         'main.tf':          build_root_main(networks, infras, peerings, clusters, avmclusters, oci_dbs, iac_tool),
+        'variables.tf':     build_root_vars(networks, infras, peerings, clusters, avmclusters, oci_dbs),
         'terraform.tfvars': build_root_tfvars(networks, infras, peerings, clusters, avmclusters),
     }
     for net in networks:
         mn = net['module_name']
-        files[f'modules/{mn}/main.tf']          = mod0_main(mn)
+        files[f'modules/{mn}/main.tf']          = mod0_main(mn, net)
         files[f'modules/{mn}/variables.tf']     = mod0_vars(mn, net)
         files[f'modules/{mn}/outputs.tf']       = mod0_outputs(mn)
         files[f'modules/{mn}/terraform.tfvars'] = mod0_tfvars(mn, net)
@@ -988,7 +1067,7 @@ def api_github_push():
     commit_message = data.pop('commit_message', '')
     customer       = data.get('customer', '')
     try:
-        files = generate_all(data)
+        files = _fmt_files(generate_all(data), data.get('iac_tool', 'terraform'))
     except Exception as e:
         return jsonify({'error': f'Generation failed: {e}'}), 500
     try:
@@ -1005,7 +1084,23 @@ def api_github_push():
 
 @app.route('/')
 def index():
-    resp = make_response(render_template('index.html'))
+    resp = make_response(render_template('home.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+@app.route('/aws')
+def aws_page():
+    resp = make_response(render_template('aws.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+@app.route('/gcp')
+def gcp_page():
+    resp = make_response(render_template('gcp.html'))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     return resp
@@ -1030,14 +1125,34 @@ def api_download():
     data = request.get_json(force=True)
     cloud = data.get('cloud', 'aws')
     zip_name = 'terraflow-studio-gcp' if cloud == 'gcp' else 'terraflow-studio-aws'
-    files = generate_all(data)
+    files = _fmt_files(generate_all(data), data.get('iac_tool', 'terraform'))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         for path, content in files.items():
             zf.writestr(f'{zip_name}/{path}', content)
+        zf.writestr(f'{zip_name}/terraflow_config.json', json.dumps(data, indent=2))
     buf.seek(0)
     return send_file(buf, mimetype='application/zip',
                      as_attachment=True, download_name=f'{zip_name}.zip')
+
+
+@app.route('/api/load-zip', methods=['POST'])
+def api_load_zip():
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'No file uploaded'})
+    try:
+        buf = io.BytesIO(f.read())
+        with zipfile.ZipFile(buf) as zf:
+            cfg_name = next((n for n in zf.namelist() if n.endswith('terraflow_config.json')), None)
+            if not cfg_name:
+                return jsonify({'error': 'No terraflow_config.json found. Re-download the ZIP from Terraflow Studio to get a loadable archive.'})
+            doc = json.loads(zf.read(cfg_name))
+        return jsonify(doc)
+    except zipfile.BadZipFile:
+        return jsonify({'error': 'Not a valid ZIP file'})
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 
 @app.route('/api/validate', methods=['POST'])
@@ -1128,6 +1243,13 @@ def api_validate():
                 _err(mn, 'enabled_ecpu_count_per_node', 'Minimum 8 (multiples of 4)')
             if not cl.get('ssh_public_keys'):
                 _err(mn, 'ssh_public_keys', 'At least one SSH key required')
+
+    elif tab == 14:  # GCP OCI DB Home / CDB / PDB
+        for db in data.get('gcp_oci_databases', []):
+            mn = db.get('module_name', 'oci_database')
+            if not db.get('vmcluster_ref'): _err(mn, 'vmcluster_ref', 'VM Cluster reference required')
+            if not db.get('db_version'):    _err(mn, 'db_version',    'Required')
+            if not db.get('db_name'):       _err(mn, 'db_name',       'Required')
 
     flat_errors = {}
     for mn_errors in errors.values():
@@ -1450,6 +1572,250 @@ def api_tf_validate():
     summary['cloud']    = cloud
     summary['files_generated'] = len(files)
     return jsonify(summary)
+
+
+def _find_tf_bin(name):
+    """Locate terraform or tofu: env-var → .env file → shutil.which → common paths."""
+    env_key = 'OPENTOFU_PATH' if name == 'tofu' else 'TERRAFORM_PATH'
+    explicit = os.environ.get(env_key, '').strip()
+    if not explicit:
+        env_file = os.path.join(os.path.dirname(__file__), '.env')
+        try:
+            for line in open(env_file, encoding='utf-8').read().splitlines():
+                line = line.strip()
+                if line.startswith(env_key + '=') and not line.startswith('#'):
+                    explicit = line.split('=', 1)[1].strip().strip('"').strip("'")
+                    break
+        except OSError:
+            pass
+    if explicit and os.path.isfile(explicit):
+        return explicit
+    found = shutil.which(name)
+    if found:
+        return found
+    exts = ['.exe', ''] if os.name == 'nt' else ['']
+    home = os.path.expanduser('~')
+    if os.name == 'nt':
+        lad = os.environ.get('LOCALAPPDATA', '')
+        pf  = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
+        candidates = [
+            os.path.join(lad, 'Programs', name),
+            os.path.join(lad, 'Programs', 'HashiCorp', name),
+            f'C:\\{name}\\{name}',
+            f'C:\\HashiCorp\\{name.capitalize()}\\{name}',
+            f'C:\\tools\\{name}\\{name}',
+            os.path.join(pf, 'HashiCorp', name.capitalize(), name),
+            os.path.join(home, 'bin', name),
+            os.path.join(home, '.local', 'bin', name),
+        ]
+    else:
+        candidates = [
+            f'/usr/local/bin/{name}',
+            f'/usr/bin/{name}',
+            os.path.join(home, 'bin', name),
+            os.path.join(home, '.local', 'bin', name),
+            f'/opt/homebrew/bin/{name}',
+        ]
+    for base in candidates:
+        for ext in exts:
+            p = base + ext
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def _fmt_files(files: dict, iac_tool: str = 'terraform') -> dict:
+    """Run terraform/tofu fmt on generated files and return formatted content.
+    Falls back to original files silently if binary not found or fmt fails."""
+    bin_path = _find_tf_bin('tofu' if iac_tool == 'opentofu' else 'terraform')
+    if not bin_path:
+        bin_path = _find_tf_bin('terraform') or _find_tf_bin('tofu')
+    if not bin_path:
+        return files
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for path, content in files.items():
+                full = os.path.join(tmpdir, path.replace('/', os.sep).replace('\\', os.sep))
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, 'w', encoding='utf-8') as fh:
+                    fh.write(content)
+            subprocess.run(
+                [bin_path, 'fmt', '-recursive', '.'],
+                cwd=tmpdir, capture_output=True, text=True, timeout=30
+            )
+            result = {}
+            for path, content in files.items():
+                full = os.path.join(tmpdir, path.replace('/', os.sep).replace('\\', os.sep))
+                try:
+                    with open(full, encoding='utf-8') as fh:
+                        result[path] = fh.read()
+                except OSError:
+                    result[path] = content
+            return result
+    except Exception:
+        return files
+
+
+@app.route('/api/tf-cli', methods=['POST'])
+def api_tf_cli():
+    """
+    Write generated files to a temp dir, then run terraform fmt --check and
+    terraform validate (via terraform init -backend=false).
+    Uses terraform or tofu based on iac_tool in the payload.
+    """
+    data     = request.get_json(force=True)
+    cloud    = data.get('cloud', 'aws')
+    customer = (data.get('customer') or '').strip()
+    iac_tool = data.get('iac_tool', 'terraform')
+
+    _ansi = re.compile(r'\x1b\[[0-9;]*[mK]')
+    def _strip(s): return _ansi.sub('', s or '').strip()
+
+    bin_name = 'tofu' if iac_tool == 'opentofu' else 'terraform'
+    bin_path = _find_tf_bin(bin_name)
+    if not bin_path:
+        alt = 'terraform' if bin_name == 'tofu' else 'tofu'
+        bin_path = _find_tf_bin(alt)
+        if bin_path:
+            bin_name = alt
+
+    if not bin_path:
+        hint = ('Set TERRAFORM_PATH or OPENTOFU_PATH in your .env to the full path of the binary '
+                '(e.g. TERRAFORM_PATH=C:\\terraform\\terraform.exe), '
+                'or add the directory to your system PATH.')
+        return jsonify({
+            'passed': 0, 'failed': 1, 'warned': 0, 'total': 1,
+            'bin': bin_name, 'bin_version': None,
+            'customer': customer or '(current)', 'cloud': cloud, 'files_generated': 0,
+            'results': [{'group': 'CLI Probe', 'name': f'{bin_name} not found',
+                         'status': 'fail', 'error': hint}]
+        })
+
+    # Detect binary version
+    try:
+        ver_out = subprocess.run([bin_path, 'version', '-json'], capture_output=True, text=True, timeout=10)
+        bin_version = json.loads(ver_out.stdout).get('terraform_version') or json.loads(ver_out.stdout).get('opentofu_version', '')
+    except Exception:
+        bin_version = ''
+
+    payload = data
+    if customer:
+        saved = storage.load(customer, cloud)
+        if saved:
+            payload = saved
+
+    try:
+        files = _fmt_files(generate_all({**payload, 'cloud': cloud}), iac_tool)
+    except Exception as e:
+        return jsonify({
+            'passed': 0, 'failed': 1, 'warned': 0, 'total': 1,
+            'bin': bin_name, 'bin_version': bin_version,
+            'customer': customer or '(current)', 'cloud': cloud, 'files_generated': 0,
+            'results': [{'group': 'File Generation', 'name': 'generate_all()',
+                         'status': 'fail', 'error': str(e)}]
+        })
+
+    results = []
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for rel_path, content in files.items():
+            abs_path = os.path.join(tmpdir, rel_path.replace('/', os.sep))
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, 'w', encoding='utf-8') as fh:
+                fh.write(content)
+
+        # ── terraform fmt --check ─────────────────────────────────────────────
+        try:
+            fmt = subprocess.run(
+                [bin_path, 'fmt', '-check', '-recursive', '.'],
+                cwd=tmpdir, capture_output=True, text=True, timeout=30
+            )
+            if fmt.returncode == 0:
+                results.append({'group': 'terraform fmt', 'name': 'All files properly formatted', 'status': 'pass'})
+            else:
+                # stdout lists files that need reformatting (one per line)
+                bad_files = [f.strip() for f in (fmt.stdout or '').splitlines() if f.strip()]
+                if bad_files:
+                    results.append({'group': 'terraform fmt', 'name': 'Files need reformatting',
+                                    'status': 'fail', 'error': '\n'.join(bad_files)})
+                else:
+                    results.append({'group': 'terraform fmt', 'name': 'Formatting check failed',
+                                    'status': 'fail', 'error': _strip(fmt.stderr or fmt.stdout)})
+        except subprocess.TimeoutExpired:
+            results.append({'group': 'terraform fmt', 'name': 'terraform fmt', 'status': 'fail', 'error': 'Timed out after 30s'})
+        except Exception as e:
+            results.append({'group': 'terraform fmt', 'name': 'terraform fmt', 'status': 'fail', 'error': str(e)})
+
+        # ── terraform init -backend=false ─────────────────────────────────────
+        init_ok = False
+        try:
+            init = subprocess.run(
+                [bin_path, 'init', '-backend=false', '-no-color', '-input=false'],
+                cwd=tmpdir, capture_output=True, text=True, timeout=180
+            )
+            if init.returncode == 0:
+                results.append({'group': 'terraform init', 'name': 'terraform init -backend=false', 'status': 'pass'})
+                init_ok = True
+            else:
+                results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
+                                'status': 'fail', 'error': _strip(init.stderr or init.stdout)})
+        except subprocess.TimeoutExpired:
+            results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
+                            'status': 'fail', 'error': 'Timed out after 180s — check internet connectivity or provider registry access'})
+        except Exception as e:
+            results.append({'group': 'terraform init', 'name': 'terraform init -backend=false', 'status': 'fail', 'error': str(e)})
+
+        # ── terraform validate ────────────────────────────────────────────────
+        if init_ok:
+            try:
+                val = subprocess.run(
+                    [bin_path, 'validate', '-json', '-no-color'],
+                    cwd=tmpdir, capture_output=True, text=True, timeout=30
+                )
+                try:
+                    vj = json.loads(val.stdout)
+                    if vj.get('valid'):
+                        results.append({'group': 'terraform validate', 'name': 'Configuration is valid', 'status': 'pass'})
+                    else:
+                        for diag in (vj.get('diagnostics') or []):
+                            sev   = diag.get('severity', 'error')
+                            fname = (diag.get('range') or {}).get('filename', '')
+                            if fname and fname.startswith(tmpdir):
+                                fname = fname[len(tmpdir):].lstrip('/\\')
+                            results.append({
+                                'group':  'terraform validate',
+                                'name':   diag.get('summary', 'Unknown error'),
+                                'status': 'fail' if sev == 'error' else 'warn',
+                                'error':  diag.get('detail', ''),
+                                'file':   fname or None,
+                            })
+                        if not vj.get('diagnostics'):
+                            results.append({'group': 'terraform validate', 'name': 'Invalid configuration',
+                                            'status': 'fail', 'error': _strip(val.stdout or val.stderr)})
+                except json.JSONDecodeError:
+                    status = 'pass' if val.returncode == 0 else 'fail'
+                    results.append({'group': 'terraform validate', 'name': 'terraform validate',
+                                    'status': status, 'error': _strip(val.stdout + val.stderr) if status == 'fail' else ''})
+            except subprocess.TimeoutExpired:
+                results.append({'group': 'terraform validate', 'name': 'terraform validate', 'status': 'fail', 'error': 'Timed out after 30s'})
+            except Exception as e:
+                results.append({'group': 'terraform validate', 'name': 'terraform validate', 'status': 'fail', 'error': str(e)})
+
+    passed = sum(1 for r in results if r['status'] == 'pass')
+    failed = sum(1 for r in results if r['status'] == 'fail')
+    warned = sum(1 for r in results if r['status'] == 'warn')
+    return jsonify({
+        'customer':        customer or '(current)',
+        'cloud':           cloud,
+        'bin':             bin_name,
+        'bin_version':     bin_version,
+        'passed':          passed,
+        'failed':          failed,
+        'warned':          warned,
+        'total':           len(results),
+        'results':         results,
+        'files_generated': len(files),
+    })
 
 
 if __name__ == '__main__':

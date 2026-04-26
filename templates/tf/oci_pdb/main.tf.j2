@@ -1,7 +1,10 @@
 # modules/{{ module_name }}/main.tf — oci_database_pluggable_database (PDB)
 terraform {
   required_providers {
-    oci = { source = "oracle/oci"; version = ">= 6.0.0" }
+    oci = {
+      source  = "oracle/oci"
+      version = ">= 6.0.0"
+    }
   }
 }
 resource "oci_database_pluggable_database" "this" {

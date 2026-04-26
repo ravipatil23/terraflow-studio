@@ -10,11 +10,7 @@ terraform {
 # Auto-discover DB servers from the Exadata Infrastructure (recommended)
 # db_servers IDs are only known at plan time after the infrastructure is provisioned
 data "aws_odb_db_servers" "{{ module_name }}" {
-{% if vm_mode == 'id' %}
   cloud_exadata_infrastructure_id = var.cloud_exadata_infrastructure_id
-{% else %}
-  cloud_exadata_infrastructure_arn = var.cloud_exadata_infrastructure_arn
-{% endif %}
 }
 
 {% endif %}
@@ -25,15 +21,8 @@ resource "aws_odb_cloud_vm_cluster" "this" {
   hostname_prefix = var.hostname_prefix
   license_model   = var.license_model
 
-{% if vm_mode == 'id' %}
-  # Infrastructure references — using IDs
   cloud_exadata_infrastructure_id = var.cloud_exadata_infrastructure_id != "" ? var.cloud_exadata_infrastructure_id : null
   odb_network_id                  = var.odb_network_id != "" ? var.odb_network_id : null
-{% else %}
-  # Infrastructure references — using ARNs (recommended)
-  cloud_exadata_infrastructure_arn = var.cloud_exadata_infrastructure_arn != "" ? var.cloud_exadata_infrastructure_arn : null
-  odb_network_arn                  = var.odb_network_arn != "" ? var.odb_network_arn : null
-{% endif %}
 
   ssh_public_keys = var.ssh_public_keys
 
@@ -56,10 +45,8 @@ resource "aws_odb_cloud_vm_cluster" "this" {
   db_node_storage_size_in_gbs = var.db_node_storage_size_in_gbs
   memory_size_in_gbs          = var.memory_size_in_gbs
   scan_listener_port_tcp      = var.scan_listener_port_tcp
-  system_version              = var.system_version != "" ? var.system_version : null
   is_local_backup_enabled     = var.is_local_backup_enabled
   is_sparse_diskgroup_enabled = var.is_sparse_diskgroup_enabled
-  region                      = var.region != "" ? var.region : null
 
   tags = var.tags
 }

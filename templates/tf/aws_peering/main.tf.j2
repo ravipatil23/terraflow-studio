@@ -13,7 +13,9 @@ resource "aws_odb_network_peering_connection" "this" {
 
   region = var.region != "" ? var.region : null
 
-  additional_peer_network_cidrs = length(var.additional_peer_network_cidrs) > 0 ? var.additional_peer_network_cidrs : null
+  # peer_network_cidrs is update-only — the AWS API rejects it during initial create.
+  # After the resource exists, uncomment the line below and re-apply to manage CIDRs.
+  # peer_network_cidrs = var.peer_network_cidrs
 
   tags = var.tags
 }

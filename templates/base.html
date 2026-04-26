@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terraflow Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --white:#ffffff;--off:#f5f4f1;--off2:#eeece8;--line:#d8d5cf;--line2:#c8c4bc;
+  --ink:#1a1916;--ink2:#4a4840;--ink3:#888480;--ink4:#b0ada8;
+  --orange:#e8500a;--orange2:#ff6b2b;--o-dim:rgba(232,80,10,0.08);--o-dim2:rgba(232,80,10,0.18);
+  --green:#1a7a4a;--red:#c0392b;--r-dim:rgba(192,57,43,0.09);
+  --blue:#1a56a0;--purple:#6b3fa0;
+  --gcp:#4285F4;--gcp-dim:rgba(66,133,244,0.10);--gcp-dim2:rgba(66,133,244,0.18);
+  --accent:var(--orange);--accent2:var(--orange2);--a-dim:var(--o-dim);--a-dim2:var(--o-dim2);
+  --radius:6px;--radius-lg:10px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.07);--shadow:0 2px 8px rgba(0,0,0,0.09);
+  --font-d:'Barlow Condensed',sans-serif;--font-b:'Barlow',sans-serif;--font-m:'DM Mono',monospace;
+}
+body.gcp{--accent:var(--gcp);--accent2:#5a9cff;--a-dim:var(--gcp-dim);--a-dim2:var(--gcp-dim2);}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{font-size:14px;}
+body{background:var(--off);color:var(--ink);font-family:var(--font-b);height:100vh;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;}
+header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:300;}
+.logo{display:flex;align-items:baseline;gap:14px;}
+.logo-name{font-family:var(--font-d);font-weight:800;font-size:22px;color:var(--white);line-height:1;}
+.logo-name .ac{color:var(--accent2);}
+.logo-sub{font-family:var(--font-m);font-size:10px;color:#555;letter-spacing:.06em;text-transform:uppercase;}
+.header-right{display:flex;align-items:center;gap:10px;}
+.pill{font-family:var(--font-m);font-size:10px;border:1px solid #333;border-radius:4px;padding:2px 8px;color:#666;}
+.pill strong{color:#4caf7d;font-weight:500;}
+.provider-badge{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;background:var(--a-dim2);color:var(--accent2);border:1px solid;border-color:var(--accent2);border-radius:4px;padding:3px 10px;opacity:.8;}
+.cloud-sw{display:flex;background:#111;border:1px solid #2a2a2a;border-radius:6px;overflow:hidden;flex-shrink:0;}
+.csw-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 16px;cursor:pointer;color:#555;border:none;background:transparent;transition:all .15s;white-space:nowrap;text-decoration:none;display:flex;align-items:center;}
+.csw-btn.sel-aws{color:#ff6b2b;background:rgba(232,80,10,.15);}
+.csw-btn.sel-gcp{color:#5a9cff;background:rgba(66,133,244,.15);}
+.csw-btn:hover:not(.sel-aws):not(.sel-gcp){color:#999;}
+.tool-sw{display:flex;background:#111;border:1px solid #2a2a2a;border-radius:6px;overflow:hidden;flex-shrink:0;}
+.tsw-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 14px;cursor:pointer;color:#555;border:none;background:transparent;transition:all .15s;white-space:nowrap;}
+.tsw-btn.sel-tf{color:#7b42bc;background:rgba(123,66,188,.15);}
+.tsw-btn.sel-tofu{color:#f5a623;background:rgba(245,166,35,.15);}
+.tsw-btn:hover:not(.sel-tf):not(.sel-tofu){color:#999;}
+/* ── Customer bar ── */
+.cust-bar{background:#0e0e0c;border-bottom:1px solid #1e1e1a;padding:0 28px;height:44px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
+.llm-bar{background:#0a0a09;border-bottom:2px solid #1e1e1a;padding:0 28px;height:40px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.llm-bar-label{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#555;white-space:nowrap;flex-shrink:0;}
+.llm-bar-input{flex:1;background:#111;border:1.5px solid #2a2a2a;border-radius:var(--radius);color:#ccc;font-family:var(--font-m);font-size:11px;padding:5px 12px;outline:none;transition:border-color .15s;min-width:0;}
+.llm-bar-input:focus{border-color:#555;}.llm-bar-input::placeholder{color:#444;}
+.llm-bar-btn{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:0 14px;height:28px;border-radius:var(--radius);cursor:pointer;border:1.5px solid;white-space:nowrap;flex-shrink:0;transition:all .15s;}
+.llm-bar-btn.send{background:rgba(123,66,188,.15);border-color:#7b42bc;color:#b080e0;}
+.llm-bar-btn.send:hover{background:#7b42bc;color:#fff;}
+.llm-bar-btn.send:disabled{opacity:.35;cursor:not-allowed;}
+.llm-prov{font-family:var(--font-m);font-size:9px;color:#333;letter-spacing:.04em;flex-shrink:0;white-space:nowrap;}
+.llm-prov.ok{color:#2a7a4a;}.llm-prov.err{color:#7a2a2a;}
+.llm-reply{font-family:var(--font-m);font-size:10px;color:#666;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.llm-tpl-card{background:#1a1a18;border:1.5px solid #2a2a2a;border-radius:7px;padding:10px 12px;cursor:pointer;transition:all .15s;text-align:left;}
+.llm-tpl-card:hover{border-color:#555;background:#222;}
+.llm-tpl-tag{display:inline-block;font-family:var(--font-d);font-weight:700;font-size:8px;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border-radius:3px;margin-bottom:5px;}
+.llm-tpl-tag.aws{background:rgba(232,80,10,.2);color:#ff6b2b;}.llm-tpl-tag.gcp{background:rgba(66,133,244,.2);color:#5a9cff;}.llm-tpl-tag.both{background:rgba(123,66,188,.2);color:#b080e0;}
+.llm-tpl-title{font-family:var(--font-d);font-weight:700;font-size:12px;color:#ccc;margin-bottom:3px;}
+.llm-tpl-desc{font-family:var(--font-m);font-size:9.5px;color:#555;line-height:1.5;}
+.cust-label{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#C9A227;white-space:nowrap;}
+.cust-input{font-family:var(--font-b);font-size:13px;background:#1a1a17;border:1.5px solid #2a2a26;border-radius:var(--radius);color:var(--white);padding:5px 12px;min-width:220px;outline:none;transition:border-color .15s;}
+.cust-input:focus{border-color:var(--accent2);}
+.cust-input::placeholder{color:#444;}
+.cust-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:5px 14px;cursor:pointer;border:1.5px solid;border-radius:var(--radius);transition:all .15s;white-space:nowrap;}
+.cust-btn.save{background:rgba(74,175,121,0.12);border-color:#4aaf79;color:#4aaf79;}
+.cust-btn.save:hover{background:rgba(74,175,121,0.22);}
+.cust-btn.save.saved{background:rgba(74,175,121,0.25);color:#6dd4a0;}
+.cust-btn.load{background:rgba(90,156,255,0.10);border-color:#5a9cff;color:#5a9cff;}
+.cust-btn.load:hover{background:rgba(90,156,255,0.20);}
+.cust-btn.del{background:rgba(192,57,43,0.10);border-color:#c0392b;color:#c0392b;}
+.cust-btn.del:hover{background:rgba(192,57,43,0.22);}
+.cust-btn.del:disabled{opacity:.35;cursor:not-allowed;}
+.cust-btn.test{background:rgba(180,100,255,0.12);border-color:#b464ff;color:#b464ff;}
+.cust-btn.test:hover{background:rgba(180,100,255,0.22);}
+.cust-btn.test:disabled{opacity:.35;cursor:not-allowed;}
+/* ── Test Modal ── */
+.test-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center;}
+.test-modal-overlay.open{display:flex;}
+.test-modal{background:var(--white);border-radius:var(--radius-lg);box-shadow:0 8px 48px rgba(0,0,0,0.3);width:min(720px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;}
+.test-modal-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.test-modal-title{font-family:var(--font-d);font-weight:800;font-size:14px;color:var(--ink);flex:1;}
+.test-modal-sub{font-family:var(--font-m);font-size:11px;color:var(--ink3);}
+.test-modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--ink3);padding:0 4px;line-height:1;}
+.test-modal-body{overflow-y:auto;padding:16px 20px;flex:1;}
+.test-progress{height:4px;background:var(--line);border-radius:2px;margin-bottom:16px;overflow:hidden;}
+.test-progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s;width:0%;}
+.test-summary{display:flex;gap:16px;margin-bottom:16px;padding:12px 16px;background:var(--off);border-radius:var(--radius);border:1px solid var(--line);}
+.test-stat{text-align:center;}
+.test-stat-num{font-family:var(--font-d);font-weight:800;font-size:22px;line-height:1;}
+.test-stat-lbl{font-family:var(--font-m);font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;}
+.test-stat.pass .test-stat-num{color:var(--green);}
+.test-stat.fail .test-stat-num{color:var(--red);}
+.test-stat.skip .test-stat-num{color:var(--ink3);}
+.test-stat.warn .test-stat-num{color:#d4a017;}
+.test-tab-bar{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:14px;flex-shrink:0;padding:0 20px;}
+.test-tab{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:8px 14px;cursor:pointer;color:var(--ink3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;}
+.test-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.test-tab:hover:not(.active){color:var(--ink);}
+.test-warn-row .test-icon{color:#d4a017;}
+.test-group{margin-bottom:12px;}
+.test-group-name{font-family:var(--font-d);font-weight:700;font-size:11px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--line);}
+.test-row{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--off2);font-size:12px;}
+.test-row:last-child{border-bottom:none;}
+.test-icon{font-size:13px;flex-shrink:0;line-height:1.4;}
+.test-name{font-family:var(--font-m);color:var(--ink2);flex:1;}
+.test-err{font-family:var(--font-m);font-size:11px;color:var(--red);margin-top:3px;background:var(--r-dim);padding:4px 8px;border-radius:4px;white-space:pre-wrap;word-break:break-word;}
+.test-running{color:var(--ink3);font-style:italic;}
+.cust-sep{width:1px;height:22px;background:#2a2a26;flex-shrink:0;}
+.cust-select{font-family:var(--font-b);font-size:12px;background:#1a1a17;border:1.5px solid #2a2a26;border-radius:var(--radius);color:#aaa;padding:5px 10px;cursor:pointer;outline:none;}
+.cust-select:focus{border-color:var(--accent2);}
+.save-toast{font-family:var(--font-m);font-size:11px;color:#4aaf79;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none;}
+.save-toast.show{opacity:1;}
+.backend-pill{font-family:var(--font-m);font-size:9px;color:#333;letter-spacing:.04em;margin-left:auto;white-space:nowrap;}
+.tab-bar{background:var(--white);border-bottom:2px solid var(--line);display:flex;align-items:stretch;overflow-x:auto;flex-shrink:0;height:46px;}
+.tab-bar::-webkit-scrollbar{height:0;}
+.tgroup{display:none;align-items:stretch;}.tgroup.show{display:contents;}
+.tab{position:relative;padding:0 18px;height:46px;display:flex;align-items:center;gap:9px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:border-color .15s;user-select:none;flex-shrink:0;}
+.tab-num{font-family:var(--font-d);font-weight:700;font-size:10px;color:var(--ink4);background:var(--off);border:1.5px solid var(--line);border-radius:4px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.tab-label{font-family:var(--font-m);font-size:11px;color:var(--ink3);transition:color .15s;white-space:nowrap;}
+.tab.active{border-bottom-color:var(--accent);}
+.tab.active .tab-label{color:var(--ink);font-weight:500;}
+.tab.active .tab-num{background:var(--accent);border-color:var(--accent);color:var(--white);}
+.app{display:grid;grid-template-columns:1fr 500px;flex:1;min-height:0;overflow:hidden;}
+.form-panel{overflow-y:auto;padding:28px 28px 40px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
+.form-panel::-webkit-scrollbar{width:4px;}
+.form-panel::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
+.page{display:none;}.page.active{display:block;}
+.page-hero{margin-bottom:20px;padding-bottom:18px;border-bottom:2px solid var(--ink);display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
+.page-resource-name{font-family:var(--font-d);font-weight:800;line-height:1;letter-spacing:-0.01em;color:var(--ink);}
+.page-resource-name em{font-style:normal;color:var(--accent);}
+.page-doc-link{font-family:var(--font-m);font-size:10px;color:var(--ink3);text-decoration:none;border:1px solid var(--line2);border-radius:var(--radius);padding:4px 9px;white-space:nowrap;flex-shrink:0;transition:all .15s;}
+.page-doc-link:hover{border-color:var(--accent);color:var(--accent);}
+.module-path-row{display:flex;align-items:center;gap:8px;background:var(--off2);border:1.5px solid var(--line2);border-radius:var(--radius-lg);padding:9px 14px;margin-bottom:20px;font-family:var(--font-m);font-size:11px;color:var(--ink3);}
+.mp-dir{color:var(--blue);}
+.module-name-field{background:transparent;border:none;outline:none;font-family:var(--font-m);font-size:11px;color:var(--accent);font-weight:500;width:160px;}
+.section{margin-bottom:22px;}
+.section-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.section-title{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);}
+.section-line{flex:1;height:1px;background:var(--line);}
+.badge-req{font-family:var(--font-d);font-weight:700;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--red);background:var(--r-dim);border:1px solid rgba(192,57,43,.2);border-radius:4px;padding:1px 6px;}
+.badge-opt{font-family:var(--font-d);font-weight:600;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);background:var(--off2);border:1px solid var(--line2);border-radius:4px;padding:1px 6px;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.field{margin-bottom:12px;}.field:last-child{margin-bottom:0;}
+.field-lbl{display:flex;align-items:center;gap:5px;font-family:var(--font-m);font-size:11px;font-weight:500;color:var(--ink2);margin-bottom:4px;}
+.req-star{color:var(--red);}
+.field-hint{font-size:10.5px;color:var(--ink3);margin-bottom:4px;line-height:1.5;}
+.field-err{font-family:var(--font-m);font-size:10px;color:var(--red);margin-top:3px;display:none;}
+.field.invalid .field-err{display:block;}
+.field.invalid input,.field.invalid select,.field.invalid textarea{border-color:var(--red)!important;}
+.field.invalid .field-lbl{color:var(--red);}
+input[type=text],input[type=number],input[type=email],select,textarea{width:100%;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);color:var(--ink);font-family:var(--font-m);font-size:11.5px;padding:7px 10px;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;box-shadow:var(--shadow-sm);}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--a-dim2);}
+input:hover:not(:focus),select:hover:not(:focus),textarea:hover:not(:focus){border-color:var(--ink3);}
+select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888480' d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:26px;}
+select option{background:var(--white);color:var(--ink);}
+textarea{resize:vertical;min-height:60px;line-height:1.6;}
+.tog-row{display:flex;align-items:center;gap:10px;margin-top:4px;}
+.tog-sw{position:relative;width:38px;height:22px;cursor:pointer;flex-shrink:0;}
+.tog-sw input{display:none;}
+.tog-track{position:absolute;inset:0;border-radius:11px;background:var(--off2);border:1.5px solid var(--line2);transition:all .2s;}
+.tog-sw input:checked~.tog-track{background:var(--a-dim2);border-color:var(--accent);}
+.tog-thumb{position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--ink4);transition:transform .2s,background .2s;}
+.tog-sw input:checked~.tog-thumb{transform:translateX(16px);background:var(--accent);}
+.tog-lbl{font-family:var(--font-m);font-size:12px;color:var(--ink2);min-width:52px;}
+.chip-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:4px;}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--off2);border:1.5px solid var(--line2);border-radius:var(--radius);padding:3px 8px 3px 10px;font-family:var(--font-m);font-size:11px;color:var(--ink2);max-width:100%;}
+.chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.chip-rm{background:none;border:none;cursor:pointer;padding:0;color:var(--ink4);font-size:15px;line-height:1;flex-shrink:0;transition:color .12s;}
+.chip-rm:hover{color:var(--red);}
+.chip-add-row{display:flex;gap:8px;}.chip-add-row input{flex:1;}
+.add-btn{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);padding:0 14px;font-family:var(--font-m);font-size:11px;color:var(--ink2);cursor:pointer;white-space:nowrap;height:36px;transition:all .15s;box-shadow:var(--shadow-sm);}
+.add-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--a-dim);}
+.seg{display:flex;border:1.5px solid var(--line2);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
+.seg button{flex:1;height:36px;border:none;background:var(--white);font-family:var(--font-m);font-size:11px;cursor:pointer;color:var(--ink3);border-right:1.5px solid var(--line2);transition:all .15s;}
+.seg button:last-child{border-right:none;}
+.seg button.on{background:var(--a-dim);color:var(--accent);font-weight:500;}
+.inner-card{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow-sm);}
+.notice{display:flex;gap:8px;align-items:flex-start;background:#fffbf5;border:1.5px solid #f0d090;border-radius:var(--radius);padding:8px 12px;font-size:11px;color:#7a5a10;margin-bottom:16px;line-height:1.55;}
+.notice.gcp{background:var(--gcp-dim);border-color:rgba(66,133,244,.3);color:#1a56a0;}
+.notice code{font-family:var(--font-m);font-size:10px;background:#faefd0;padding:1px 4px;border-radius:3px;}
+.vbtn{width:100%;margin-top:12px;background:var(--ink);border:none;border-radius:var(--radius);color:var(--white);font-family:var(--font-d);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;padding:12px;cursor:pointer;transition:background .15s;box-shadow:var(--shadow);}
+.vbtn:hover{background:var(--accent);}
+.output-panel{border-left:2px solid var(--ink);background:var(--white);display:flex;flex-direction:column;overflow:hidden;}
+.out-layout{display:flex;flex:1;overflow:hidden;}
+.file-tree{width:190px;border-right:1.5px solid var(--line);background:var(--off);flex-shrink:0;overflow-y:auto;padding:12px 0;}
+.ft-section{padding:0 12px 6px;font-family:var(--font-d);font-weight:700;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink4);margin-top:6px;}
+.ft-dir{padding:3px 12px;font-family:var(--font-m);font-size:10px;color:var(--ink3);display:flex;align-items:center;gap:5px;}
+.ft-dir::before{content:'📁';font-size:11px;}
+.ft-file,.ft-root-file{padding:4px 12px;font-family:var(--font-m);font-size:10.5px;color:var(--ink2);cursor:pointer;border-left:2px solid transparent;transition:all .12s;white-space:nowrap;display:flex;align-items:center;gap:5px;}
+.ft-file{padding-left:26px;}
+.ft-file:hover,.ft-root-file:hover{background:var(--off2);color:var(--ink);}
+.ft-file.active,.ft-root-file.active{background:var(--a-dim);color:var(--accent);border-left-color:var(--accent);font-weight:500;}
+.editor-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.editor-header{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--off);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;}
+.editor-filepath{font-family:var(--font-m);font-size:11px;color:var(--ink3);display:flex;align-items:center;gap:4px;}
+.editor-filepath .ep-dir{color:var(--blue);}
+.editor-filepath .ep-file{color:var(--ink);}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px rgba(26,122,74,.2);animation:blink 2.5s ease-in-out infinite;flex-shrink:0;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.editor-actions{display:flex;gap:6px;}
+.icon-btn{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding:4px 10px;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.icon-btn:hover{background:var(--ink);color:var(--white);border-color:var(--ink);}
+.icon-btn.green{border-color:rgba(26,122,74,.4);color:var(--green);}
+.icon-btn.green:hover{background:var(--green);color:var(--white);border-color:var(--green);}
+.icon-btn.copied{background:var(--green);color:var(--white);border-color:var(--green);}
+pre.code-editor{flex:1;overflow-y:auto;padding:18px 20px;font-family:var(--font-m);font-size:12px;line-height:1.85;color:var(--ink2);white-space:pre;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
+pre.code-editor::-webkit-scrollbar{width:4px;}
+pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
+/* ── Tooltips ── */
+.tip-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--off2);border:1px solid var(--line2);color:var(--ink3);font-size:9px;font-family:var(--font-d);font-weight:700;cursor:default;flex-shrink:0;transition:all .15s;line-height:1;position:relative;}
+.tip-icon:hover{background:var(--accent);border-color:var(--accent);color:var(--white);}
+.tip-icon .tip-box{display:none;position:absolute;left:20px;top:50%;transform:translateY(-50%);background:var(--ink);color:var(--white);font-family:var(--font-b);font-size:11px;font-weight:400;line-height:1.55;padding:9px 12px;border-radius:6px;white-space:normal;width:260px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.25);pointer-events:none;}
+.tip-icon .tip-box::before{content:'';position:absolute;right:100%;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--ink);}
+.tip-icon:hover .tip-box{display:block;}
+.tip-icon .tip-box em{color:var(--orange2);font-style:normal;}
+.tip-icon .tip-box code{background:rgba(255,255,255,0.12);padding:1px 4px;border-radius:3px;font-family:var(--font-m);font-size:10px;}
+.hkw{color:var(--red);font-weight:500;}.hres{color:#854F0B;font-weight:500;}.hgres{color:#185FA5;font-weight:500;}.hstr{color:var(--green);}.hnum{color:#534AB7;}.hbol{color:#854F0B;font-weight:500;}.href{color:var(--green);font-style:italic;}.hvar{color:#534AB7;font-style:italic;}.htype{color:var(--blue);}.hcmt{color:var(--ink4);font-style:italic;}
+/* ── Multi-instance cards ── */
+.inst-list{display:flex;flex-direction:column;gap:12px;}
+.inst-card{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden;}
+.inst-card.open .inst-body{display:block;}
+.inst-card-head{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;background:var(--off);border-bottom:1px solid transparent;transition:border-color .15s;}
+.inst-card.open .inst-card-head{border-bottom-color:var(--line);}
+.inst-card-head:hover{background:var(--off2);}
+.inst-num{font-family:var(--font-d);font-weight:800;font-size:11px;color:var(--white);background:var(--accent);border-radius:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.inst-title{font-family:var(--font-m);font-size:11px;font-weight:500;color:var(--ink2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inst-modname{font-family:var(--font-m);font-size:10px;color:var(--accent);background:var(--a-dim);border:1px solid var(--a-dim2);border-radius:3px;padding:1px 6px;flex-shrink:0;}
+.inst-chevron{font-size:10px;color:var(--ink4);transition:transform .2s;flex-shrink:0;}
+.inst-card.open .inst-chevron{transform:rotate(180deg);}
+.inst-rm{background:none;border:1px solid rgba(192,57,43,.25);border-radius:4px;color:var(--red);font-size:11px;padding:2px 8px;cursor:pointer;flex-shrink:0;transition:all .15s;font-family:var(--font-d);font-weight:700;letter-spacing:.04em;}
+.inst-rm:hover{background:var(--r-dim);border-color:var(--red);}
+.inst-body{display:none;padding:18px 18px 12px;}
+.inst-add-row{display:flex;align-items:center;gap:10px;margin-top:8px;}
+.inst-add-btn{display:flex;align-items:center;gap:6px;background:var(--a-dim);border:1.5px solid var(--a-dim2);border-radius:var(--radius);color:var(--accent);font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:7px 16px;cursor:pointer;transition:all .15s;}
+.inst-add-btn:hover{background:var(--accent);color:var(--white);}
+.inst-count-lbl{font-family:var(--font-m);font-size:10px;color:var(--ink3);}
+.ref-select{font-family:var(--font-m);font-size:11px;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);color:var(--ink);padding:7px 26px 7px 10px;outline:none;cursor:pointer;width:100%;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888480' d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;}
+.ref-select:focus{border-color:var(--accent);}
+</style>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+<header>
+  <div class="logo">
+    <div class="logo-name">Terraflow<span class="ac"> Studio</span><span style="font-size:10px;font-weight:400;color:#C9A227;margin-left:8px;font-family:var(--font-m);letter-spacing:.04em">v5.1</span></div>
+    <div class="logo-sub" style="color:#C9A227">Oracle DB@Cloud · Terraform Generator</div>
+  </div>
+  <div class="header-right">
+    <div class="tool-sw">
+      <button class="tsw-btn sel-tf" id="btn-tf"   onclick="switchTool('terraform')" title="Generate for Terraform">⬡ Terraform</button>
+      <button class="tsw-btn"         id="btn-tofu" onclick="switchTool('opentofu')"  title="Generate for OpenTofu">⬡ OpenTofu</button>
+    </div>
+    {% block cloud_nav %}{% endblock %}
+    <span class="provider-badge" id="prov-badge">{% block provider_badge %}{% endblock %}</span>
+  </div>
+</header>
+
+<!-- ── Customer bar ── -->
+<div class="cust-bar">
+  <span class="cust-label">Customer</span>
+  <input class="cust-input" type="text" id="cust-name" placeholder="Enter customer name…" oninput="onCustInput()">
+  <button class="cust-btn save" id="save-btn" onclick="saveConfig()" title="Save current config for this customer">💾 Save</button>
+  <button class="cust-btn load" id="load-btn" onclick="loadConfig()" title="Load saved config for this customer">📂 Load</button>
+  <button class="cust-btn del" id="del-btn" onclick="deleteConfig()" title="Delete saved config for this customer" disabled>🗑 Delete</button>
+  <button class="cust-btn test" id="test-btn" onclick="runCustomerTests()" title="Run Terraform generation tests for this customer" disabled>🧪 Test</button>
+  <div class="cust-sep"></div>
+  <select class="cust-select" id="cust-select" onchange="onCustSelect()" title="Switch to a saved customer">
+    <option value="">— saved customers —</option>
+  </select>
+  <span class="save-toast" id="save-toast"></span>
+  <span class="backend-pill" id="backend-pill"></span>
+</div>
+
+<!-- ── LLM Prompt Bar ── -->
+<div class="llm-bar" id="llm-bar">
+  <span class="llm-bar-label">✦ AI</span>
+  <button class="llm-bar-btn" id="llm-templates-btn" onclick="toggleTemplates()" style="background:rgba(255,255,255,.04);border-color:#333;color:#666;padding:0 10px">⚡ Templates</button>
+  <input class="llm-bar-input" type="text" id="llm-input"
+    placeholder="Describe what you want… e.g. 'Production ExaDB in us-east-1 with 19c database'"
+    onkeydown="if(event.key==='Enter')sendLlmPrompt()">
+  <button class="llm-bar-btn send" id="llm-send-btn" onclick="sendLlmPrompt()">Ask</button>
+  <span class="llm-reply" id="llm-reply"></span>
+  <span class="llm-prov" id="llm-prov-badge">checking…</span>
+</div>
+<div id="llm-templates-panel" style="display:none;position:fixed;top:98px;left:28px;right:28px;z-index:600;background:#111;border:1.5px solid #2a2a2a;border-radius:10px;padding:16px 20px 12px;box-shadow:0 8px 32px rgba(0,0,0,.6)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <span style="font-family:var(--font-d);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#666">⚡ Prompt Templates</span>
+    <button onclick="toggleTemplates()" style="background:none;border:none;color:#444;cursor:pointer;font-size:16px;line-height:1;padding:0 4px">✕</button>
+  </div>
+  <div id="llm-template-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px"></div>
+</div>
+
+<!-- ── Test Modal ── -->
+<div class="test-modal-overlay" id="test-modal-overlay" onclick="if(event.target===this)closeTestModal()">
+  <div class="test-modal">
+    <div class="test-modal-head">
+      <span style="font-size:18px">🧪</span>
+      <div>
+        <div class="test-modal-title" id="test-modal-title">Running Tests…</div>
+        <div class="test-modal-sub" id="test-modal-sub"></div>
+      </div>
+      <button class="test-modal-close" onclick="closeTestModal()">✕</button>
+    </div>
+    <div class="test-tab-bar">
+      <button class="test-tab active" id="ttab-functional" onclick="switchTestTab('functional')">⚙ Functional Tests</button>
+      <button class="test-tab" id="ttab-tfvalidate" onclick="switchTestTab('tfvalidate')">🔬 Mock TF Validate</button>
+      <button class="test-tab" id="ttab-tfcli" onclick="switchTestTab('tfcli')">🏗 TF CLI</button>
+    </div>
+    <div class="test-modal-body">
+      <div class="test-progress"><div class="test-progress-bar" id="test-progress-bar"></div></div>
+      <div id="test-summary-row"></div>
+      <div id="test-results-body"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-bar">
+  {% block product_tabs %}{% endblock %}
+</div>
+
+<div class="app">
+<div class="form-panel">
+  {% block product_pages %}{% endblock %}
+</div><!-- /form-panel -->
+
+<!-- OUTPUT PANEL -->
+<div class="output-panel">
+  <div class="out-layout">
+    <div class="file-tree" id="file-tree">
+      <div class="ft-section">Root</div>
+      <div class="ft-root-file active" id="ft-root-main" onclick="selFile('root-main')"><span>📄</span>main.tf</div>
+      <div class="ft-root-file" id="ft-root-tfvars" onclick="selFile('root-tfvars')"><span>📄</span>terraform.tfvars</div>
+      <div id="ft-modules-section"></div>
+    </div>
+    <div class="editor-pane">
+      <div class="editor-header">
+        <div class="editor-filepath"><span class="live-dot"></span><span id="ep-path">main.tf</span></div>
+        <div class="editor-actions">
+          <button class="icon-btn green" onclick="dlZip()">⬇ Download ZIP</button>
+          <button class="icon-btn" onclick="loadZip()" title="Load a previously downloaded Terraflow ZIP to restore its configuration">⬆ Load ZIP</button>
+          <input type="file" id="load-zip-input" accept=".zip" style="display:none" onchange="onLoadZipFile(this)">
+          <button class="icon-btn" id="gh-push-btn" onclick="pushToGithub()" style="display:none" title="Push all Terraform files to GitHub">⬆ GitHub</button>
+          <span id="gh-status-badge" style="font-family:var(--font-m);font-size:9px;color:#444;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis"></span>
+          <button class="icon-btn" id="copybtn" onclick="copyFile()">⎘ Copy</button>
+        </div>
+      </div>
+      <pre class="code-editor" id="code-out"><span style="color:var(--ink4);font-style:italic"># Fill in the form — output appears here in real time.</span></pre>
+    </div>
+  </div>
+</div>
+</div><!-- /app -->
+
+<script>
+// ── Product-specific: region/zone data, state arrays, card builders ───────────
+{% block product_data %}{% endblock %}
+{% block product_state %}{% endblock %}
+
+// ── Shorthand field accessors ─────────────────────────────────────────────────
+function fv(id){ const e=document.getElementById(id); return e?e.value.trim():''; }
+function fcb(id){ const e=document.getElementById(id); return e?e.checked:false; }
+function fset(id,v){ const e=document.getElementById(id); if(e&&v!==undefined&&v!==null) e.value=v; }
+function fsetcb(id,v){ const e=document.getElementById(id); if(e) e.checked=!!v; }
+function tog_lbl(cbId,lblId,t,f){ const e=document.getElementById(cbId); const l=document.getElementById(lblId); if(e&&l) l.textContent=e.checked?t:f; }
+
+// ── Net-options html for dropdowns ─────────────────────────────────────────────
+function netOptions(selected='') {
+  if (typeof awsNets === 'undefined') return '';
+  return awsNets.map(n=>`<option value="${n.module_name}"${n.module_name===selected?' selected':''}>${n.module_name}</option>`).join('');
+}
+function infraOptions(selected='') {
+  if (typeof awsInfras === 'undefined') return '';
+  return awsInfras.map(n=>`<option value="${n.module_name}"${n.module_name===selected?' selected':''}>${n.module_name}</option>`).join('');
+}
+function gcpNetOptions(selected='') {
+  if (typeof gcpNets === 'undefined') return '';
+  return gcpNets.map(n=>`<option value="${n.module_name}"${n.module_name===selected?' selected':''}>${n.module_name}</option>`).join('');
+}
+function gcpInfraOptions(selected='') {
+  if (typeof gcpInfras === 'undefined') return '';
+  return gcpInfras.map(n=>`<option value="${n.module_name}"${n.module_name===selected?' selected':''}>${n.module_name}</option>`).join('');
+}
+
+// ── Product-specific orchestration ───────────────────────────────────────────
+{% block product_orchestration %}{% endblock %}
+
+// ── Card toggle ───────────────────────────────────────────────────────────────
+function toggleCard(id) { document.getElementById(id)?.classList.toggle('open'); }
+
+// ── MW card toggle ────────────────────────────────────────────────────────────
+function toggleMWCard(p) {
+  const sel = document.getElementById(p+'mwp');
+  const div = document.getElementById(p+'mwcustom');
+  if(sel&&div) div.style.display = sel.value==='CUSTOM_PREFERENCE'?'':'none';
+}
+
+// ── SSH key add for cluster cards ─────────────────────────────────────────────
+function addSshToCluster(i, isGcp) {
+  const arr = isGcp ? gcpClusters : awsClusters;
+  const p   = isGcp ? `gc${i}_` : `ac${i}_`;
+  const ta  = document.getElementById(p+'sshin');
+  if(!ta||!ta.value.trim()) return;
+  arr[i].ssh_public_keys = [...(arr[i].ssh_public_keys||[]), ta.value.trim()];
+  ta.value = '';
+  isGcp ? renderGcpClusters() : renderAwsClusters();
+  refresh();
+}
+
+function addDbServerToCluster(i) {
+  const p = `ac${i}_`;
+  const inp = document.getElementById(`${p}dbsrv-inp`);
+  if (!inp) return;
+  const v = inp.value.trim();
+  if (!v) return;
+  if (!awsClusters[i].db_servers) awsClusters[i].db_servers = [];
+  if (!awsClusters[i].db_servers.includes(v)) {
+    awsClusters[i].db_servers.push(v);
+    renderAwsClusters();
+    refresh();
+  }
+  inp.value = '';
+}
+
+function addGcpDbServerToCluster(i) {
+  const p = `gc${i}_`;
+  const inp = document.getElementById(`${p}gcpdbsrv-inp`);
+  if (!inp) return;
+  const v = inp.value.trim();
+  if (!v) return;
+  if (!gcpClusters[i].db_servers) gcpClusters[i].db_servers = [];
+  if (!gcpClusters[i].db_servers.includes(v)) {
+    gcpClusters[i].db_servers.push(v);
+    renderGcpClusters();
+    refresh();
+  }
+  inp.value = '';
+}
+
+function addDbServerToAvmc(i) {
+  const p = `av${i}_`;
+  const inp = document.getElementById(`${p}dbsrv-inp`);
+  if (!inp) return;
+  const v = inp.value.trim();
+  if (!v) return;
+  if (!awsAvmcs[i].db_servers) awsAvmcs[i].db_servers = [];
+  if (!awsAvmcs[i].db_servers.includes(v)) {
+    awsAvmcs[i].db_servers.push(v);
+    renderAwsAvmcs();
+    refresh();
+  }
+  inp.value = '';
+}
+
+function addCidrToPeer(i) {
+  const inp = document.getElementById(`ap${i}_cidrin`);
+  if(!inp||!inp.value.trim()) return;
+  const cidr = inp.value.trim();
+  if(!/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(cidr)) { inp.style.borderColor='var(--red)'; return; }
+  inp.style.borderColor='';
+  awsPeerings[i].peer_network_cidrs = [...(awsPeerings[i].peer_network_cidrs||[]), cidr];
+  inp.value='';
+  renderAwsPeerings(); refresh();
+}
+
+// ── Validate & Generate ───────────────────────────────────────────────────────
+async function vgen(tab, isGcp){
+  const p=buildPayload(); p.tab=tab;
+  try {
+    const res=await fetch('/api/validate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    const d=await res.json();
+
+    document.querySelectorAll('.inst-body .field.invalid').forEach(f=>f.classList.remove('invalid'));
+    document.querySelectorAll('.inst-card .card-err-banner').forEach(b=>b.remove());
+
+    if(!d.valid){
+      const byModule = d.errors_by_module || {};
+      for(const [mn, errs] of Object.entries(byModule)){
+        const mnInput = [...document.querySelectorAll('.module-name-field')].find(el=>el.value===mn);
+        if(mnInput){
+          const card = mnInput.closest('.inst-card');
+          if(card){
+            card.classList.add('open');
+            const body = card.querySelector('.inst-body');
+            if(body && !body.querySelector('.card-err-banner')){
+              const banner = document.createElement('div');
+              banner.className = 'card-err-banner';
+              banner.style.cssText='background:var(--r-dim);border:1px solid var(--red);border-radius:var(--radius);padding:8px 12px;margin-bottom:10px;font-family:var(--font-m);font-size:11px;color:var(--red);';
+              banner.innerHTML = '⚠ ' + Object.entries(errs).map(([k,v])=>`<strong>${k}</strong>: ${v}`).join(' &nbsp;·&nbsp; ');
+              body.insertBefore(banner, body.firstChild);
+            }
+            for(const field of Object.keys(errs)){
+              const inp = card.querySelector(`input[id*="${field}"], select[id*="${field}"], textarea[id*="${field}"]`);
+              if(inp){
+                const fieldDiv = inp.closest('.field');
+                if(fieldDiv) fieldDiv.classList.add('invalid');
+              }
+            }
+          }
+        }
+      }
+      const totalErrors = Object.values(byModule).reduce((s,e)=>s+Object.keys(e).length,0);
+      showToast(`${totalErrors} validation error${totalErrors!==1?'s':''} — check highlighted fields`, true);
+      return;
+    }
+    document.querySelectorAll('.card-err-banner').forEach(b=>b.remove());
+    showToast('Valid — generating all files…');
+  } catch(e) {
+    showToast('Error: '+e.message, true);
+    return;
+  }
+  activeFile='root-main';
+  updateTree(); renderEditor();
+}
+
+function copyFile(){const text=document.getElementById('code-out').innerText;navigator.clipboard.writeText(text).then(()=>{const btn=document.getElementById('copybtn');btn.classList.add('copied');btn.textContent='✓ Copied!';setTimeout(()=>{btn.classList.remove('copied');btn.textContent='⎘ Copy';},2000);});}
+
+// ── Tool switcher ─────────────────────────────────────────────────────────────
+function switchTool(t) {
+  iacTool = t;
+  document.getElementById('btn-tf').className   = 'tsw-btn' + (t==='terraform' ? ' sel-tf'   : '');
+  document.getElementById('btn-tofu').className = 'tsw-btn' + (t==='opentofu'  ? ' sel-tofu' : '');
+  refresh();
+}
+
+// ── File key helpers ──────────────────────────────────────────────────────────
+function fkToPath(k){
+  if(k==='root-main')return'<span class="ep-file">main.tf</span>';
+  if(k==='root-tfvars')return'<span class="ep-file">terraform.tfvars</span>';
+  const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
+  if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'<span class="ep-dir">modules/'+m2[1]+'/</span><span class="ep-file">'+f+'</span>';}
+  return k;
+}
+function fkToApiPath(k){
+  if(k==='root-main')return'main.tf';
+  if(k==='root-tfvars')return'terraform.tfvars';
+  const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
+  if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'modules/'+m2[1]+'/'+f;}
+  return k;
+}
+
+function updateTree(){
+  const sec=document.getElementById('ft-modules-section');
+  if(!sec) return;
+  const names=getAllModuleNames();
+  let h='<div class="ft-section" style="margin-top:8px">Modules</div>';
+  names.forEach(n=>{
+    h+='<div class="ft-dir">'+n+'/</div>';
+    [['main','main.tf','📄'],['variables','variables.tf','📋'],['outputs','outputs.tf','📤'],['tfvars','terraform.tfvars','⚙']].forEach(([kt,f,ic])=>{
+      const fk='mod:'+n+':'+kt;
+      const sid='ft-mod-'+n.replace(/[^a-z0-9]/gi,'_')+'-'+kt;
+      h+='<div class="ft-file '+(activeFile===fk?'active':'')+'" id="'+sid+'" onclick="selFile(\''+fk+'\')"><span>'+ic+'</span>'+f+'</div>';
+    });
+  });
+  sec.innerHTML=h;
+  ['root-main','root-tfvars'].forEach(k=>{const el=document.getElementById('ft-'+k);if(el)el.className='ft-root-file'+(activeFile===k?' active':'');});
+}
+
+async function fetchFile(fk){
+  const p=buildPayload(); p.file_key=fk;
+  try{const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const d=await r.json();if(d.error)return'# Error:\n# '+d.error;return d.content||'';}
+  catch(e){return'# Network error: '+e.message;}
+}
+
+async function renderEditor(){
+  document.getElementById('ep-path').innerHTML=fkToPath(activeFile);
+  document.getElementById('code-out').innerHTML='<span style="color:var(--ink4);font-style:italic"># Generating...</span>';
+  const c=await fetchFile(fkToApiPath(activeFile));
+  document.getElementById('code-out').innerHTML=hl(c);
+}
+function selFile(k){activeFile=k;updateTree();renderEditor();}
+function refresh(){
+  document.querySelectorAll('.inst-body .field.invalid').forEach(f=>f.classList.remove('invalid'));
+  document.querySelectorAll('.card-err-banner').forEach(b=>b.remove());
+  clearTimeout(rtimer);rtimer=setTimeout(()=>{updateTree();renderEditor();},300);
+}
+
+function hl(code){
+  return code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
+    .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|validation|condition|error_message|description|type|default|value|properties)\b(?=[^(])/g,'<span class="hkw">$1</span>')
+    .replace(/"(aws_odb_[a-z_]+)"/g,'"<span class="hres">$1</span>"')
+    .replace(/"(google_oracle_database_[a-z_]+)"/g,'"<span class="hgres">$1</span>"')
+    .replace(/\b(string|number|bool|list|map|any|null)\b/g,'<span class="htype">$1</span>')
+    .replace(/var\.([a-z_][a-z0-9_.]*)/g,'<span class="hvar">var.$1</span>')
+    .replace(/module\.([a-z_][a-z0-9_.]*)/g,'<span class="href">module.$1</span>')
+    .replace(/=\s*"([^"<>]+)"/g,(m,v)=>'= <span class="hstr">"'+v+'"</span>')
+    .replace(/=\s*(true|false)\b/g,'= <span class="hbol">$1</span>')
+    .replace(/=\s*(-?\d+\.?\d*)\b/g,'= <span class="hnum">$1</span>');
+}
+
+// ── LLM Prompt Templates ──────────────────────────────────────────────────────
+const LLM_TEMPLATES = [
+  {cloud:'aws',tag:'aws',title:'Quick start — AWS prod',desc:'Network + X11M infra + 16-core VM cluster in us-east-1',prompt:'Set up a production ODB@AWS environment in us-east-1 (AZ use1-az6). ODB network CIDRs 10.2.0.0/24 and 10.2.1.0/24. Exadata.X11M infra 2 compute 3 storage. VM cluster prod-vmcluster 16 CPU cores GI 23.0.0.0 hostname vm LICENSE_INCLUDED.'},
+  {cloud:'aws',tag:'aws',title:'Dev/test — small footprint',desc:'Minimal X9M + 8 cores for dev workloads',prompt:'Create a dev/test ODB@AWS setup in us-west-2 (AZ usw2-az3). Network CIDRs 10.10.0.0/24 and 10.10.1.0/24. Exadata.X9M infra 2 compute 3 storage. VM cluster dev-cluster 8 CPU cores GI 19.0.0.0 hostname dev BRING_YOUR_OWN_LICENSE.'},
+  {cloud:'aws',tag:'aws',title:'19c Database on VM Cluster',desc:'DB Home + CDB PROD19 + PDB SALESDB with auto-backup',prompt:'Add a 19c Oracle database on the first VM cluster. DB home display name dbhome19. CDB name PROD19 PDB name SALESDB character set AL32UTF8. Enable auto-backup SLOT_TWO window 14 day recovery.'},
+  {cloud:'aws',tag:'aws',title:'23c Database on VM Cluster',desc:'DB Home + CDB on latest Oracle 23c',prompt:'Add a 23c Oracle database on the first VM cluster. DB home named dbhome23. CDB name MYDB23 PDB name MYPDB23. No auto-backup.'},
+  {cloud:'aws',tag:'aws',title:'S3 + Zero-ETL access',desc:'Network with S3 and Zero-ETL access for data lake',prompt:'Create an ODB network in us-east-1 AZ use1-az6 CIDRs 10.4.0.0/24 and 10.4.1.0/24. Enable s3_access and zero_etl_access. Add Exadata.X11M infra and VM cluster 32 cores GI 23.0.0.0.'},
+  {cloud:'aws',tag:'aws',title:'Autonomous VM Cluster',desc:'40 cores/node, 5TB ADS, 2 CDBs',prompt:'Add an Autonomous VM Cluster named odb-avmcluster on the first infra and network. 40 CPU cores per node 5TB autonomous data storage 2 container databases memory 2GB per OCU LICENSE_INCLUDED. mTLS disabled.'},
+  {cloud:'aws',tag:'aws',title:'VPC peering connection',desc:'Peer the ODB network to an existing VPC',prompt:'Add a network peering connection named prod-peering connecting the ODB network to peer VPC vpc-0abc123456def7890.'},
+  {cloud:'aws',tag:'aws',title:'Multi-region DR',desc:'Second stack in us-west-2 for disaster recovery',prompt:'Create a second ODB@AWS disaster recovery stack in us-west-2 (AZ usw2-az3). Network CIDRs 10.3.0.0/24 and 10.3.1.0/24. Exadata.X11M infra named dr-exaInfra 2 compute 3 storage. VM cluster dr-vmcluster 16 cores GI 23.0.0.0 hostname drvm LICENSE_INCLUDED.'},
+  {cloud:'aws',tag:'aws',title:'BYOL licensing',desc:'Switch all clusters to Bring Your Own License',prompt:'Change the license model on all VM clusters and Autonomous VM clusters to BRING_YOUR_OWN_LICENSE.'},
+  {cloud:'gcp',tag:'gcp',title:'Quick start — GCP prod',desc:'ODB network + X9M infra + ExaDB cluster in us-east4',prompt:'Set up a production DB@GCP environment. ODB network my-odb-network in us-east4 project my-gcp-project VPC projects/my-gcp-project/global/networks/default CIDRs 10.5.0.0/24 and 10.5.1.0/24. Exadata.X9M infra gcp-infra 2 compute 3 storage. ExaDB cluster gcp-cluster 2 nodes 8 ECPU per node GI 23.0.0.0 hostname vm LICENSE_INCLUDED.'},
+  {cloud:'gcp',tag:'gcp',title:'Dev cluster — GCP',desc:'Minimal GCP setup for development',prompt:'Create a minimal DB@GCP dev setup in us-central1 project dev-project. ODB network dev-odb-net CIDRs 10.20.0.0/24 and 10.20.1.0/24. Exadata.X9M infra 2 compute 3 storage. ExaDB cluster dev-cluster 2 nodes 4 ECPU GI 19.0.0.0 hostname dev BRING_YOUR_OWN_LICENSE.'},
+  {cloud:'gcp',tag:'gcp',title:'EU region — GCP',desc:'DB@GCP in europe-west4',prompt:'Create a DB@GCP setup in europe-west4 project eu-project. ODB network eu-odb-net CIDRs 10.6.0.0/24 and 10.6.1.0/24. Exadata.X9M infra eu-exaInfra 2 compute 3 storage. ExaDB cluster eu-cluster 2 nodes 8 ECPU GI 23.0.0.0 hostname eu LICENSE_INCLUDED.'},
+  {cloud:'aws',tag:'both',title:'Reset to blank',desc:'Clear all resources and start fresh',prompt:'Remove all configured resources and reset to a blank AWS configuration with no networks infras clusters or databases.'},
+  {cloud:'aws',tag:'both',title:'Add maintenance window',desc:'Set custom weekly maintenance on Sunday 2–4am',prompt:'Update the Exadata infrastructure maintenance window to CUSTOM_PREFERENCE. Patching mode ROLLING. Schedule Sunday hours_of_day 2 week 1 of month.'},
+];
+
+function renderTemplates() {
+  const grid = document.getElementById('llm-template-grid');
+  if (!grid) return;
+  const filtered = LLM_TEMPLATES.filter(t => t.tag === 'both' || t.cloud === cloud);
+  grid.innerHTML = filtered.map(t => `
+    <button class="llm-tpl-card" onclick="useTemplate(${JSON.stringify(t.prompt).replace(/'/g,'&apos;')})">
+      <div><span class="llm-tpl-tag ${t.tag}">${t.tag.toUpperCase()}</span></div>
+      <div class="llm-tpl-title">${t.title}</div>
+      <div class="llm-tpl-desc">${t.desc}</div>
+    </button>`).join('');
+}
+
+function toggleTemplates() {
+  const panel = document.getElementById('llm-templates-panel');
+  const btn   = document.getElementById('llm-templates-btn');
+  const open  = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = open ? 'block' : 'none';
+  btn.style.borderColor = open ? '#7b42bc' : '#333';
+  btn.style.color       = open ? '#b080e0' : '#666';
+  if (open) renderTemplates();
+}
+
+function useTemplate(prompt) {
+  const inp = document.getElementById('llm-input');
+  if (inp) inp.value = prompt;
+  document.getElementById('llm-templates-panel').style.display = 'none';
+  document.getElementById('llm-templates-btn').style.borderColor = '#333';
+  document.getElementById('llm-templates-btn').style.color = '#666';
+  inp && inp.focus();
+}
+
+document.addEventListener('click', function(e) {
+  const panel = document.getElementById('llm-templates-panel');
+  const btn   = document.getElementById('llm-templates-btn');
+  if (panel && panel.style.display !== 'none') {
+    if (!panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+      panel.style.display = 'none';
+      btn.style.borderColor = '#333'; btn.style.color = '#666';
+    }
+  }
+});
+
+// ── LLM Prompt Bar ────────────────────────────────────────────────────────────
+async function initLlmBar() {
+  try {
+    const r = await fetch('/api/llm/info');
+    const d = await r.json();
+    const badge = document.getElementById('llm-prov-badge');
+    if (d.configured) {
+      badge.textContent = `${d.provider} · ${d.model}`;
+      badge.className = 'llm-prov ok';
+    } else {
+      badge.textContent = 'LLM not configured';
+      badge.className = 'llm-prov err';
+      document.getElementById('llm-send-btn').disabled = true;
+      document.getElementById('llm-input').placeholder = 'Set LLM_PROVIDER and LLM_API_KEY in .env to enable AI';
+    }
+  } catch(e) {
+    const badge = document.getElementById('llm-prov-badge');
+    if (badge) { badge.textContent = 'unavailable'; }
+  }
+}
+
+async function sendLlmPrompt() {
+  const inp   = document.getElementById('llm-input');
+  const reply = document.getElementById('llm-reply');
+  const btn   = document.getElementById('llm-send-btn');
+  const prompt = inp.value.trim();
+  if (!prompt) return;
+  btn.disabled = true; btn.textContent = '…';
+  reply.textContent = 'Thinking…'; reply.style.color = '#555';
+  try {
+    const r = await fetch('/api/llm/fill', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({prompt, cloud, current: buildPayload()}),
+    });
+    const d = await r.json();
+    if (d.error) {
+      reply.textContent = '✗ ' + d.error; reply.style.color = '#c0392b';
+    } else {
+      if (d.payload && Object.keys(d.payload).length) applyConfig(d.payload);
+      reply.textContent = '✓ ' + (d.explanation || 'Done');
+      reply.style.color = '#1a7a4a'; inp.value = '';
+    }
+  } catch(e) {
+    reply.textContent = '✗ Network error: ' + e.message; reply.style.color = '#c0392b';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ask';
+  }
+}
+
+// ── GitHub Integration ────────────────────────────────────────────────────────
+async function initGithub() {
+  try {
+    const r = await fetch('/api/github/info');
+    const d = await r.json();
+    const btn = document.getElementById('gh-push-btn');
+    const badge = document.getElementById('gh-status-badge');
+    if (d.configured) {
+      btn.style.display = '';
+      btn.style.borderColor = 'rgba(26,122,74,.4)';
+      btn.style.color = 'var(--green)';
+      badge.textContent = `${d.repo} / ${d.branch}`;
+      badge.style.color = '#2a7a4a';
+    }
+  } catch(e) {}
+}
+
+async function pushToGithub() {
+  const btn = document.getElementById('gh-push-btn');
+  const badge = document.getElementById('gh-status-badge');
+  const prev = btn.textContent;
+  btn.disabled = true; btn.textContent = '↑ Pushing…';
+  badge.textContent = ''; badge.style.color = '#555';
+  const payload = buildPayload();
+  const customer = getCustName();
+  const ts = new Date().toISOString().slice(0,16).replace('T',' ') + ' UTC';
+  payload.commit_message = `chore: Terraflow update — ${customer||'unnamed'} — ${ts}`;
+  payload.customer = customer;
+  try {
+    const r = await fetch('/api/github/push', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.error) {
+      badge.textContent = '✗ ' + d.error; badge.style.color = '#c0392b';
+    } else {
+      const errs = (d.errors||[]).length;
+      badge.textContent = errs ? `✓ ${d.pushed?.length} pushed, ${errs} errors` : `✓ ${d.pushed?.length} files pushed`;
+      badge.style.color = errs ? '#e67e22' : '#1a7a4a';
+      if (d.commit_url) { badge.style.cursor = 'pointer'; badge.onclick = ()=>window.open(d.commit_url,'_blank'); }
+    }
+  } catch(e) {
+    badge.textContent = '✗ Network error'; badge.style.color = '#c0392b';
+  } finally {
+    btn.disabled = false; btn.textContent = prev;
+  }
+}
+
+async function dlZip(){const p=buildPayload();const r=await fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);const tool=iacTool==='opentofu'?'-tofu':'';const cust=getCustName().replace(/[^a-z0-9_-]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');const suffix=(cust?'-'+cust:'')+tool+'.zip';const names={'aws':'terraflow-studio-aws'+suffix,'gcp':'terraflow-studio-gcp'+suffix};a.download=names[cloud]||'terraform.zip';a.click();}
+
+function loadZip() { document.getElementById('load-zip-input').click(); }
+async function onLoadZipFile(inp) {
+  const file = inp.files[0];
+  if (!file) return;
+  inp.value = '';
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch('/api/load-zip', {method: 'POST', body: fd});
+    const doc = await r.json();
+    if (doc.error) { showToast(doc.error, true); return; }
+    const cld = doc.cloud || cloud;
+    if (cld !== cloud) {
+      showToast(`This ZIP is for ${cld.toUpperCase()} — open that product page to load it`, true);
+      return;
+    }
+    applyConfig(doc);
+    showToast('ZIP loaded ✓');
+  } catch(e) { showToast('Load failed: ' + e.message, true); }
+}
+
+// ── Customer & Config persistence ────────────────────────────────────────────
+function getCustName() { return (document.getElementById('cust-name').value || '').trim(); }
+
+function onCustInput() {
+  const n = getCustName();
+  document.getElementById('save-btn').disabled = !n;
+  updateDelBtn();
+  updateTestBtn();
+}
+
+function updateDelBtn() {
+  const name = getCustName();
+  const sel  = document.getElementById('cust-select');
+  const hasMatch = Array.from(sel.options).some(o => {
+    if (!o.value) return false;
+    const [, cld] = o.value.split('|');
+    return o.dataset.name === name && cld === cloud;
+  });
+  document.getElementById('del-btn').disabled = !hasMatch;
+}
+
+function onCustSelect() {
+  const sel = document.getElementById('cust-select');
+  const val = sel.value;
+  if (!val) return;
+  const [slug, cld] = val.split('|');
+  const opt = sel.options[sel.selectedIndex];
+  const name = opt.dataset.name || slug;
+  document.getElementById('cust-name').value = name;
+  if (cld && cld !== cloud) {
+    showToast(`This config is for ${cld.toUpperCase()} — open that product page to load it`, true);
+    return;
+  }
+  loadConfigFor(name, cld || cloud);
+}
+
+async function saveConfig() {
+  const name = getCustName();
+  if (!name) { showToast('Enter a customer name first', true); return; }
+  const payload = { ...buildPayload(), customer: name };
+  try {
+    const r = await fetch('/api/config/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (d.error) { showToast('Save failed: ' + d.error, true); return; }
+    showToast('Saved ✓');
+    const btn = document.getElementById('save-btn');
+    btn.classList.add('saved');
+    setTimeout(() => btn.classList.remove('saved'), 2000);
+    await refreshCustomerList();
+  } catch(e) { showToast('Save error: ' + e.message, true); }
+}
+
+async function deleteConfig() {
+  const name = getCustName();
+  if (!name) { showToast('Enter a customer name first', true); return; }
+  if (!confirm(`Delete saved config for "${name}" (${cloud.toUpperCase()})?`)) return;
+  try {
+    const r = await fetch(`/api/config/delete/${encodeURIComponent(name)}/${cloud}`, {
+      method: 'DELETE'
+    });
+    const d = await r.json();
+    if (!d.ok) { showToast('Nothing to delete', true); return; }
+    showToast(`Deleted "${name}" (${cloud.toUpperCase()}) ✓`);
+    await refreshCustomerList();
+  } catch(e) { showToast('Delete error: ' + e.message, true); }
+}
+
+async function loadConfig() {
+  const name = getCustName();
+  if (!name) { showToast('Enter a customer name first', true); return; }
+  await loadConfigFor(name, cloud);
+}
+
+async function loadConfigFor(name, cld) {
+  try {
+    const r = await fetch(`/api/config/load/${encodeURIComponent(name)}/${cld}`);
+    if (r.status === 404) { showToast('No saved config found', true); return; }
+    const doc = await r.json();
+    if (doc.error) { showToast('Load failed: ' + doc.error, true); return; }
+    applyConfig(doc);
+    showToast('Loaded ✓');
+  } catch(e) { showToast('Load error: ' + e.message, true); }
+}
+
+function showToast(msg, isError=false) {
+  if (!isError) {
+    const el = document.getElementById('save-toast');
+    if (el) { el.textContent = msg; el.style.color = '#4aaf79'; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2500); return; }
+  }
+  let t = document.getElementById('vgen-toast');
+  if (!t) { t = document.createElement('div'); t.id = 'vgen-toast'; t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:var(--ink);color:var(--white);font-family:var(--font-m);font-size:12px;padding:10px 16px;border-radius:8px;max-width:360px;white-space:pre-wrap;box-shadow:0 4px 16px rgba(0,0,0,0.3);transition:opacity .3s;'; document.body.appendChild(t); }
+  t.style.background = isError ? 'var(--red)' : 'var(--ink)';
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, isError ? 5000 : 2500);
+}
+
+async function refreshCustomerList() {
+  try {
+    const r = await fetch('/api/config/list');
+    const list = await r.json();
+    const sel = document.getElementById('cust-select');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— saved customers —</option>';
+    list.forEach(c => {
+      c.clouds.forEach(cld => {
+        const opt = document.createElement('option');
+        opt.value = `${c.slug}|${cld}`;
+        opt.dataset.name = c.customer;
+        opt.textContent = `${c.customer} (${cld.toUpperCase()})`;
+        if (opt.value === prev) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    });
+    updateDelBtn();
+  } catch(e) { console.warn('Could not refresh customer list:', e); }
+}
+
+async function initStorage() {
+  try {
+    const r = await fetch('/api/config/backend');
+    const d = await r.json();
+    const type = d.backend.startsWith('couchdb') ? '🛢 CouchDB' : '📁 File';
+    document.getElementById('backend-pill').textContent = type;
+  } catch(e) {}
+  await refreshCustomerList();
+}
+
+// ── Test modal ────────────────────────────────────────────────────────────────
+let _activeTestTab = 'functional';
+
+function switchTestTab(tab) {
+  _activeTestTab = tab;
+  document.querySelectorAll('.test-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('ttab-' + tab).classList.add('active');
+  const overlay = document.getElementById('test-modal-overlay');
+  if (overlay.classList.contains('open')) {
+    _runCurrentTab();
+  }
+}
+
+function updateTestBtn() {
+  const name = getCustName();
+  const btn = document.getElementById('test-btn');
+  if (btn) btn.disabled = !name;
+}
+
+async function runCustomerTests() {
+  const name = getCustName();
+  if (!name) { showToast('Enter a customer name first', true); return; }
+  document.getElementById('test-modal-overlay').classList.add('open');
+  _runCurrentTab();
+}
+
+async function _runCurrentTab() {
+  const name = getCustName();
+  const tab  = _activeTestTab;
+
+  const tabLabels = { functional: `Testing "${name}"…`, tfvalidate: `TF Validate "${name}"…`, tfcli: `TF CLI "${name}"…` };
+  const tabHints  = { functional: 'Running functional tests…', tfvalidate: 'Running mock Terraform validation…',
+                      tfcli: '⏳ Running terraform fmt + init + validate… (init may take ~30s to download providers)' };
+  document.getElementById('test-modal-title').textContent = tabLabels[tab] || `Testing "${name}"…`;
+  document.getElementById('test-modal-sub').textContent = `Cloud: ${cloud.toUpperCase()}`;
+  document.getElementById('test-progress-bar').style.width = '15%';
+  document.getElementById('test-summary-row').innerHTML = '';
+  document.getElementById('test-results-body').innerHTML = `<div class="test-running">${tabHints[tab] || '⏳ Running…'}</div>`;
+
+  const endpoints = { functional: '/api/test', tfvalidate: '/api/tf-validate', tfcli: '/api/tf-cli' };
+  const endpoint = endpoints[tab] || '/api/test';
+  try {
+    const payload = { ...buildPayload(), customer: name };
+    const r = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    document.getElementById('test-progress-bar').style.width = '100%';
+    if (tab === 'functional') renderTestResults(d);
+    else if (tab === 'tfvalidate') renderTFValidateResults(d);
+    else renderTFCliResults(d);
+  } catch (e) {
+    document.getElementById('test-results-body').innerHTML =
+      `<div class="test-err">Network error: ${e.message}</div>`;
+  }
+}
+
+function closeTestModal() {
+  document.getElementById('test-modal-overlay').classList.remove('open');
+}
+
+function renderTestResults(d) {
+  const { passed, failed, total, results, customer, cloud: cl } = d;
+  const allPass = failed === 0;
+
+  document.getElementById('test-modal-title').textContent =
+    allPass ? `✅ All tests passed — "${customer}"` : `❌ ${failed} test${failed!==1?'s':''} failed — "${customer}"`;
+  document.getElementById('test-modal-sub').textContent =
+    `Cloud: ${(cl||'').toUpperCase()} · ${total} checks`;
+
+  document.getElementById('test-summary-row').innerHTML = `
+    <div class="test-summary">
+      <div class="test-stat pass"><div class="test-stat-num">${passed}</div><div class="test-stat-lbl">Passed</div></div>
+      <div class="test-stat fail"><div class="test-stat-num">${failed}</div><div class="test-stat-lbl">Failed</div></div>
+      <div class="test-stat skip"><div class="test-stat-num">${total}</div><div class="test-stat-lbl">Total</div></div>
+    </div>`;
+
+  document.getElementById('test-results-body').innerHTML = _buildResultsHTML(results);
+}
+
+function renderTFValidateResults(d) {
+  const { passed=0, failed=0, warned=0, total=0, results=[], customer='', cloud: cl='', files_generated=0 } = d;
+  const allOk = failed === 0;
+  const icon  = allOk ? (warned > 0 ? '⚠️' : '✅') : '❌';
+
+  document.getElementById('test-modal-title').textContent =
+    `${icon} Mock TF Validate — "${customer}"`;
+  document.getElementById('test-modal-sub').textContent =
+    `Cloud: ${(cl||'').toUpperCase()} · ${files_generated} files · ${total} checks`;
+
+  document.getElementById('test-summary-row').innerHTML = `
+    <div class="test-summary">
+      <div class="test-stat pass"><div class="test-stat-num">${passed}</div><div class="test-stat-lbl">Passed</div></div>
+      <div class="test-stat fail"><div class="test-stat-num">${failed}</div><div class="test-stat-lbl">Failed</div></div>
+      <div class="test-stat warn"><div class="test-stat-num">${warned}</div><div class="test-stat-lbl">Warnings</div></div>
+      <div class="test-stat skip"><div class="test-stat-num">${total}</div><div class="test-stat-lbl">Total</div></div>
+    </div>
+    <div style="font-family:var(--font-m);font-size:11px;color:var(--ink3);margin-bottom:12px;padding:8px 12px;background:var(--off);border-radius:var(--radius);">
+      🔬 <strong>Mock Terraform Validator</strong> — simulates <code>terraform validate</code> checking HCL syntax, provider schemas, variable resolution, output validity, and cross-module references without requiring Terraform or cloud credentials.
+    </div>`;
+
+  document.getElementById('test-results-body').innerHTML = _buildResultsHTML(results, true);
+}
+
+function renderTFCliResults(d) {
+  const { passed=0, failed=0, warned=0, total=0, results=[], customer='', cloud: cl='',
+          files_generated=0, bin='terraform', bin_version='' } = d;
+  const allOk = failed === 0;
+  const icon  = allOk ? (warned > 0 ? '⚠️' : '✅') : '❌';
+
+  document.getElementById('test-modal-title').textContent =
+    `${icon} TF CLI — "${customer}"`;
+  document.getElementById('test-modal-sub').textContent =
+    `Cloud: ${(cl||'').toUpperCase()} · ${files_generated} files · ${bin}${bin_version ? ' v'+bin_version : ''}`;
+
+  document.getElementById('test-summary-row').innerHTML = `
+    <div class="test-summary">
+      <div class="test-stat pass"><div class="test-stat-num">${passed}</div><div class="test-stat-lbl">Passed</div></div>
+      <div class="test-stat fail"><div class="test-stat-num">${failed}</div><div class="test-stat-lbl">Failed</div></div>
+      <div class="test-stat warn"><div class="test-stat-num">${warned}</div><div class="test-stat-lbl">Warnings</div></div>
+      <div class="test-stat skip"><div class="test-stat-num">${total}</div><div class="test-stat-lbl">Total</div></div>
+    </div>
+    <div style="font-family:var(--font-m);font-size:11px;color:var(--ink3);margin-bottom:12px;padding:8px 12px;background:var(--off);border-radius:var(--radius);">
+      🏗 Runs <code>${bin} fmt --check</code>, <code>${bin} init -backend=false</code>, and <code>${bin} validate</code> against the generated files in a temporary directory.
+    </div>`;
+
+  document.getElementById('test-results-body').innerHTML = _buildResultsHTML(results, true);
+}
+
+function _buildResultsHTML(results, showWarn=false) {
+  if (!results || results.length === 0) return '<div class="test-running">No tests ran.</div>';
+
+  const groups = {};
+  results.forEach(r => {
+    if (!groups[r.group]) groups[r.group] = [];
+    groups[r.group].push(r);
+  });
+
+  let html = '';
+  for (const [grpName, rows] of Object.entries(groups)) {
+    const grpFail = rows.filter(r => r.status === 'fail').length;
+    const grpWarn = rows.filter(r => r.status === 'warn').length;
+    let badge = '';
+    if (grpFail)      badge = `<span style="color:var(--red);font-size:10px"> ✗ ${grpFail} failed</span>`;
+    else if (grpWarn) badge = `<span style="color:#d4a017;font-size:10px"> ⚠ ${grpWarn} warnings</span>`;
+    else              badge = `<span style="color:var(--green);font-size:10px"> ✓ all passed</span>`;
+
+    html += `<div class="test-group"><div class="test-group-name">${grpName}${badge}</div>`;
+    rows.forEach(r => {
+      const icon = r.status === 'pass' ? '✅' : r.status === 'warn' ? '⚠️' : '❌';
+      const rowClass = r.status === 'warn' ? ' test-warn-row' : '';
+      const fileLabel = r.file ? `<span style="font-family:var(--font-m);font-size:10px;color:var(--ink4);margin-left:6px">${r.file}</span>` : '';
+      html += `<div class="test-row${rowClass}">
+        <span class="test-icon">${icon}</span>
+        <div style="flex:1">
+          <span class="test-name">${r.name}</span>${fileLabel}
+          ${r.error ? `<div class="test-err">${r.error}</div>` : ''}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+
+// ── Tooltip system ────────────────────────────────────────────────────────────
+const TOOLTIPS = {
+  'display_name':                   'Human-friendly name for this resource. Can be updated after creation. Used in the AWS Console and OCI.',
+  'availability_zone_id':           'AWS Availability Zone ID (not name). Example: <code>use1-az6</code>. Find with <code>aws ec2 describe-availability-zones</code>. Cannot be changed after creation.',
+  'client_subnet_cidr':             'IPv4 CIDR block for the client subnet inside the ODB Network. Must be a valid RFC1918 range (e.g. <code>10.2.0.0/24</code>). Cannot overlap backup subnet or 192.168.128.0/20.',
+  'backup_subnet_cidr':             'IPv4 CIDR block for the backup subnet. Used for database backups and Data Guard replication. Cannot overlap client subnet or 192.168.128.0/20.',
+  's3_access':                       'Allows Oracle Database instances in this network to access Amazon S3 directly. Enable if you plan to use S3 for backups or external tables.',
+  'zero_etl_access':                 'Enables Zero-ETL integrations between Oracle Database and AWS analytics services (e.g. Redshift). Enable only if you need this feature.',
+  'availability_zone':              'Human-readable AZ name (e.g. <code>us-east-1a</code>). Optional — prefer <em>availability_zone_id</em> for consistency across accounts.',
+  'region':                          'AWS region override. Defaults to the provider region if omitted. Example: <code>us-east-1</code>.',
+  'default_dns_prefix':             'DNS prefix used for hostnames inside the ODB Network. Must be unique within the region. Alphanumeric, max 12 chars. Mutually exclusive with custom_domain_name.',
+  'custom_domain_name':             'Custom domain name for ODB Network hostnames (e.g. <code>myodb.corp.example.com</code>). Mutually exclusive with default_dns_prefix — only one may be set.',
+  'delete_associated_resources':    'When true, deleting this ODB Network also destroys all associated resources (subnets, peering connections). Use with caution.',
+  'shape':                           'Exadata system family shape. Determines hardware generation and capacity increments. <em>X11M</em> is the latest; <em>X9M</em> is previous-gen. Cannot be changed after provisioning.',
+  'compute_count':                   'Number of Exadata database server nodes. Minimum 2. Each node adds OCPUs and memory. Can be scaled up after creation.',
+  'storage_count':                   'Number of Exadata storage cell servers. Minimum 3. Each cell adds storage capacity. Can be scaled up after creation.',
+  'database_server_type':           'Specific database server hardware type, e.g. <code>X11M</code>. Leave blank to use the default for the selected shape.',
+  'storage_server_type':            'Specific storage server hardware type, e.g. <code>X11M-HC</code>. HC = High Capacity. Leave blank to use the default.',
+  'customer_contacts':              'Email addresses that receive OCI maintenance and operational notifications. Up to 10 addresses. Oracle emails these for planned maintenance events.',
+  'mw_preference':                   '<em>NO_PREFERENCE</em>: Oracle picks the schedule. <em>CUSTOM_PREFERENCE</em>: you specify days, hours, weeks, and months below.',
+  'mw_patching_mode':               '<em>ROLLING</em>: nodes patched one at a time — cluster stays available. <em>NON_ROLLING</em>: all nodes patched together — faster but causes downtime.',
+  'lead_time_week':                  'Weeks of advance notice before Oracle initiates maintenance. Range 1–4. Gives you time to prepare.',
+  'hours_of_day':                   'Hours (UTC, 0–23) when maintenance may start. Example: <code>4, 8</code> allows maintenance starting at 4 AM or 8 AM UTC.',
+  'weeks_of_month':                  'Weeks of the month (1–4) when maintenance may occur. Week 1 starts on the 1st of the month.',
+  'days_of_week':                   'Days when maintenance may run. Example: <code>SUNDAY, MONDAY</code>. Full names required.',
+  'months':                          'Months when maintenance may run. Example: <code>JANUARY, APRIL, JULY, OCTOBER</code> for quarterly windows.',
+  'is_custom_action_timeout_enabled': 'Enable a waiting period before Oracle begins maintenance on DB servers. Useful if you need time to quiesce workloads.',
+  'custom_action_timeout_mins':      'Minutes to wait before Oracle begins the maintenance action. Range 15–120 minutes.',
+  'peer_network_id':                 'ID of the peer AWS VPC to connect to. Example: <code>vpc-0abc123def456789</code>. The VPC must be in the same region.',
+  'odb_network_id':                  'ID of the source ODB Network. Auto-wired from <code>module.odb_network.network_id</code> — leave blank unless referencing a different stack.',
+  'peer_network_cidrs':   'Set of peer network CIDRs. Add/remove is only supported during update operation. During create this attribute is computed only.',
+  'cpu_core_count':                  'Number of enabled OCPU cores across the VM Cluster. Minimum 2. Each OCPU provides 2 vCPUs. Can be scaled up or down after creation.',
+  'gi_version':                      'Oracle Grid Infrastructure software version. Example: <code>23.0.0.0</code>. Determines which Oracle Database versions can run. Cannot be downgraded.',
+  'hostname_prefix':                 'Prefix for generating VM hostnames. Max 12 chars, letters/numbers/hyphens, must start with a letter. Hostname = prefix + node index.',
+  'license_model':                   '<em>LICENSE_INCLUDED</em>: Oracle Database license is bundled — pay-as-you-go. <em>BRING_YOUR_OWN_LICENSE</em>: use your existing Oracle license agreements.',
+  'cloud_exadata_infrastructure_id': 'ID of the Exadata Infrastructure this cluster runs on. Auto-wired from <code>module.odb_exadata_infra.infra_id</code>.',
+  'cloud_exadata_infrastructure_arn': 'ARN of the Exadata Infrastructure. Use ARN-mode when referencing infra from a different AWS account or stack.',
+  'odb_network_arn':                 'ARN of the ODB Network. Use ARN-mode when the network is in a different AWS account or when cross-account peering is required.',
+  'ssh_public_keys':                 'Public SSH keys for accessing VM Cluster compute nodes. Add one or more RSA or ED25519 public keys. Keys are installed on all nodes.',
+  'db_servers':                      'Specific DB server IDs to place this VM Cluster on. Leave empty to use all available servers from the Exadata Infrastructure. Typically from a data source.',
+  'is_diagnostics_events_enabled':   'Enables Oracle diagnostic data collection. Allows Oracle support to proactively identify and resolve issues. Recommended: true.',
+  'is_health_monitoring_enabled':    'Enables health metrics collection. Oracle uses this to monitor system health and provide enhanced support. Recommended: true.',
+  'is_incident_logs_enabled':        'Enables incident log and trace collection. Required for Oracle to diagnose guest VM issues. Recommended: true.',
+  'cluster_name':                    'Internal Oracle cluster name. Max 11 chars, letters and hyphens only. If omitted, Oracle generates one. Cannot be changed after creation.',
+  'timezone':                        'Time zone for the VM Cluster. Default is UTC. Use IANA format: <code>America/New_York</code>, <code>Europe/London</code>, etc.',
+  'data_storage_size_in_tbs':       'Total usable Exadata storage allocated to this cluster in TiB. Must be in multiples of 1 TiB, minimum 2. Cannot be reduced after creation.',
+  'db_node_storage_size_in_gbs':    'Local DB node storage per VM in GiB. Used for OS, Grid Infrastructure, and database files. Minimum 60 GiB.',
+  'memory_size_in_gbs':             'Total memory per VM in GiB. Minimum 30 GiB per VM. Must be a multiple of 1 GiB. More memory improves database performance.',
+  'scan_listener_port_tcp':         'TCP port for the SCAN (Single Client Access Name) listener. Default 1521. Cannot be changed after creation. Ensure firewall allows this port.',
+  'system_version':                  'Operating system image version, e.g. <code>23.8.0.25.04</code>. Leave blank to use the latest validated OS image.',
+  'is_local_backup_enabled':        'Enables backup to local Exadata storage. Faster recovery, but uses cluster storage capacity. Cannot be changed after creation.',
+  'is_sparse_diskgroup_enabled':    'Enables sparse disk group for thin-provisioned clones (Oracle Multitenant). Cannot be changed after creation. Enable only if using snapshot-based cloning.',
+  'location':                        'GCP region where this resource is created. Example: <code>us-east4</code>. Must match the zone of all dependent resources (subnets, infra, cluster).',
+  'network':                         'Full self-link of the GCP VPC network to associate. Format: <code>projects/{project}/global/networks/{name}</code>.',
+  'gcp_oracle_zone':                 'GCP Oracle Zone within the region, e.g. <code>us-east4-b-r1</code>. Represents the OCI child site. Determines hardware availability. Immutable.',
+  'deletion_protection':             'When true, Terraform will refuse to destroy this resource. Set to false before running <code>terraform destroy</code>. Recommended: true for production.',
+  'odb_subnet_id':                   'Unique subnet identifier. Max 63 chars, lowercase letters/numbers/hyphens, must start with a letter. Immutable.',
+  'cidr_range':                      'IPv4 CIDR range for this subnet in RFC1918 space. Minimum /27, maximum /22. Example: <code>10.0.1.0/24</code>. Cannot overlap other subnets in the ODB Network.',
+  'total_storage_size_gb':           'Total raw storage in GiB to allocate. If unset, uses the shape minimum. Example: <code>196608</code> (192 TiB).',
+  'exadb_vm_cluster_id':            'Unique cluster ID. Max 63 chars, lowercase letters/numbers/hyphens, starts with letter. Immutable.',
+  'node_count':                      'Number of VM Cluster nodes (virtual machines). Minimum 2. More nodes = higher availability and more OCPUs available.',
+  'enabled_ecpu_count_per_node':    'Number of enabled ECPUs per VM node. Minimum 8, must be a multiple of 4. ECPUs determine database compute capacity per node.',
+  'additional_ecpu_count_per_node': 'Reserved (but not enabled) ECPUs per node. Range 0–192, multiples of 4. Reserve capacity to scale up later without reprovisioning.',
+  'vm_file_system_storage_size_gbs': 'Local file-system storage per node in GiB (60–900). Used for OS, GI, and local data files. Cannot be reduced after creation.',
+  'odb_network':                     'Full ODB Network resource path. Auto-wired from <code>module.gcp_odb_network.odb_network_name</code> in root main.tf.',
+  'odb_subnet':                      'Full client ODB Subnet path. Auto-wired from <code>module.gcp_odb_client_subnet.odb_subnet_name</code> in root main.tf.',
+  'backup_odb_subnet':              'Full backup ODB Subnet path. Auto-wired from <code>module.gcp_odb_backup_subnet.odb_subnet_name</code> in root main.tf.',
+  'exadata_infrastructure':         'Full Exadata Infrastructure resource path. Auto-wired from <code>module.gcp_exadb_infra.infra_name</code> in root main.tf.',
+  'license_type':                    '<em>LICENSE_INCLUDED</em>: Oracle license bundled in the price. <em>BRING_YOUR_OWN_LICENSE</em>: apply your existing Oracle license agreement.',
+  'time_zone':                       'VM Cluster time zone. Default UTC. Use IANA names: <code>America/New_York</code>, <code>Asia/Tokyo</code>, <code>Europe/Berlin</code>, etc.',
+  'memory_per_node_in_gbs':         'Memory allocated per VM node in GiB. Minimum 30 GiB. Leave blank to use the shape default. More memory improves SGA and PGA sizing.',
+  'db_node_storage_size_per_vm_in_gbs': 'Local DB node storage per VM in GiB (60–900). Used for OS, Grid Infrastructure, and local database files.',
+  'spare_snapshot_space_in_gbs':    'Storage reserved for sparse snapshots (Oracle Database snapshot clones). Enable if using thin-provisioned PDB snapshots. Cannot be changed after creation.',
+  'disk_redundancy':                 '<em>HIGH</em>: triple mirroring — better durability, ~33% usable capacity. <em>NORMAL</em>: double mirroring — ~50% usable. HIGH recommended for production.',
+  'diagnostics_events_enabled':     'Collect diagnostic events. Allows Oracle to notify you and proactively resolve guest VM issues. Recommended: enabled.',
+  'health_monitoring_enabled':      'Collect health metrics for Oracle support visibility. Provides enhanced proactive support. Recommended: enabled.',
+  'incident_logs_enabled':          'Collect incident logs and traces. Required for Oracle to diagnose failures. Recommended: enabled.',
+  'project':                         'GCP project ID. If omitted, uses the provider default project. Override for cross-project deployments.',
+};
+
+function injectTooltips() {
+  document.querySelectorAll('.field-lbl').forEach(lbl => {
+    const rawText = lbl.textContent.replace(/[*?]/g,'').replace(/\s+/g,' ').trim();
+    let tip = TOOLTIPS[rawText];
+    if (!tip) {
+      const words = rawText.split('_');
+      for (let len = words.length; len >= 2; len--) {
+        const key = words.slice(-len).join('_');
+        if (TOOLTIPS[key]) { tip = TOOLTIPS[key]; break; }
+      }
+    }
+    if (!tip) return;
+    if (lbl.querySelector('.tip-icon')) return;
+    const icon = document.createElement('span');
+    icon.className = 'tip-icon';
+    icon.textContent = '?';
+    const box = document.createElement('span');
+    box.className = 'tip-box';
+    box.innerHTML = tip;
+    icon.appendChild(box);
+    lbl.appendChild(icon);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => { setTimeout(injectTooltips, 50); });
+
+// ── Runtime state ─────────────────────────────────────────────────────────────
+let rtimer = null;
+let activeFile = 'root-main';
+let iacTool = 'terraform';
+
+// ── Init on load ─────────────────────────────────────────────────────────────
+initStorage();
+updateTree();
+renderEditor();
+
+// ── Product-specific initial state seed ──────────────────────────────────────
+{% block product_seed %}{% endblock %}
+
+// NOTE: renderAll() is called AFTER TOOLTIPS is defined above
+renderAll();
+initLlmBar();
+initGithub();
+</script>
+</body>
+</html>

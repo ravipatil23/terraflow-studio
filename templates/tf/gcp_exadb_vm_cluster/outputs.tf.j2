@@ -2,5 +2,6 @@
 
 output "vm_cluster_id"   { value = google_oracle_database_exadb_vm_cluster.this.exadb_vm_cluster_id }
 output "vm_cluster_name" { value = google_oracle_database_exadb_vm_cluster.this.name }
+output "ocid"            { value = google_oracle_database_exadb_vm_cluster.this.properties[0].ocid }
 output "state"           { value = google_oracle_database_exadb_vm_cluster.this.state }
 output "create_time"     { value = google_oracle_database_exadb_vm_cluster.this.create_time }

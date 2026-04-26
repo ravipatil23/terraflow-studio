@@ -39,7 +39,7 @@ AWS_SCHEMAS = {
     'aws_odb_network_peering_connection': {
         'required': ['display_name'],
         'optional': ['odb_network_id', 'odb_network_arn', 'peer_network_id',
-                     'additional_peer_network_cidrs', 'region', 'tags'],
+                     'peer_network_cidrs', 'region', 'tags'],
     },
     'aws_odb_cloud_vm_cluster': {
         'required': ['display_name', 'cpu_core_count', 'gi_version',

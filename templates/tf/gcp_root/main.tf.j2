@@ -12,6 +12,12 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 6.0.0"
     }
+{% if oci_databases %}
+    oci = {
+      source  = "oracle/oci"
+      version = ">= 6.0.0"
+    }
+{% endif %}
   }
 }
 
@@ -20,42 +26,47 @@ provider "google" {
   region  = var.gcp_region
 }
 
+{% if oci_databases %}
+# ── OCI Provider (DB Home / CDB / PDB) ───────────────────────────────────────
+# Set these env vars or use a ~/.oci/config profile:
+#   export TF_VAR_oci_tenancy_ocid=ocid1.tenancy...
+#   export TF_VAR_oci_user_ocid=ocid1.user...
+#   export TF_VAR_oci_fingerprint=xx:xx:xx:...
+provider "oci" {
+  auth             = var.oci_auth_method
+  region           = var.oci_region
+  tenancy_ocid     = var.oci_auth_method == "APIKey" ? var.oci_tenancy_ocid     : null
+  user_ocid        = var.oci_auth_method == "APIKey" ? var.oci_user_ocid        : null
+  fingerprint      = var.oci_auth_method == "APIKey" ? var.oci_fingerprint      : null
+  private_key_path = var.oci_auth_method == "APIKey" ? var.oci_private_key_path : null
+}
+{% endif %}
+
 {% for net in networks %}
 # ── ODB Network: {{ net.module_name }} ──────────────────────────────────────────
 module "{{ net.module_name }}" {
-  source = "./modules/{{ net.module_name }}"
-
-  odb_network_id = var.{{ net.module_name }}_odb_network_id
-  location       = var.gcp_region
-  network        = var.{{ net.module_name }}_vpc_self_link
-  project        = var.gcp_project
-  labels         = var.labels
+  source   = "./modules/{{ net.module_name }}"
+  location = var.gcp_region
+  project  = var.gcp_project
+  labels   = var.labels
 }
 
 # ── Client Subnet: {{ net.client_subnet_module }} ──
 module "{{ net.client_subnet_module }}" {
-  source = "./modules/{{ net.client_subnet_module }}"
-
-  odb_subnet_id = var.{{ net.client_subnet_module }}_id
-  location      = var.gcp_region
-  odb_network   = module.{{ net.module_name }}.odb_network_id
-  cidr_range    = var.{{ net.client_subnet_module }}_cidr
-  purpose       = "CLIENT_SUBNET"
-  project       = var.gcp_project
+  source      = "./modules/{{ net.client_subnet_module }}"
+  location    = var.gcp_region
+  odb_network = module.{{ net.module_name }}.odb_network_id
+  project     = var.gcp_project
 
   depends_on = [module.{{ net.module_name }}]
 }
 
 # ── Backup Subnet: {{ net.backup_subnet_module }} ──
 module "{{ net.backup_subnet_module }}" {
-  source = "./modules/{{ net.backup_subnet_module }}"
-
-  odb_subnet_id = var.{{ net.backup_subnet_module }}_id
-  location      = var.gcp_region
-  odb_network   = module.{{ net.module_name }}.odb_network_id
-  cidr_range    = var.{{ net.backup_subnet_module }}_cidr
-  purpose       = "BACKUP_SUBNET"
-  project       = var.gcp_project
+  source      = "./modules/{{ net.backup_subnet_module }}"
+  location    = var.gcp_region
+  odb_network = module.{{ net.module_name }}.odb_network_id
+  project     = var.gcp_project
 
   depends_on = [module.{{ net.module_name }}]
 }
@@ -64,56 +75,73 @@ module "{{ net.backup_subnet_module }}" {
 {% for inf in infras %}
 # ── Exadata Infrastructure: {{ inf.module_name }} ──────────────────────────────
 module "{{ inf.module_name }}" {
-  source = "./modules/{{ inf.module_name }}"
-
-  cloud_exadata_infrastructure_id = var.{{ inf.module_name }}_infra_id
-  display_name                    = var.{{ inf.module_name }}_display_name
-  location                        = var.gcp_region
-  gcp_oracle_zone                 = var.{{ inf.module_name }}_gcp_oracle_zone
-  project                         = var.gcp_project
-  shape                           = var.{{ inf.module_name }}_shape
-  compute_count                   = var.{{ inf.module_name }}_compute_count
-  storage_count                   = var.{{ inf.module_name }}_storage_count
-  labels                          = var.labels
+  source   = "./modules/{{ inf.module_name }}"
+  location = var.gcp_region
+  project  = var.gcp_project
+  labels   = var.labels
 }
 
 {% endfor %}
 {% for cl in clusters %}
 # ── ExaDB VM Cluster: {{ cl.module_name }} ────────────────────────────────────
 module "{{ cl.module_name }}" {
-  source = "./modules/{{ cl.module_name }}"
-
-  exadb_vm_cluster_id         = var.{{ cl.module_name }}_cluster_id
-  display_name                = var.{{ cl.module_name }}_display_name
-  location                    = var.gcp_region
-  gcp_oracle_zone             = var.{{ cl.module_name }}_gcp_oracle_zone
-  odb_network                 = module.{{ cl.network_ref }}.odb_network_name
-  odb_subnet                  = module.{{ cl.client_subnet_ref }}.odb_subnet_name
-  backup_odb_subnet           = module.{{ cl.backup_subnet_ref }}.odb_subnet_name
-  project                     = var.gcp_project
-  gi_version                  = var.{{ cl.module_name }}_gi_version
-  hostname_prefix             = var.{{ cl.module_name }}_hostname_prefix
-  license_type                = var.{{ cl.module_name }}_license_type
-  node_count                  = var.{{ cl.module_name }}_node_count
-  enabled_ecpu_count_per_node = var.{{ cl.module_name }}_enabled_ecpu_count_per_node
-  ssh_public_keys             = var.{{ cl.module_name }}_ssh_public_keys
-  exadata_infrastructure      = module.{{ cl.infra_ref }}.infra_name
-  labels                      = var.labels
+  source                 = "./modules/{{ cl.module_name }}"
+  location               = var.gcp_region
+  project                = var.gcp_project
+  odb_network            = module.{{ cl.network_ref }}.odb_network_name
+  odb_subnet             = module.{{ cl.client_subnet_ref }}.odb_subnet_name
+  backup_odb_subnet      = module.{{ cl.backup_subnet_ref }}.odb_subnet_name
+  exadata_infrastructure = module.{{ cl.infra_ref }}.infra_name
+  labels                 = var.labels
 
   depends_on = [module.{{ cl.network_ref }}, module.{{ cl.client_subnet_ref }},
                 module.{{ cl.backup_subnet_ref }}, module.{{ cl.infra_ref }}]
 }
 
 {% endfor %}
+{% for db in oci_databases %}
+# ── OCI DB: {{ db.module_name }} — Step 1: DB Home ───────────────────────────
+module "{{ db.module_name }}_dbhome" {
+  source          = "./modules/{{ db.module_name }}_dbhome"
+  vm_cluster_ocid = module.{{ db.vmcluster_ref }}.ocid
+  depends_on      = [module.{{ db.vmcluster_ref }}]
+}
+
+# ── OCI DB: {{ db.module_name }} — Step 2: CDB ───────────────────────────────
+module "{{ db.module_name }}_cdb" {
+  source         = "./modules/{{ db.module_name }}_cdb"
+  db_home_id     = module.{{ db.module_name }}_dbhome.db_home_id
+  admin_password = var.{{ db.module_name }}_admin_password
+  depends_on     = [module.{{ db.module_name }}_dbhome]
+}
+
+{% if db.create_pdb and db.pdb_name %}
+# ── OCI DB: {{ db.module_name }} — Step 3: PDB ───────────────────────────────
+module "{{ db.module_name }}_pdb" {
+  source                = "./modules/{{ db.module_name }}_pdb"
+  container_database_id = module.{{ db.module_name }}_cdb.cdb_id
+  pdb_admin_password    = var.{{ db.module_name }}_admin_password
+  depends_on            = [module.{{ db.module_name }}_cdb]
+}
+{% endif %}
+
+output "{{ db.module_name }}_db_home_id" { value = module.{{ db.module_name }}_dbhome.db_home_id }
+output "{{ db.module_name }}_cdb_id"     { value = module.{{ db.module_name }}_cdb.cdb_id }
+{% if db.create_pdb and db.pdb_name %}
+output "{{ db.module_name }}_pdb_id" { value = module.{{ db.module_name }}_pdb.pdb_id }
+{% endif %}
+
+{% endfor %}
 # ── Outputs ────────────────────────────────────────────────────────────────────
 {% for net in networks %}
-output "{{ net.module_name }}_odb_network_name"   { value = module.{{ net.module_name }}.odb_network_name }
-output "{{ net.client_subnet_module }}_name"      { value = module.{{ net.client_subnet_module }}.odb_subnet_name }
-output "{{ net.backup_subnet_module }}_name"      { value = module.{{ net.backup_subnet_module }}.odb_subnet_name }
+output "{{ net.module_name }}_odb_network_name" { value = module.{{ net.module_name }}.odb_network_name }
+output "{{ net.client_subnet_module }}_name"    { value = module.{{ net.client_subnet_module }}.odb_subnet_name }
+output "{{ net.backup_subnet_module }}_name"    { value = module.{{ net.backup_subnet_module }}.odb_subnet_name }
 {% endfor %}
 {% for inf in infras %}
-output "{{ inf.module_name }}_infra_name"         { value = module.{{ inf.module_name }}.infra_name }
+output "{{ inf.module_name }}_infra_name" { value = module.{{ inf.module_name }}.infra_name }
 {% endfor %}
 {% for cl in clusters %}
-output "{{ cl.module_name }}_vm_cluster_name"     { value = module.{{ cl.module_name }}.vm_cluster_name }
+output "{{ cl.module_name }}_vm_cluster_name" { value = module.{{ cl.module_name }}.vm_cluster_name }
+output "{{ cl.module_name }}_ocid"            { value = module.{{ cl.module_name }}.ocid }
 {% endfor %}

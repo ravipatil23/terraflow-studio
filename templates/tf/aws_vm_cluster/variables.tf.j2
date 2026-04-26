@@ -36,35 +36,19 @@ variable "license_model" {
 }
 
 # Infrastructure references — wired from module outputs in root main.tf:
-{% if vm_mode == 'id' %}
 #   cloud_exadata_infrastructure_id = module.{{ mn1 }}.infra_id
 #   odb_network_id                  = module.{{ mn0 }}.network_id
 variable "cloud_exadata_infrastructure_id" {
   description = "Exadata Infrastructure ID — auto-wired from module.{{ mn1 }}.infra_id in root."
-  type    = string
-  default = "{{ cloud_exadata_infrastructure_id }}"
+  type        = string
+  default     = "{{ cloud_exadata_infrastructure_id }}"
 }
 
 variable "odb_network_id" {
   description = "ODB Network ID — auto-wired from module.{{ mn0 }}.network_id in root."
-  type    = string
-  default = "{{ odb_network_id }}"
+  type        = string
+  default     = "{{ odb_network_id }}"
 }
-{% else %}
-#   cloud_exadata_infrastructure_arn = module.{{ mn1 }}.infra_arn
-#   odb_network_arn                  = module.{{ mn0 }}.network_arn
-variable "cloud_exadata_infrastructure_arn" {
-  description = "Exadata Infrastructure ARN — auto-wired from module.{{ mn1 }}.infra_arn in root."
-  type    = string
-  default = "{{ cloud_exadata_infrastructure_arn }}"
-}
-
-variable "odb_network_arn" {
-  description = "ODB Network ARN — auto-wired from module.{{ mn0 }}.network_arn in root."
-  type    = string
-  default = "{{ odb_network_arn }}"
-}
-{% endif %}
 
 variable "ssh_public_keys" {
   description = "SSH public keys for cluster access."
@@ -109,27 +93,22 @@ variable "timezone" {
 
 variable "data_storage_size_in_tbs" {
   type    = number
-  default = {{ data_storage_size_in_tbs | default("null") }}
+  default = {{ data_storage_size_in_tbs }}
 }
 
 variable "db_node_storage_size_in_gbs" {
   type    = number
-  default = {{ db_node_storage_size_in_gbs | default("null") }}
+  default = {{ db_node_storage_size_in_gbs }}
 }
 
 variable "memory_size_in_gbs" {
   type    = number
-  default = {{ memory_size_in_gbs | default("null") }}
+  default = {{ memory_size_in_gbs }}
 }
 
 variable "scan_listener_port_tcp" {
   type    = number
-  default = {{ scan_listener_port_tcp | default("null") }}
-}
-
-variable "system_version" {
-  type    = string
-  default = "{{ system_version }}"
+  default = {{ scan_listener_port_tcp }}
 }
 
 variable "is_local_backup_enabled" {
@@ -140,11 +119,6 @@ variable "is_local_backup_enabled" {
 variable "is_sparse_diskgroup_enabled" {
   type    = bool
   default = {{ is_sparse_diskgroup_enabled }}
-}
-
-variable "region" {
-  type    = string
-  default = "{{ region }}"
 }
 
 variable "tags" {

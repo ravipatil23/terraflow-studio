@@ -16,10 +16,15 @@ region                = "{{ region }}"
 {% else %}
 # region                = "us-east-1"
 {% endif %}
-{% if default_dns_prefix %}
+{% if custom_domain_name %}
+custom_domain_name    = "{{ custom_domain_name }}"
+# default_dns_prefix  = "myodb"
+{% elif default_dns_prefix %}
 default_dns_prefix    = "{{ default_dns_prefix }}"
+# custom_domain_name  = "corp.example.com"
 {% else %}
-# default_dns_prefix    = "myodb"
+# default_dns_prefix  = "myodb"
+# custom_domain_name  = "corp.example.com"
 {% endif %}
 delete_associated_resources = {{ delete_associated_resources }}
 

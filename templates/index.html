@@ -652,12 +652,12 @@ let awsOciDbs = [];
 let gcpNets = [], gcpInfras = [], gcpClusters = [];
 
 // ── Defaults factories ────────────────────────────────────────────────────────
-function defAwsNet(i)     { return {module_name: i===0?'odb_network':`odb_network_${i+1}`,    display_name:'',availability_zone_id:'',client_subnet_cidr:'',backup_subnet_cidr:'',s3_access:false,zero_etl_access:false,availability_zone:'',region:'',default_dns_prefix:'',delete_associated_resources:false,tags:{}}; }
+function defAwsNet(i)     { return {module_name: i===0?'odb_network':`odb_network_${i+1}`,    display_name:'',availability_zone_id:'',client_subnet_cidr:'',backup_subnet_cidr:'',s3_access:false,zero_etl_access:false,availability_zone:'',region:'',default_dns_prefix:'',custom_domain_name:'',delete_associated_resources:false,tags:{}}; }
 function defAwsInfra(i)   { return {module_name: i===0?'odb_exaInfra':`odb_exaInfra_${i+1}`,      display_name:'',shape:'Exadata.X11M',availability_zone_id:'',compute_count:2,storage_count:3,database_server_type:'',storage_server_type:'',customer_contacts:[],mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',tags:{}}; }
 function defAwsCluster(i) { return {module_name: i===0?'odb_vmcluster':`odb_vmcluster_${i+1}`,    display_name:'',cpu_core_count:16,gi_version:'',hostname_prefix:'',license_model:'LICENSE_INCLUDED',vm_mode:'arn',cloud_exadata_infrastructure_id:'',odb_network_id:'',cloud_exadata_infrastructure_arn:'',odb_network_arn:'',infra_ref:'',network_ref:'',ssh_public_keys:[],db_servers:[],db_servers_mode:'auto',dco_is_diagnostics_events_enabled:true,dco_is_health_monitoring_enabled:true,dco_is_incident_logs_enabled:true,cluster_name:'',timezone:'',data_storage_size_in_tbs:'',db_node_storage_size_in_gbs:'',memory_size_in_gbs:'',scan_listener_port_tcp:'',system_version:'',is_local_backup_enabled:false,is_sparse_diskgroup_enabled:false,region:'',tags:{}}; }
 function defAwsAvmc(i)    { return {module_name: i===0?'odb_avmcluster':`odb_avmcluster_${i+1}`, display_name:'',autonomous_data_storage_size_in_tbs:5,cpu_core_count_per_node:40,memory_per_oracle_compute_unit_in_gbs:2,total_container_databases:2,scan_listener_port_non_tls:1521,scan_listener_port_tls:2484,license_model:'LICENSE_INCLUDED',is_mtls_enabled_vm_cluster:false,infra_ref:'',network_ref:'',db_servers:[],db_servers_mode:'auto',description:'',time_zone:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,tags:{}}; }
 function defAwsOciDb(i)   { return {module_name: i===0?'oci_database':`oci_database_${i+1}`, vmcluster_ref:'', db_home_display_name:'dbhome', db_version:'19.0.0.0', db_name:'MYDB', character_set:'AL32UTF8', ncharacter_set:'AL16UTF16', pdb_name:'MYPDB', db_unique_name:'', sid_prefix:'', create_pdb:true, auto_backup_enabled:false, auto_backup_window:'SLOT_TWO', recovery_window_in_days:7}; }
-function defAwsPeering(i)   { return {module_name: i===0?'odb_peering':`odb_peering_${i+1}`,     display_name:'',peer_network_id:'',network_ref:'',region:'',additional_peer_network_cidrs:[],tags:{}}; }
+function defAwsPeering(i)   { return {module_name: i===0?'odb_peering':`odb_peering_${i+1}`,     display_name:'',peer_network_id:'',network_ref:'',region:'',peer_network_cidrs:[],tags:{}}; }
 function defGcpNet(i)     { return {module_name: i===0?'gcp_network':`gcp_network_${i+1}`,    odb_network_id:'',location:'',network:'',project:'',gcp_oracle_zone:'',deletion_protection:true,client_subnet_module:i===0?'gcp_client_subnet':`gcp_client_subnet_${i+1}`,backup_subnet_module:i===0?'gcp_backup_subnet':`gcp_backup_subnet_${i+1}`,client_subnet_id:i===0?'gcp-client-subnet':`gcp-client-subnet-${i+1}`,client_cidr:'',backup_subnet_id:i===0?'gcp-backup-subnet':`gcp-backup-subnet-${i+1}`,backup_cidr:'',labels:{}}; }
 function defGcpInfra(i)   { return {module_name: i===0?'gcp_infra':`gcp_infra_${i+1}`,      cloud_exadata_infrastructure_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',shape:'Exadata.X9M',compute_count:2,storage_count:3,total_storage_size_gb:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',deletion_protection:true,labels:{}}; }
 function defGcpCluster(i) { return {module_name: i===0?'gcp_cluster':`gcp_cluster_${i+1}`,    exadb_vm_cluster_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',gi_version:'',hostname_prefix:'',license_type:'LICENSE_INCLUDED',node_count:2,enabled_ecpu_count_per_node:8,additional_ecpu_count_per_node:0,vm_file_system_storage_size_gbs:60,ssh_public_keys:[],db_servers:[],dco_diagnostics:true,dco_health:true,dco_incident_logs:true,cluster_name:'',time_zone:'',system_version:'',memory_per_node_in_gbs:'',db_node_storage_size_per_vm_in_gbs:'',data_storage_size_in_tbs:'',spare_snapshot_space_in_gbs:'',disk_redundancy:'',network_ref:'',client_subnet_ref:'',backup_subnet_ref:'',infra_ref:'',deletion_protection:true,labels:{}}; }
@@ -688,7 +688,8 @@ function readAwsNet(i) {
     zero_etl_access: fcb(`${p}zetl`),
     availability_zone: fv(`${p}azn`),
     region:        fv(`${p}reg`),
-    default_dns_prefix: fv(`${p}dns`),
+    default_dns_prefix:  fv(`${p}dns`),
+    custom_domain_name:  fv(`${p}cdn`),
     delete_associated_resources: fcb(`${p}del`),
   };
 }
@@ -1123,9 +1124,10 @@ function awsNetCardHTML(d, i) {
     </div>
     <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
       <div class="g2">
-        <div class="field"><div class="field-lbl">default_dns_prefix</div><input type="text" id="${p}dns" value="${d.default_dns_prefix||''}" placeholder="myodb" oninput="readAwsNet(${i});refresh()"></div>
-        <div class="field"><div class="field-lbl">delete_associated_resources</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}del" ${d.delete_associated_resources?'checked':''} onchange="readAwsNet(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.delete_associated_resources?'true':'false'}</span></div></div>
+        <div class="field"><div class="field-lbl">default_dns_prefix</div><input type="text" id="${p}dns" value="${d.default_dns_prefix||''}" placeholder="myodb" oninput="if(this.value){var o=document.getElementById('${p}cdn');if(o)o.value='';} readAwsNet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">custom_domain_name</div><input type="text" id="${p}cdn" value="${d.custom_domain_name||''}" placeholder="myodb.corp.example.com" oninput="if(this.value){var o=document.getElementById('${p}dns');if(o)o.value='';} readAwsNet(${i});refresh()"></div>
       </div>
+      <div class="field"><div class="field-lbl">delete_associated_resources</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}del" ${d.delete_associated_resources?'checked':''} onchange="readAwsNet(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.delete_associated_resources?'true':'false'}</span></div></div>
     </div>
   </div>
 </div>`;
@@ -1448,7 +1450,7 @@ function gcpClusterCardHTML(d, i) {
 function awsPeeringCardHTML(d, i) {
   const p=`ap${i}_`, open=i===0?'open':'';
   const netOpts = netOptions(d.network_ref);
-  const cidrChips = (d.additional_peer_network_cidrs||[]).map((c,ci)=>`<span class="chip"><span>${c}</span><button class="chip-rm" onclick="awsPeerings[${i}].additional_peer_network_cidrs.splice(${ci},1);renderAwsPeerings();refresh()">×</button></span>`).join('');
+  const cidrChips = (d.peer_network_cidrs||[]).map((c,ci)=>`<span class="chip"><span>${c}</span><button class="chip-rm" onclick="awsPeerings[${i}].peer_network_cidrs.splice(${ci},1);renderAwsPeerings();refresh()">×</button></span>`).join('');
   return `<div class="inst-card ${open}" id="ap-card-${i}">
   <div class="inst-card-head" onclick="toggleCard('ap-card-${i}')">
     <span class="inst-num">${i+1}</span>
@@ -1467,11 +1469,11 @@ function awsPeeringCardHTML(d, i) {
     </div>
     <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
       <div class="field"><div class="field-lbl">region</div><input type="text" id="${p}reg" value="${d.region||''}" placeholder="us-east-1" oninput="readAwsPeering(${i});refresh()"></div>
-      <div class="field"><div class="field-lbl">additional_peer_network_cidrs</div>
+      <div class="field"><div class="field-lbl">peer_network_cidrs</div><div class="field-hint">Only supported during update operations, not during initial creation.</div>
         <div class="chip-list">${cidrChips}</div>
         <div class="chip-add-row">
           <input type="text" id="${p}cidrin" placeholder="10.0.0.0/16">
-          <button class="add-btn" onclick="addCidrTopeer(${i})">+ Add CIDR</button>
+          <button class="add-btn" onclick="addCidrToPeer(${i})">+ Add CIDR</button>
         </div>
       </div>
     </div>
@@ -1486,13 +1488,13 @@ function renderAwsPeerings() {
   updateTree(); injectTooltips();
 }
 
-function addCidrTopeer(i) {
+function addCidrToPeer(i) {
   const inp = document.getElementById(`ap${i}_cidrin`);
   if(!inp||!inp.value.trim()) return;
   const cidr = inp.value.trim();
   if(!/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(cidr)) { inp.style.borderColor='var(--red)'; return; }
   inp.style.borderColor='';
-  awsPeerings[i].additional_peer_network_cidrs = [...(awsPeerings[i].additional_peer_network_cidrs||[]), cidr];
+  awsPeerings[i].peer_network_cidrs = [...(awsPeerings[i].peer_network_cidrs||[]), cidr];
   inp.value='';
   renderAwsPeerings(); refresh();
 }
@@ -2118,7 +2120,7 @@ function applyConfig(doc) {
       awsInfras   = [{...defAwsInfra(0),   ...d1, module_name: mn['1'] || 'odb_exadata_infra'}];
       awsPeerings = [{...defAwsPeering(0), ...d2, module_name: mn['2'] || 'odb_peering',
                       peer_network_id: d2.peer_network_id || '',
-                      additional_peer_network_cidrs: d2.additional_peer_network_cidrs || []}];
+                      peer_network_cidrs: d2.peer_network_cidrs || []}];
       awsClusters = [{...defAwsCluster(0), ...d3, module_name: mn['3'] || 'odb_vm_cluster',
                       ssh_public_keys: d3.ssh_public_keys || []}];
     }
@@ -2395,7 +2397,8 @@ const TOOLTIPS = {
   'zero_etl_access':                 'Enables Zero-ETL integrations between Oracle Database and AWS analytics services (e.g. Redshift). Enable only if you need this feature.',
   'availability_zone':              'Human-readable AZ name (e.g. <code>us-east-1a</code>). Optional — prefer <em>availability_zone_id</em> for consistency across accounts.',
   'region':                          'AWS region override. Defaults to the provider region if omitted. Example: <code>us-east-1</code>.',
-  'default_dns_prefix':             'DNS prefix used for hostnames inside the ODB Network. Must be unique within the region. Alphanumeric, max 12 chars.',
+  'default_dns_prefix':             'DNS prefix used for hostnames inside the ODB Network. Must be unique within the region. Alphanumeric, max 12 chars. Mutually exclusive with custom_domain_name.',
+  'custom_domain_name':             'Custom domain name for ODB Network hostnames (e.g. <code>myodb.corp.example.com</code>). Mutually exclusive with default_dns_prefix — only one may be set.',
   'delete_associated_resources':    'When true, deleting this ODB Network also destroys all associated resources (subnets, peering connections). Use with caution.',
 
   // AWS Exadata Infra
@@ -2420,7 +2423,7 @@ const TOOLTIPS = {
   // AWS Peering
   'peer_network_id':                 'ID of the peer AWS VPC to connect to. Example: <code>vpc-0abc123def456789</code>. The VPC must be in the same region.',
   'odb_network_id':                  'ID of the source ODB Network. Auto-wired from <code>module.odb_network.network_id</code> — leave blank unless referencing a different stack.',
-  'additional_peer_network_cidrs':   'Extra CIDRs from the peered VPC to allow through the peering connection. Add if the VPC has secondary CIDRs you need to reach.',
+  'peer_network_cidrs':   'Set of peer network CIDRs. Add/remove is only supported during update operation. During create this attribute is computed only.',
 
   // AWS VM Cluster
   'cpu_core_count':                  'Number of enabled OCPU cores across the VM Cluster. Minimum 2. Each OCPU provides 2 vCPUs. Can be scaled up or down after creation.',

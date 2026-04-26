@@ -219,7 +219,7 @@ class TestAwsOdbNetwork(unittest.TestCase):
         self.d  = _aws_net_defaults(aws_net(self.mn))
 
     def test_main_contains_resource(self):
-        out = mod0_main(self.mn)
+        out = mod0_main(self.mn, self.d)
         self.assertIn('aws_odb_network', out)
         self.assertIn(self.mn, out)
 
@@ -257,7 +257,7 @@ class TestAwsOdbNetwork(unittest.TestCase):
     def test_custom_module_name(self):
         mn = 'prod_odb_network'
         d = _aws_net_defaults(aws_net(mn))
-        out = mod0_main(mn)
+        out = mod0_main(mn, d)
         self.assertIn(mn, out)
 
     def test_tags_rendered_in_vars(self):
@@ -723,8 +723,9 @@ class TestGenerateAll(unittest.TestCase):
                          'cloud_exadata_infrastructure_id': '',
                          'odb_network_id': ''},
         })
-        self.assertEqual(len(files), 18)
+        self.assertEqual(len(files), 19)
         self.assertIn('main.tf', files)
+        self.assertIn('variables.tf', files)
         self.assertIn('modules/net/main.tf', files)
 
     # ── AWS multi-instance ────────────────────────────────────────────────────
@@ -736,8 +737,8 @@ class TestGenerateAll(unittest.TestCase):
             'aws_peerings':  [aws_peer('p1', network_ref='n1')],
             'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
         })
-        # 2 nets + 1 infra + 1 peer + 1 cluster = 5 modules × 4 files + 2 root = 22
-        self.assertEqual(len(files), 22)
+        # 2 nets + 1 infra + 1 peer + 1 cluster = 5 modules × 4 files + 3 root = 23
+        self.assertEqual(len(files), 23)
         self.assertIn('modules/n1/main.tf', files)
         self.assertIn('modules/n2/main.tf', files)
 
@@ -808,8 +809,9 @@ class TestGenerateAll(unittest.TestCase):
             'gcp_module_3': gcp_infra('ginf'),
             'gcp_module_4': {**gcp_cluster('gcl', 'gnet', 'ginf'), 'odb_network': '', 'odb_subnet': '', 'backup_odb_subnet': '', 'exadata_infrastructure': ''},
         })
-        self.assertEqual(len(files), 22)
+        self.assertEqual(len(files), 23)
         self.assertIn('main.tf', files)
+        self.assertIn('variables.tf', files)
 
     # ── GCP multi-instance ────────────────────────────────────────────────────
     def test_gcp_multi_two_networks(self):
@@ -821,8 +823,8 @@ class TestGenerateAll(unittest.TestCase):
             'gcp_infras':   [gcp_infra('ginf1')],
             'gcp_clusters': [gcp_cluster('gcl1', 'gnet1', 'ginf1')],
         })
-        # 2 nets × 3 (net+client+backup) + 1 infra + 1 cluster = 8 modules × 4 + 2 = 34
-        self.assertEqual(len(files), 34)
+        # 2 nets × 3 (net+client+backup) + 1 infra + 1 cluster = 8 modules × 4 + 3 root = 35
+        self.assertEqual(len(files), 35)
 
     def test_gcp_multi_cluster_cross_wired(self):
         n1 = _gcp_net_defaults(gcp_net('gnet1'))
@@ -938,7 +940,7 @@ class TestApiRoutes(unittest.TestCase):
             'gcp_clusters':  [gcp_cluster('gcl1', 'gnet1', 'ginf1')],
         }
 
-    # GET /
+    # GET / (home page)
     def test_index_returns_200(self):
         r = self.client.get('/')
         self.assertEqual(r.status_code, 200)
@@ -954,6 +956,32 @@ class TestApiRoutes(unittest.TestCase):
     def test_index_contains_version(self):
         r = self.client.get('/')
         self.assertIn(b'v5', r.data)
+
+    # GET /aws
+    def test_aws_page_returns_200(self):
+        r = self.client.get('/aws')
+        self.assertEqual(r.status_code, 200)
+
+    def test_aws_page_contains_html(self):
+        r = self.client.get('/aws')
+        self.assertIn(b'ODB@AWS', r.data)
+
+    def test_aws_page_no_cache_header(self):
+        r = self.client.get('/aws')
+        self.assertIn('no-cache', r.headers.get('Cache-Control', ''))
+
+    # GET /gcp
+    def test_gcp_page_returns_200(self):
+        r = self.client.get('/gcp')
+        self.assertEqual(r.status_code, 200)
+
+    def test_gcp_page_contains_html(self):
+        r = self.client.get('/gcp')
+        self.assertIn(b'DB@GCP', r.data)
+
+    def test_gcp_page_no_cache_header(self):
+        r = self.client.get('/gcp')
+        self.assertIn('no-cache', r.headers.get('Cache-Control', ''))
 
     # POST /api/generate — AWS
     def test_generate_aws_root_main(self):
@@ -1843,3 +1871,124 @@ class TestTFValidator(unittest.TestCase):
         })
         d = r.get_json()
         self.assertEqual(d['failed'], 0, f"Unexpected failures: {[x for x in d['results'] if x['status']=='fail']}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  20. TERRAFORM FMT
+#  Requires terraform or tofu in PATH; skipped automatically when absent.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestTerraformFmt(unittest.TestCase):
+    """Generated .tf files must pass `terraform fmt -check`."""
+
+    @classmethod
+    def setUpClass(cls):
+        import shutil
+        cls.tf_bin = shutil.which('terraform') or shutil.which('tofu')
+
+    def _assert_fmt_clean(self, files):
+        if not self.__class__.tf_bin:
+            self.skipTest('terraform/tofu not found in PATH')
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for rel_path, content in files.items():
+                if not rel_path.endswith('.tf'):
+                    continue
+                full = Path(tmpdir) / rel_path
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content, encoding='utf-8')
+            result = subprocess.run(
+                [self.__class__.tf_bin, 'fmt', '-check', '-recursive', tmpdir],
+                capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                bad = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+                self.fail(
+                    f'terraform fmt -check found {len(bad)} file(s) needing formatting:\n'
+                    + '\n'.join(bad)
+                )
+
+    def test_aws_tf_files_are_formatted(self):
+        self._assert_fmt_clean(generate_all({
+            'cloud': 'aws',
+            'aws_networks':  [aws_net('n1')],
+            'aws_infras':    [aws_infra('i1')],
+            'aws_peerings':  [aws_peer('p1', network_ref='n1')],
+            'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+        }))
+
+    def test_gcp_tf_files_are_formatted(self):
+        self._assert_fmt_clean(generate_all({
+            'cloud': 'gcp',
+            'gcp_networks':  [gcp_net('gnet1')],
+            'gcp_infras':    [gcp_infra('ginf1')],
+            'gcp_clusters':  [gcp_cluster('gcl1', 'gnet1', 'ginf1')],
+        }))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  21. TERRAFORM VALIDATE
+#  Requires terraform or tofu in PATH; skipped automatically when absent.
+#  Downloads providers on first run (~400 MB); subsequent runs use the cache.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestTerraformValidate(unittest.TestCase):
+    """Generated Terraform must pass `terraform validate` after `terraform init`."""
+
+    @classmethod
+    def setUpClass(cls):
+        import shutil
+        cls.tf_bin = shutil.which('terraform') or shutil.which('tofu')
+
+    def _validate_files(self, files):
+        if not self.__class__.tf_bin:
+            self.skipTest('terraform/tofu not found in PATH')
+        import subprocess
+        import json as _json
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for rel_path, content in files.items():
+                full = Path(tmpdir) / rel_path
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content, encoding='utf-8')
+
+            init = subprocess.run(
+                [self.__class__.tf_bin, 'init', '-no-color', '-backend=false'],
+                capture_output=True, text=True, cwd=tmpdir,
+                timeout=300,
+            )
+            if init.returncode != 0:
+                self.fail(f'terraform init failed:\n{init.stderr or init.stdout}')
+
+            val = subprocess.run(
+                [self.__class__.tf_bin, 'validate', '-no-color', '-json'],
+                capture_output=True, text=True, cwd=tmpdir,
+                timeout=60,
+            )
+            if val.returncode != 0:
+                try:
+                    diags = _json.loads(val.stdout).get('diagnostics', [])
+                    msgs = '\n'.join(
+                        f"[{d['severity']}] {d['summary']}: {d.get('detail', '')}"
+                        for d in diags
+                    )
+                except Exception:
+                    msgs = val.stdout or val.stderr
+                self.fail(f'terraform validate failed:\n{msgs}')
+
+    def test_aws_config_validates(self):
+        self._validate_files(generate_all({
+            'cloud': 'aws',
+            'aws_networks':  [aws_net('n1')],
+            'aws_infras':    [aws_infra('i1')],
+            'aws_peerings':  [aws_peer('p1', network_ref='n1')],
+            'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+        }))
+
+    def test_gcp_config_validates(self):
+        self._validate_files(generate_all({
+            'cloud': 'gcp',
+            'gcp_networks':  [gcp_net('gnet1')],
+            'gcp_infras':    [gcp_infra('ginf1')],
+            'gcp_clusters':  [gcp_cluster('gcl1', 'gnet1', 'ginf1')],
+        }))

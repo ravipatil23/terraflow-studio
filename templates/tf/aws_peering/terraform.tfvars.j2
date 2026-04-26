@@ -20,10 +20,11 @@ region          = "{{ region }}"
 # region          = "us-west-2"
 {% endif %}
 
+# peer_network_cidrs is update-only — uncomment and re-apply AFTER the resource is created.
 {% if cidrs %}
-additional_peer_network_cidrs = [{{ cidrs | map("tojson") | join(", ") }}]
+# peer_network_cidrs = toset([{{ cidrs | map("tojson") | join(", ") }}])
 {% else %}
-# additional_peer_network_cidrs = []
+# peer_network_cidrs = toset([])
 {% endif %}
 
 tags = {

@@ -5,11 +5,18 @@ A Flask web app that generates modular Terraform/OpenTofu for Oracle Database@AW
 
 ## Stack
 - **Backend**: Python 3.12 + Flask, Jinja2 templates for HCL, pure urllib (no requests)
-- **Frontend**: Single HTML file (`templates/index.html`) — vanilla JS, no framework
+- **Frontend**: Split HTML templates — `home.html` (chooser), `base.html` (shared chrome/JS), `aws.html`, `gcp.html` — vanilla JS, no framework
 - **Storage**: FileStore (JSON files in `data/`) or CouchDB (when COUCHDB_URL is set)
 - **LLM**: `llm.py` — model-agnostic adapter (Anthropic, OpenAI, Gemini, Ollama)
 - **GitHub**: `github.py` — pushes generated files via GitHub Contents API
-- **Tests**: `tests/test_all.py` — 210 tests, run with `python -m unittest tests/test_all.py`
+- **Tests**: `tests/test_all.py` — 220 tests, run with `python -m unittest tests/test_all.py`
+
+## Routes
+| Route | Template | Purpose |
+|-------|----------|---------|
+| `GET /` | `home.html` | Product chooser landing page |
+| `GET /aws` | `aws.html` | ODB@AWS product page |
+| `GET /gcp` | `gcp.html` | DB@GCP product page |
 
 ## Key files
 | File | Purpose |
@@ -18,9 +25,26 @@ A Flask web app that generates modular Terraform/OpenTofu for Oracle Database@AW
 | `llm.py` | LLM provider adapter |
 | `github.py` | GitHub API integration |
 | `store.py` | FileStore / CouchDB storage backend |
-| `templates/index.html` | Entire frontend (HTML + CSS + JS) |
+| `templates/home.html` | Product chooser landing page (standalone, no base) |
+| `templates/base.html` | Shared Jinja2 base — CSS, header, customer bar, LLM bar, output panel, shared JS |
+| `templates/aws.html` | ODB@AWS product page (extends base) |
+| `templates/gcp.html` | DB@GCP product page (extends base) |
+| `templates/index.html` | Legacy monolithic template (kept for reference, not served) |
 | `templates/tf/` | Jinja2 templates for every HCL file |
 | `.env` | Config — LLM key, GitHub token, CouchDB |
+
+## Template block architecture (base.html blocks)
+| Block | Contents |
+|-------|---------|
+| `body_class` | `gcp` for GCP page; empty for AWS (default orange theme) |
+| `cloud_nav` | Active cloud badge + link to the other product page |
+| `provider_badge` | Provider version string in header |
+| `product_tabs` | Tab bar for the product's resource types |
+| `product_pages` | Form pages (`.page` divs) for each resource type |
+| `product_data` | Region/zone data arrays + select-HTML helpers |
+| `product_state` | State arrays, factory/add/read/card/render functions |
+| `product_orchestration` | `const cloud`, `switchTab`, `buildPayload`, `applyConfig`, `renderAll` |
+| `product_seed` | Initial `push(def*())` calls to pre-populate one of each resource |
 
 ## Terraform template directories
 ```
@@ -45,22 +69,23 @@ A. `google_oracle_database_odb_network` + subnets
 C. `google_oracle_database_cloud_exadata_infrastructure`
 D. `google_oracle_database_exadb_vm_cluster`
 
-## JS state arrays (in index.html)
+## JS state arrays
 ```js
+// aws.html
 awsNets, awsInfras, awsPeerings, awsClusters, awsAvmcs, awsOciDbs
+// gcp.html
 gcpNets, gcpInfras, gcpClusters
 ```
 
 ## Adding a new AWS resource — checklist
 1. Add Jinja2 templates in `templates/tf/<resource>/` (main, variables, outputs, tfvars)
 2. Add Python context builder `_mod_ctx()` and generators in `app.py`
-3. Add JS: `defAwsX(i)`, `readAwsX(i)`, `awsXCardHTML(d,i)`, `renderAwsXs()`, `addAwsX()`
-4. Add state array `let awsXs = []`
-5. Add tab in HTML tab bar + page div `id="aws-page-N"`
-6. Wire into `buildPayload()`, `renderAll()`, `applyConfig()`
-7. Wire into `generate_all()` in app.py
-8. Add validate handler in `api_validate()`
-9. Run `python -m unittest tests/test_all.py` — all 210 must pass
+3. In `templates/aws.html` `product_state` block: add `defAwsX(i)`, `addAwsX()`, `readAwsX(i)`, `awsXCardHTML(d,i)`, `renderAwsXs()`, state array
+4. Add tab in `product_tabs` block + page div in `product_pages` block
+5. Wire into `buildPayload()`, `renderAll()`, `applyConfig()` in `product_orchestration` block
+6. Wire into `generate_all()` in app.py
+7. Add validate handler in `api_validate()`
+8. Run `python -m unittest tests/test_all.py` — all 220 must pass
 
 ## Running locally
 ```bash
@@ -93,7 +118,7 @@ GITHUB_TOKEN, GITHUB_REPO, GITHUB_BRANCH=main, GITHUB_BASE_PATH=terraform
 ```bash
 python -m unittest tests/test_all.py
 ```
-All 210 tests must pass before committing.
+All 220 tests must pass before committing.
 
 ## Conventions
 - Python functions named `mod0_*` = AWS ODB Network, `mod1_*` = Exadata Infra, etc.

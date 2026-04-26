@@ -1,0 +1,636 @@
+{% extends "base.html" %}
+
+{% block body_class %}gcp{% endblock %}
+
+{% block cloud_nav %}{% endblock %}
+
+{% block provider_badge %}hashicorp/google ≥ 6.0.0{% endblock %}
+
+{% block product_tabs %}
+<div class="tgroup show" id="gcp-tabs">
+  <div class="tab active" onclick="switchTab(0,true)"><span class="tab-num">A</span><span class="tab-label">odb_network + subnets</span></div>
+  <div class="tab" onclick="switchTab(2,true)"><span class="tab-num">C</span><span class="tab-label">cloud_exadata_infrastructure</span></div>
+  <div class="tab" onclick="switchTab(3,true)"><span class="tab-num">D</span><span class="tab-label">exadb_vm_cluster</span></div>
+  <div class="tab" onclick="switchTab(4,true)"><span class="tab-num">E</span><span class="tab-label">DB Home · CDB · PDB</span></div>
+</div>
+{% endblock %}
+
+{% block product_pages %}
+<!-- ─── GCP PAGE A: odb_network (multi-instance) ─── -->
+<div class="page active" id="gcp-page-0">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:21px;line-height:1.2">google_oracle_database_<em>odb_network</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/oracle_database_odb_network" target="_blank">docs ↗</a></div>
+  <div class="notice gcp"><span style="font-size:14px;flex-shrink:0">ℹ</span> Each ODB Network generates a client subnet and a backup subnet module automatically.</div>
+  <div id="gcp-net-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addGcpNet()">＋ Add ODB Network</button>
+    <span class="inst-count-lbl" id="gcp-net-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(10,true)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── GCP PAGE B: odb_subnet (hidden — subnets auto-generate from network) ─── -->
+<div class="page" id="gcp-page-1" style="display:none!important"></div>
+
+<!-- ─── GCP PAGE C: exadb_infra (multi-instance) ─── -->
+<div class="page" id="gcp-page-2">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:18px;line-height:1.2">google_oracle_database_<em>cloud_exadata_infrastructure</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/oracle_database_cloud_exadata_infrastructure" target="_blank">docs ↗</a></div>
+  <div id="gcp-infra-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addGcpInfra()">＋ Add Exadata Infrastructure</button>
+    <span class="inst-count-lbl" id="gcp-infra-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(12,true)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── GCP PAGE D: exadb_vm_cluster (multi-instance) ─── -->
+<div class="page" id="gcp-page-3">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:18px;line-height:1.2">google_oracle_database_<em>exadb_vm_cluster</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/oracle_database_exadb_vm_cluster" target="_blank">docs ↗</a></div>
+  <div id="gcp-cluster-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addGcpCluster()">＋ Add VM Cluster</button>
+    <span class="inst-count-lbl" id="gcp-cluster-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(13,true)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── GCP PAGE E: DB Home / CDB / PDB ─── -->
+<div class="page" id="gcp-page-4">
+  <div class="page-hero">
+    <div>
+      <div class="page-resource-name" style="font-size:20px;line-height:1.2">DB Home · CDB · <em>PDB</em></div>
+      <div style="font-family:var(--font-m);font-size:10px;color:var(--ink3);margin-top:4px">oracle/oci provider — oci_database_db_home → oci_database_database → oci_database_pluggable_database</div>
+    </div>
+    <a class="page-doc-link" href="https://docs.oracle.com/en-us/iaas/Content/database-at-gcp/gcpcr-create-exadata-database.html" target="_blank">docs ↗</a>
+  </div>
+  <div class="notice gcp" style="margin-bottom:16px"><span style="font-size:13px;flex-shrink:0">ℹ</span> Uses the <strong>oracle/oci</strong> provider. OCI provider block auto-added to root <code>main.tf</code>. VM Cluster OCID auto-wired from <code>module.&lt;vmcluster&gt;.ocid</code>. Each entry generates 3 separate modules: <code>_dbhome</code>, <code>_cdb</code>, <code>_pdb</code>.</div>
+  <div id="gcp-ocidb-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addGcpOciDb()">＋ Add DB Home / CDB / PDB</button>
+    <span class="inst-count-lbl" id="gcp-ocidb-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(14,true)">Validate &amp; Generate All</button>
+</div>
+{% endblock %}
+
+{% block product_data %}
+// ── ODB@GCP Region & Oracle Zone data ────────────────────────────────────────
+const GCP_REGIONS = [
+  { region:'us-east4',                label:'N. Virginia (us-east4)',                zones:['us-east4-b-r1','us-east4-a-r2'],                          oci:'us-ashburn-1',      ociLabel:'US East (Ashburn)',              status:'live'    },
+  { region:'us-central1',             label:'Iowa / Council Bluffs (us-central1)',   zones:[],                                                         oci:'us-desmoines-1',    ociLabel:'US Midwest (Des Moines)',        status:'live'    },
+  { region:'us-west3',                label:'Salt Lake City (us-west3)',             zones:[],                                                         oci:'us-saltlake-2',     ociLabel:'US West (Salt Lake City)',       status:'live'    },
+  { region:'northamerica-northeast1', label:'Montréal (northamerica-northeast1)',    zones:[],                                                         oci:'ca-montreal-1',     ociLabel:'Canada Southeast (Montreal)',    status:'live'    },
+  { region:'northamerica-northeast2', label:'Toronto (northamerica-northeast2)',     zones:[],                                                         oci:'ca-toronto-1',      ociLabel:'Canada Southeast (Toronto)',     status:'live'    },
+  { region:'europe-west3',            label:'Frankfurt (europe-west3)',              zones:['europe-west3-b-r1','europe-west3-a-r2'],                   oci:'eu-frankfurt-1',    ociLabel:'Germany Central (Frankfurt)',    status:'live'    },
+  { region:'europe-west2',            label:'London (europe-west2)',                 zones:['europe-west2-c-r2','europe-west2-a-r1'],                   oci:'uk-london-1',       ociLabel:'UK South (London)',              status:'live'    },
+  { region:'europe-west8',            label:'Milan (europe-west8)',                  zones:['europe-west8-a-r1','europe-west8-b-r1'],                   oci:'eu-milan-1',        ociLabel:'Italy Northwest (Milan)',        status:'live'    },
+  { region:'asia-south2',             label:'Delhi (asia-south2)',                   zones:[],                                                         oci:'ap-delhi-1',        ociLabel:'India North (Delhi)',            status:'live'    },
+  { region:'australia-southeast2',    label:'Melbourne (australia-southeast2)',      zones:['australia-southeast2-a-r2','australia-southeast2-b-r1'],   oci:'ap-melbourne-1',    ociLabel:'Australia Southeast (Melbourne)',status:'live'    },
+  { region:'asia-south1',             label:'Mumbai (asia-south1)',                  zones:[],                                                         oci:'ap-mumbai-1',       ociLabel:'India West (Mumbai)',            status:'live'    },
+  { region:'asia-northeast2',         label:'Osaka (asia-northeast2)',               zones:[],                                                         oci:'ap-osaka-1',        ociLabel:'Japan Central (Osaka)',          status:'live'    },
+  { region:'australia-southeast1',    label:'Sydney (australia-southeast1)',         zones:[],                                                         oci:'ap-sydney-1',       ociLabel:'Australia East (Sydney)',        status:'live'    },
+  { region:'asia-northeast1',         label:'Tokyo (asia-northeast1)',               zones:[],                                                         oci:'ap-tokyo-1',        ociLabel:'Japan East (Tokyo)',             status:'live'    },
+  { region:'southamerica-east1',      label:'Osasco / São Paulo (southamerica-east1)',zones:[],                                                        oci:'sa-saopaulo-1',     ociLabel:'Brazil East (Sao Paulo)',        status:'live'    },
+  { region:'northamerica-south1',     label:'Mexico (northamerica-south1)',          zones:[],                                                         oci:'TBD',               ociLabel:'TBD',                            status:'planned' },
+  { region:'europe-west6',            label:'Turin (europe-west6)',                  zones:[],                                                         oci:'TBD',               ociLabel:'TBD',                            status:'planned' },
+];
+
+const GCP_ZONE_MAP = Object.fromEntries(GCP_REGIONS.map(r => [r.region, r.zones]));
+
+function gcpRegionSelectHTML(id, value, onchange) {
+  const liveOpts = GCP_REGIONS.filter(r => r.status === 'live').map(r =>
+    `<option value="${r.region}"${r.region === value ? ' selected' : ''}>${r.label}</option>`
+  ).join('');
+  const plannedOpts = GCP_REGIONS.filter(r => r.status === 'planned').map(r =>
+    `<option value="${r.region}"${r.region === value ? ' selected' : ''} style="color:var(--ink3)">${r.label} — planned</option>`
+  ).join('');
+  return `<select id="${id}" class="ref-select" onchange="${onchange}">
+    <option value="">— select region —</option>
+    <optgroup label="Live (${GCP_REGIONS.filter(r=>r.status==='live').length} regions)">${liveOpts}</optgroup>
+    <optgroup label="Planned">${plannedOpts}</optgroup>
+  </select>`;
+}
+
+function gcpOciHintHTML(regionVal) {
+  if (!regionVal) return '';
+  const r = GCP_REGIONS.find(x => x.region === regionVal);
+  if (!r || r.oci === 'TBD') return '';
+  return `<div style="font-family:var(--font-m);font-size:10px;color:var(--ink3);margin-top:4px">
+    🔗 Paired OCI region: <strong>${r.ociLabel}</strong> <code style="font-size:10px">${r.oci}</code>
+  </div>`;
+}
+
+function gcpZoneOptionsHTML(id, regionVal, zoneVal, onchange) {
+  const zones = GCP_ZONE_MAP[regionVal] || [];
+  let opts = `<option value="">— select zone —</option>`;
+  if (zones.length === 0 && regionVal) {
+    opts += `<option value="" disabled style="color:var(--ink3)">No explicit zone for this region</option>`;
+  }
+  zones.forEach(z => { opts += `<option value="${z}"${z === zoneVal ? ' selected' : ''}>${z}</option>`; });
+  if (zoneVal && zones.length > 0 && !zones.includes(zoneVal)) {
+    opts += `<option value="${zoneVal}" selected>${zoneVal} (custom)</option>`;
+  }
+  return `<select id="${id}" class="ref-select" onchange="${onchange}">${opts}</select>`;
+}
+
+function onGcpRegionChange(regionSelectId, zoneSelectId, readFn) {
+  const regionEl = document.getElementById(regionSelectId);
+  const zoneEl   = document.getElementById(zoneSelectId);
+  if (!regionEl || !zoneEl) return;
+  const regionVal = regionEl.value;
+  const zones = GCP_ZONE_MAP[regionVal] || [];
+  let opts = `<option value="">— select zone —</option>`;
+  zones.forEach(z => { opts += `<option value="${z}">${z}</option>`; });
+  if (zones.length === 0 && regionVal) {
+    opts += `<option value="" disabled style="color:var(--ink3)">No explicit zone for this region</option>`;
+  }
+  zoneEl.innerHTML = opts;
+  const hintEl = document.getElementById(regionSelectId + '-oci-hint');
+  if (hintEl) hintEl.innerHTML = gcpOciHintHTML(regionVal);
+  if (readFn) readFn();
+  refresh();
+}
+{% endblock %}
+
+{% block product_state %}
+let gcpNets = [], gcpInfras = [], gcpClusters = [], gcpOciDbs = [];
+
+// ── Default factories ─────────────────────────────────────────────────────────
+function defGcpOciDb(i)   { return {module_name: i===0?'gcp_oci_database':`gcp_oci_database_${i+1}`, vmcluster_ref:'', db_home_display_name:'dbhome', db_version:'19.0.0.0', db_name:'MYDB', character_set:'AL32UTF8', ncharacter_set:'AL16UTF16', pdb_name:'MYPDB', db_unique_name:'', sid_prefix:'', create_pdb:true, auto_backup_enabled:false, auto_backup_window:'SLOT_TWO', recovery_window_in_days:7}; }
+function defGcpNet(i)     { return {module_name: i===0?'gcp_network':`gcp_network_${i+1}`, odb_network_id:'',location:'',network:'',project:'',gcp_oracle_zone:'',deletion_protection:true,client_subnet_module:i===0?'gcp_client_subnet':`gcp_client_subnet_${i+1}`,backup_subnet_module:i===0?'gcp_backup_subnet':`gcp_backup_subnet_${i+1}`,client_subnet_id:i===0?'gcp-client-subnet':`gcp-client-subnet-${i+1}`,client_cidr:'',backup_subnet_id:i===0?'gcp-backup-subnet':`gcp-backup-subnet-${i+1}`,backup_cidr:'',labels:{}}; }
+function defGcpInfra(i)   { return {module_name: i===0?'gcp_infra':`gcp_infra_${i+1}`,     cloud_exadata_infrastructure_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',shape:'Exadata.X9M',compute_count:2,storage_count:3,total_storage_size_gb:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',deletion_protection:true,labels:{}}; }
+function defGcpCluster(i) { return {module_name: i===0?'gcp_cluster':`gcp_cluster_${i+1}`, exadb_vm_cluster_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',gi_version:'',hostname_prefix:'',license_type:'LICENSE_INCLUDED',node_count:2,enabled_ecpu_count_per_node:8,additional_ecpu_count_per_node:0,vm_file_system_storage_size_gbs:60,ssh_public_keys:[],db_servers:[],dco_diagnostics:true,dco_health:true,dco_incident_logs:true,cluster_name:'',time_zone:'',system_version:'',memory_per_node_in_gbs:'',db_node_storage_size_per_vm_in_gbs:'',data_storage_size_in_tbs:'',spare_snapshot_space_in_gbs:'',disk_redundancy:'',network_ref:'',client_subnet_ref:'',backup_subnet_ref:'',infra_ref:'',deletion_protection:true,labels:{}}; }
+
+// ── Card add helpers ──────────────────────────────────────────────────────────
+function addGcpNet()     { gcpNets.push(defGcpNet(gcpNets.length));           renderGcpNets();     refresh(); }
+function addGcpInfra()   { gcpInfras.push(defGcpInfra(gcpInfras.length));     renderGcpInfras();   refresh(); }
+function addGcpCluster() { gcpClusters.push(defGcpCluster(gcpClusters.length)); renderGcpClusters(); refresh(); }
+function addGcpOciDb()   { gcpOciDbs.push(defGcpOciDb(gcpOciDbs.length));     renderGcpOciDbs();   refresh(); }
+
+function removeInst(arr, i, renderFn) { arr.splice(i,1); renderFn(); refresh(); }
+
+// ── Read card values back into state arrays ───────────────────────────────────
+function readGcpNet(i) {
+  const p = `gn${i}_`;
+  gcpNets[i] = {...gcpNets[i],
+    module_name:   fv(`${p}mn`)  || gcpNets[i].module_name,
+    odb_network_id: fv(`${p}netid`),
+    location:      fv(`${p}loc`),
+    network:       fv(`${p}net`),
+    project:       fv(`${p}proj`),
+    gcp_oracle_zone: fv(`${p}zone`),
+    deletion_protection: fcb(`${p}delp`),
+    client_subnet_module: fv(`${p}csmn`) || gcpNets[i].client_subnet_module,
+    backup_subnet_module: fv(`${p}bsmn`) || gcpNets[i].backup_subnet_module,
+    client_subnet_id: fv(`${p}csid`),
+    client_cidr:   fv(`${p}ccidr`),
+    backup_subnet_id: fv(`${p}bsid`),
+    backup_cidr:   fv(`${p}bcidr`),
+  };
+}
+function readGcpInfra(i) {
+  const p = `gi${i}_`;
+  gcpInfras[i] = {...gcpInfras[i],
+    module_name:   fv(`${p}mn`)  || gcpInfras[i].module_name,
+    cloud_exadata_infrastructure_id: fv(`${p}infraid`),
+    display_name:  fv(`${p}dn`),
+    location:      fv(`${p}loc`),
+    gcp_oracle_zone: fv(`${p}zone`),
+    project:       fv(`${p}proj`),
+    shape:         fv(`${p}shape`) || 'Exadata.X9M',
+    compute_count: parseInt(fv(`${p}cc`)) || 2,
+    storage_count: parseInt(fv(`${p}sc`)) || 3,
+    total_storage_size_gb: fv(`${p}tsg`),
+    mw_preference: fv(`${p}mwp`) || 'NO_PREFERENCE',
+    mw_patching_mode: fv(`${p}mwpm`) || 'ROLLING',
+    mw_is_custom_action_timeout_enabled: fcb(`${p}mwtoe`),
+    mw_custom_action_timeout_mins: parseInt(fv(`${p}mwtom`)) || 15,
+    mw_lead_time_week:  fv(`${p}mwlead`),
+    mw_hours_of_day:    fv(`${p}mwhours`),
+    mw_weeks_of_month:  fv(`${p}mwweeks`),
+    mw_days_of_week:    fv(`${p}mwdays`),
+    mw_months:          fv(`${p}mwmonths`),
+    deletion_protection: fcb(`${p}delp`),
+  };
+}
+function readGcpCluster(i) {
+  const p = `gc${i}_`;
+  gcpClusters[i] = {...gcpClusters[i],
+    module_name:   fv(`${p}mn`)  || gcpClusters[i].module_name,
+    exadb_vm_cluster_id: fv(`${p}clid`),
+    display_name:  fv(`${p}dn`),
+    location:      fv(`${p}loc`),
+    gcp_oracle_zone: fv(`${p}zone`),
+    project:       fv(`${p}proj`),
+    gi_version:    fv(`${p}gi`),
+    hostname_prefix: fv(`${p}hp`),
+    license_type:  fv(`${p}lt`) || 'LICENSE_INCLUDED',
+    node_count:    parseInt(fv(`${p}nc`)) || 2,
+    enabled_ecpu_count_per_node: parseInt(fv(`${p}ecpu`)) || 8,
+    additional_ecpu_count_per_node: parseInt(fv(`${p}aecpu`)) || 0,
+    vm_file_system_storage_size_gbs: parseInt(fv(`${p}fsgbs`)) || 60,
+    network_ref:   fv(`${p}net_ref`),
+    infra_ref:     fv(`${p}infra_ref`),
+    client_subnet_ref: gcpClusters[i].client_subnet_ref || '',
+    backup_subnet_ref: gcpClusters[i].backup_subnet_ref || '',
+    dco_diagnostics: fcb(`${p}dcoD`),
+    dco_health:      fcb(`${p}dcoH`),
+    dco_incident_logs: fcb(`${p}dcoL`),
+    cluster_name:  fv(`${p}cn`),
+    time_zone:     fv(`${p}tz`),
+    system_version: fv(`${p}sv`),
+    memory_per_node_in_gbs: fv(`${p}mem`),
+    db_node_storage_size_per_vm_in_gbs: fv(`${p}dng`),
+    data_storage_size_in_tbs: fv(`${p}dstb`),
+    spare_snapshot_space_in_gbs: fv(`${p}snap`),
+    disk_redundancy: fv(`${p}dred`),
+    deletion_protection: fcb(`${p}delp`),
+    ssh_public_keys: gcpClusters[i].ssh_public_keys || [],
+    db_servers: gcpClusters[i].db_servers || [],
+  };
+  const nr = gcpClusters[i].network_ref;
+  const net = gcpNets.find(n=>n.module_name===nr);
+  if (net) {
+    gcpClusters[i].client_subnet_ref = net.client_subnet_module;
+    gcpClusters[i].backup_subnet_ref = net.backup_subnet_module;
+  }
+}
+
+function readGcpOciDb(i) {
+  const p = `go${i}_`;
+  gcpOciDbs[i] = {...gcpOciDbs[i],
+    module_name:          fv(`${p}mn`) || gcpOciDbs[i].module_name,
+    vmcluster_ref:        fv(`${p}vcref`),
+    db_home_display_name: fv(`${p}hdn`),
+    db_version:           fv(`${p}dbv`) || '19.0.0.0',
+    db_name:              fv(`${p}dbn`),
+    pdb_name:             fv(`${p}pdb`),
+    db_unique_name:       fv(`${p}dun`),
+    sid_prefix:           fv(`${p}sid`),
+    character_set:        fv(`${p}cs`)  || 'AL32UTF8',
+    ncharacter_set:       fv(`${p}ncs`) || 'AL16UTF16',
+    create_pdb:           fcb(`${p}cpdb`),
+    auto_backup_enabled:  fcb(`${p}bak`),
+    auto_backup_window:   fv(`${p}bakw`) || 'SLOT_TWO',
+    recovery_window_in_days: parseInt(fv(`${p}bakr`)) || 7,
+  };
+}
+
+// ── Card HTML builders ────────────────────────────────────────────────────────
+function gcpNetCardHTML(d, i) {
+  const p=`gn${i}_`, open=i===0?'open':'';
+  return `<div class="inst-card ${open}" id="gn-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('gn-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${gcpNets.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(gcpNets,${i},renderGcpNets)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readGcpNet(${i});renderRefDropdowns();refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">ODB Network</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">odb_network_id <span class="req-star">*</span></div><input type="text" id="${p}netid" value="${d.odb_network_id||''}" placeholder="my-odb-network" oninput="readGcpNet(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div><div class="field-hint">GCP region</div>${gcpRegionSelectHTML(`${p}loc`, d.location||'', `onGcpRegionChange('${p}loc','${p}zone',()=>readGcpNet(${i}))`)}<div id="${p}loc-oci-hint">${gcpOciHintHTML(d.location||'')}</div></div>
+        <div class="field"><div class="field-lbl">project</div><input type="text" id="${p}proj" value="${d.project||''}" placeholder="my-project" oninput="readGcpNet(${i});refresh()"></div>
+      </div>
+      <div class="field"><div class="field-lbl">network <span class="req-star">*</span></div><div class="field-hint">projects/{project}/global/networks/{name}</div><input type="text" id="${p}net" value="${d.network||''}" placeholder="projects/p/global/networks/default" oninput="readGcpNet(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">gcp_oracle_zone</div><div class="field-hint">Physical zone within region</div>${gcpZoneOptionsHTML(`${p}zone`, d.location||'', d.gcp_oracle_zone||'', `readGcpNet(${i});refresh()`)}</div>
+        <div class="field"><div class="field-lbl">deletion_protection</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}delp" ${d.deletion_protection!==false?'checked':''} onchange="readGcpNet(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.deletion_protection!==false?'true':'false'}</span></div></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Client Subnet</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="module-path-row" style="margin-bottom:8px"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}csmn" value="${d.client_subnet_module||''}" placeholder="gcp-client-subnet-1" oninput="readGcpNet(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">subnet_id <span class="req-star">*</span></div><input type="text" id="${p}csid" value="${d.client_subnet_id||''}" placeholder="client-subnet-prod" oninput="readGcpNet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">cidr_range <span class="req-star">*</span></div><input type="text" id="${p}ccidr" value="${d.client_cidr||''}" placeholder="10.0.1.0/24" oninput="readGcpNet(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Backup Subnet</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="module-path-row" style="margin-bottom:8px"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}bsmn" value="${d.backup_subnet_module||''}" placeholder="gcp-backup-subnet-1" oninput="readGcpNet(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">subnet_id <span class="req-star">*</span></div><input type="text" id="${p}bsid" value="${d.backup_subnet_id||''}" placeholder="backup-subnet-prod" oninput="readGcpNet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">cidr_range <span class="req-star">*</span></div><input type="text" id="${p}bcidr" value="${d.backup_cidr||''}" placeholder="10.0.2.0/24" oninput="readGcpNet(${i});refresh()"></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function gcpInfraCardHTML(d, i) {
+  const p=`gi${i}_`, open=i===0?'open':'';
+  const isCust = d.mw_preference==='CUSTOM_PREFERENCE';
+  return `<div class="inst-card ${open}" id="gi-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('gi-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${gcpInfras.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(gcpInfras,${i},renderGcpInfras)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readGcpInfra(${i});renderRefDropdowns();refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">cloud_exadata_infrastructure_id <span class="req-star">*</span></div><div class="field-hint">Immutable unique ID</div><input type="text" id="${p}infraid" value="${d.cloud_exadata_infrastructure_id||''}" placeholder="my-exadb-infra" oninput="readGcpInfra(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${gcpRegionSelectHTML(`${p}loc`, d.location||'', `onGcpRegionChange('${p}loc','${p}zone',()=>readGcpInfra(${i}))`)}<div id="${p}loc-oci-hint">${gcpOciHintHTML(d.location||'')}</div></div>
+        <div class="field"><div class="field-lbl">shape <span class="req-star">*</span></div><select id="${p}shape" onchange="readGcpInfra(${i});refresh()"><option value="Exadata.X9M"${d.shape==='Exadata.X9M'||!d.shape?' selected':''}>Exadata.X9M</option><option value="Exadata.X10M"${d.shape==='Exadata.X10M'?' selected':''}>Exadata.X10M</option><option value="Exadata.X11M"${d.shape==='Exadata.X11M'?' selected':''}>Exadata.X11M</option></select></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">compute_count <span class="req-star">*</span></div><div class="field-hint">Min 2</div><input type="number" id="${p}cc" value="${d.compute_count||2}" min="2" oninput="readGcpInfra(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">storage_count <span class="req-star">*</span></div><div class="field-hint">Min 3</div><input type="number" id="${p}sc" value="${d.storage_count||3}" min="3" oninput="readGcpInfra(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">display_name</div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="My Exadata Infra" oninput="readGcpInfra(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">gcp_oracle_zone</div>${gcpZoneOptionsHTML(`${p}zone`, d.location||'', d.gcp_oracle_zone||'', `readGcpInfra(${i});refresh()`)}</div>
+        <div class="field"><div class="field-lbl">project</div><input type="text" id="${p}proj" value="${d.project||''}" placeholder="my-gcp-project" oninput="readGcpInfra(${i});refresh()"></div>
+      </div>
+      <div class="field"><div class="field-lbl">total_storage_size_gb</div><input type="number" id="${p}tsg" value="${d.total_storage_size_gb||''}" placeholder="196608" oninput="readGcpInfra(${i});refresh()"></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Maintenance Window</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="inner-card">
+        <div class="g2">
+          <div class="field"><div class="field-lbl">preference</div><select id="${p}mwp" onchange="readGcpInfra(${i});toggleMWCard('${p}');refresh()"><option value="NO_PREFERENCE"${!isCust?' selected':''}>NO_PREFERENCE</option><option value="CUSTOM_PREFERENCE"${isCust?' selected':''}>CUSTOM_PREFERENCE</option></select></div>
+          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readGcpInfra(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NONROLLING'?' selected':''}>ROLLING</option><option value="NONROLLING"${d.mw_patching_mode==='NONROLLING'?' selected':''}>NONROLLING</option></select></div>
+        </div>
+        <div id="${p}mwcustom" style="${isCust?'':'display:none'}; margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
+          <div class="g3">
+            <div class="field"><div class="field-lbl">lead_time_week</div><input type="number" id="${p}mwlead" value="${d.mw_lead_time_week||''}" min="1" max="4" oninput="readGcpInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">hours_of_day</div><input type="text" id="${p}mwhours" value="${d.mw_hours_of_day||''}" placeholder="4,8" oninput="readGcpInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">weeks_of_month</div><input type="text" id="${p}mwweeks" value="${d.mw_weeks_of_month||''}" placeholder="1,3" oninput="readGcpInfra(${i});refresh()"></div>
+          </div>
+          <div class="g2">
+            <div class="field"><div class="field-lbl">days_of_week</div><input type="text" id="${p}mwdays" value="${d.mw_days_of_week||''}" placeholder="SUNDAY,MONDAY" oninput="readGcpInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">months</div><input type="text" id="${p}mwmonths" value="${d.mw_months||''}" placeholder="JANUARY,APRIL" oninput="readGcpInfra(${i});refresh()"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function gcpClusterCardHTML(d, i) {
+  const p=`gc${i}_`, open=i===0?'open':'';
+  const infOpts = gcpInfraOptions(d.infra_ref);
+  const netOpts = gcpNetOptions(d.network_ref);
+  const sshChips = (d.ssh_public_keys||[]).map((k,ki)=>`<span class="chip"><span>${k.substring(0,40)}…</span><button class="chip-rm" onclick="gcpClusters[${i}].ssh_public_keys.splice(${ki},1);renderGcpClusters();refresh()">×</button></span>`).join('');
+  return `<div class="inst-card ${open}" id="gc-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('gc-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${gcpClusters.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(gcpClusters,${i},renderGcpClusters)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readGcpCluster(${i});refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">References</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice gcp" style="margin-bottom:8px"><span style="font-size:13px;flex-shrink:0">✓</span> <strong>Auto-wired in root main.tf</strong> — select the ODB Network and Infra this cluster uses.</div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">ODB Network</div><select class="ref-select" id="${p}net_ref" onchange="readGcpCluster(${i});refresh()">${netOpts||'<option value="">— add network first —</option>'}</select></div>
+        <div class="field"><div class="field-lbl">Exadata Infrastructure</div><select class="ref-select" id="${p}infra_ref" onchange="readGcpCluster(${i});refresh()">${infOpts||'<option value="">— add infra first —</option>'}</select></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">exadb_vm_cluster_id <span class="req-star">*</span></div><div class="field-hint">Immutable unique ID</div><input type="text" id="${p}clid" value="${d.exadb_vm_cluster_id||''}" placeholder="my-exadb-cluster" oninput="readGcpCluster(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="My VM Cluster" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${gcpRegionSelectHTML(`${p}loc`, d.location||'', `onGcpRegionChange('${p}loc','${p}zone',()=>readGcpCluster(${i}))`)}<div id="${p}loc-oci-hint">${gcpOciHintHTML(d.location||'')}</div></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">gi_version <span class="req-star">*</span></div><input type="text" id="${p}gi" value="${d.gi_version||''}" placeholder="23.0.0.0" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">hostname_prefix <span class="req-star">*</span></div><div class="field-hint">Max 12 chars</div><input type="text" id="${p}hp" value="${d.hostname_prefix||''}" placeholder="vm" oninput="readGcpCluster(${i});refresh()"></div>
+      </div>
+      <div class="g3">
+        <div class="field"><div class="field-lbl">node_count <span class="req-star">*</span></div><div class="field-hint">Min 2</div><input type="number" id="${p}nc" value="${d.node_count||2}" min="2" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">enabled_ecpu_count_per_node <span class="req-star">*</span></div><div class="field-hint">Min 8, ×4</div><input type="number" id="${p}ecpu" value="${d.enabled_ecpu_count_per_node||8}" min="8" step="4" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">license_type</div><select id="${p}lt" onchange="readGcpCluster(${i});refresh()"><option value="LICENSE_INCLUDED"${d.license_type!=='BRING_YOUR_OWN_LICENSE'?' selected':''}>LICENSE_INCLUDED</option><option value="BRING_YOUR_OWN_LICENSE"${d.license_type==='BRING_YOUR_OWN_LICENSE'?' selected':''}>BRING_YOUR_OWN_LICENSE</option></select></div>
+      </div>
+      <div class="field"><div class="field-lbl">ssh_public_keys <span class="req-star">*</span></div>
+        <div class="chip-list">${sshChips}</div>
+        <textarea id="${p}sshin" placeholder="Paste ssh-rsa or ssh-ed25519 key…" style="min-height:54px"></textarea>
+        <button class="add-btn" style="margin-top:6px;height:32px" onclick="addSshToCluster(${i},true)">+ Add SSH Key</button>
+      </div>
+      <div class="field">
+        <div class="field-lbl">db_servers</div>
+        <div class="field-hint">DB server OCIDs to pin this cluster to specific servers within the Exadata Infrastructure. Leave empty to use all available servers (recommended for new deployments). Each entry generates a <code>db_servers { ocid = "..." }</code> block inside <code>properties</code>.</div>
+        <div class="chip-list" id="${p}gcpdbsrv-chips">${(d.db_servers||[]).map((s,si)=>`<span class="chip"><span title="${s}">${s.length>36?s.substring(0,36)+'…':s}</span><button class="chip-rm" onclick="gcpClusters[${i}].db_servers.splice(${si},1);renderGcpClusters();refresh()">×</button></span>`).join('')}</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input type="text" id="${p}gcpdbsrv-inp" placeholder="ocid1.dbserver.oc1…" style="flex:1">
+          <button class="add-btn" style="height:32px;white-space:nowrap" onclick="addGcpDbServerToCluster(${i})">+ Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g3">
+        <div class="field"><div class="field-lbl">additional_ecpu_count_per_node</div><input type="number" id="${p}aecpu" value="${d.additional_ecpu_count_per_node||0}" min="0" step="4" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">vm_file_system_storage_size_gbs</div><input type="number" id="${p}fsgbs" value="${d.vm_file_system_storage_size_gbs||60}" min="60" max="900" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">data_storage_size_in_tbs</div><input type="number" id="${p}dstb" value="${d.data_storage_size_in_tbs||''}" placeholder="" min="2" oninput="readGcpCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">time_zone</div><input type="text" id="${p}tz" value="${d.time_zone||''}" placeholder="UTC" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">disk_redundancy</div><select id="${p}dred" onchange="readGcpCluster(${i});refresh()"><option value="">— default —</option><option value="NORMAL"${d.disk_redundancy==='NORMAL'?' selected':''}>NORMAL (2-way)</option><option value="HIGH"${d.disk_redundancy==='HIGH'?' selected':''}>HIGH (3-way)</option></select></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">memory_per_node_in_gbs</div><input type="number" id="${p}mem" value="${d.memory_per_node_in_gbs||''}" placeholder="30" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">spare_snapshot_space_in_gbs</div><input type="number" id="${p}snap" value="${d.spare_snapshot_space_in_gbs||''}" oninput="readGcpCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">gcp_oracle_zone</div>${gcpZoneOptionsHTML(`${p}zone`, d.location||'', d.gcp_oracle_zone||'', `readGcpCluster(${i});refresh()`)}</div>
+        <div class="field"><div class="field-lbl">deletion_protection</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}delp" ${d.deletion_protection!==false?'checked':''} onchange="readGcpCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.deletion_protection!==false?'true':'false'}</span></div></div>
+      </div>
+      <div class="section"><div class="section-head"><div class="section-title">Diagnostics</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+        <div class="inner-card"><div class="g3">
+          <div class="field"><div class="field-lbl" style="font-size:10px">diagnostics_events_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcoD" ${d.dco_diagnostics!==false?'checked':''} onchange="readGcpCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_diagnostics!==false?'true':'false'}</span></div></div>
+          <div class="field"><div class="field-lbl" style="font-size:10px">health_monitoring_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcoH" ${d.dco_health!==false?'checked':''} onchange="readGcpCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_health!==false?'true':'false'}</span></div></div>
+          <div class="field"><div class="field-lbl" style="font-size:10px">incident_logs_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcoL" ${d.dco_incident_logs!==false?'checked':''} onchange="readGcpCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_incident_logs!==false?'true':'false'}</span></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function gcpOciDbCardHTML(d, i) {
+  const p = `go${i}_`, open = i===0 ? 'open' : '';
+  const vcOpts = gcpClusters.map(c=>`<option value="${c.module_name}"${c.module_name===d.vmcluster_ref?' selected':''}>${c.module_name}</option>`).join('') || '<option value="">— add VM Cluster first —</option>';
+  return `<div class="inst-card ${open}" id="go-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('go-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${gcpOciDbs.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(gcpOciDbs,${i},renderGcpOciDbs)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readGcpOciDb(${i});refresh()"><span style="color:var(--ink4)">_dbhome · _cdb · _pdb</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">VM Cluster Reference</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice gcp" style="margin-bottom:8px"><span style="font-size:12px;flex-shrink:0">✓</span> Auto-wires <code>vm_cluster_ocid = module.&lt;vmcluster&gt;.ocid</code></div>
+      <div class="field"><div class="field-lbl">ExaDB VM Cluster module</div><select class="ref-select" id="${p}vcref" onchange="readGcpOciDb(${i});refresh()">${vcOpts}</select></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">DB Home</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">display_name</div><input type="text" id="${p}hdn" value="${d.db_home_display_name||''}" placeholder="dbhome" oninput="readGcpOciDb(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">db_version <span class="req-star">*</span></div><input type="text" id="${p}dbv" value="${d.db_version||'19.0.0.0'}" placeholder="19.0.0.0" oninput="readGcpOciDb(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Container Database (CDB)</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice gcp" style="margin-bottom:8px"><span style="font-size:12px;flex-shrink:0">🔒</span> <code>admin_password</code> is sensitive — set via: <code>export TF_VAR_${d.module_name}_admin_password="..."</code></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">db_name <span class="req-star">*</span></div><div class="field-hint">Max 8 chars, starts with letter</div><input type="text" id="${p}dbn" value="${d.db_name||''}" placeholder="MYDB" maxlength="8" oninput="readGcpOciDb(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">db_unique_name</div><input type="text" id="${p}dun" value="${d.db_unique_name||''}" placeholder="optional" oninput="readGcpOciDb(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">character_set</div><select id="${p}cs" onchange="readGcpOciDb(${i});refresh()"><option value="AL32UTF8"${(d.character_set||'AL32UTF8')==='AL32UTF8'?' selected':''}>AL32UTF8</option><option value="WE8ISO8859P1"${d.character_set==='WE8ISO8859P1'?' selected':''}>WE8ISO8859P1</option><option value="WE8MSWIN1252"${d.character_set==='WE8MSWIN1252'?' selected':''}>WE8MSWIN1252</option></select></div>
+        <div class="field"><div class="field-lbl">ncharacter_set</div><select id="${p}ncs" onchange="readGcpOciDb(${i});refresh()"><option value="AL16UTF16"${(d.ncharacter_set||'AL16UTF16')==='AL16UTF16'?' selected':''}>AL16UTF16</option><option value="UTF8"${d.ncharacter_set==='UTF8'?' selected':''}>UTF8</option></select></div>
+      </div>
+      <div class="field"><div class="field-lbl">sid_prefix</div><input type="text" id="${p}sid" value="${d.sid_prefix||''}" placeholder="optional" oninput="readGcpOciDb(${i});refresh()"></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Pluggable Database (PDB)</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">Create PDB</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}cpdb" ${d.create_pdb?'checked':''} onchange="readGcpOciDb(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.create_pdb?'yes':'no'}</span></div></div>
+        <div class="field"><div class="field-lbl">pdb_name</div><input type="text" id="${p}pdb" value="${d.pdb_name||''}" placeholder="MYPDB" oninput="readGcpOciDb(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Backup</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">auto_backup_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}bak" ${d.auto_backup_enabled?'checked':''} onchange="readGcpOciDb(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.auto_backup_enabled?'true':'false'}</span></div></div>
+        <div class="field"><div class="field-lbl">auto_backup_window</div><select id="${p}bakw" onchange="readGcpOciDb(${i});refresh()"><option value="SLOT_TWO"${(d.auto_backup_window||'SLOT_TWO')==='SLOT_TWO'?' selected':''}>SLOT_TWO (02:00–04:00)</option><option value="SLOT_ONE"${d.auto_backup_window==='SLOT_ONE'?' selected':''}>SLOT_ONE (00:00–02:00)</option><option value="SLOT_THREE"${d.auto_backup_window==='SLOT_THREE'?' selected':''}>SLOT_THREE (04:00–06:00)</option><option value="SLOT_FOUR"${d.auto_backup_window==='SLOT_FOUR'?' selected':''}>SLOT_FOUR (06:00–08:00)</option></select></div>
+      </div>
+      <div class="field"><div class="field-lbl">recovery_window_in_days</div><input type="number" id="${p}bakr" value="${d.recovery_window_in_days||7}" min="1" max="60" oninput="readGcpOciDb(${i});refresh()"></div>
+    </div>
+  </div>
+</div>`;
+}
+
+// ── Render functions ──────────────────────────────────────────────────────────
+function renderGcpNets() {
+  const el=document.getElementById('gcp-net-list'); if(!el)return;
+  el.innerHTML=gcpNets.map((d,i)=>gcpNetCardHTML(d,i)).join('');
+  const cl=document.getElementById('gcp-net-count'); if(cl) cl.textContent=`${gcpNets.length} network${gcpNets.length!==1?'s':''}`;
+  updateTree(); injectTooltips();
+  _renderGcpClusterDropdowns();
+}
+function renderGcpInfras() {
+  const el=document.getElementById('gcp-infra-list'); if(!el)return;
+  el.innerHTML=gcpInfras.map((d,i)=>gcpInfraCardHTML(d,i)).join('');
+  const cl=document.getElementById('gcp-infra-count'); if(cl) cl.textContent=`${gcpInfras.length} infra${gcpInfras.length!==1?'s':''}`;
+  updateTree(); injectTooltips();
+  _renderGcpClusterDropdowns();
+}
+function renderGcpClusters() {
+  const el=document.getElementById('gcp-cluster-list'); if(!el)return;
+  el.innerHTML=gcpClusters.map((d,i)=>gcpClusterCardHTML(d,i)).join('');
+  const cl=document.getElementById('gcp-cluster-count'); if(cl) cl.textContent=`${gcpClusters.length} cluster${gcpClusters.length!==1?'s':''}`;
+  updateTree(); injectTooltips();
+  _renderGcpOciDbClusterDropdowns();
+}
+function renderGcpOciDbs() {
+  const el = document.getElementById('gcp-ocidb-list'); if (!el) return;
+  el.innerHTML = gcpOciDbs.map((d,i) => gcpOciDbCardHTML(d,i)).join('');
+  const ct = document.getElementById('gcp-ocidb-count');
+  if (ct) ct.textContent = gcpOciDbs.length > 1 ? `${gcpOciDbs.length} instances` : '';
+  updateTree(); injectTooltips();
+}
+function _renderGcpClusterDropdowns() {
+  gcpClusters.forEach((d,i) => {
+    const infSel = document.getElementById(`gc${i}_infra_ref`);
+    const netSel = document.getElementById(`gc${i}_net_ref`);
+    if (infSel) { const cur=infSel.value; infSel.innerHTML=gcpInfraOptions(cur)||'<option value="">— add infra first —</option>'; }
+    if (netSel) { const cur=netSel.value; netSel.innerHTML=gcpNetOptions(cur)||'<option value="">— add network first —</option>'; }
+  });
+  _renderGcpOciDbClusterDropdowns();
+}
+function _renderGcpOciDbClusterDropdowns() {
+  gcpOciDbs.forEach((d,i) => {
+    const sel = document.getElementById(`go${i}_vcref`);
+    if (sel) {
+      const cur = sel.value || d.vmcluster_ref;
+      sel.innerHTML = gcpClusters.map(c=>`<option value="${c.module_name}"${c.module_name===cur?' selected':''}>${c.module_name}</option>`).join('') || '<option value="">— add VM Cluster first —</option>';
+    }
+  });
+}
+function renderRefDropdowns() {
+  _renderGcpClusterDropdowns();
+}
+{% endblock %}
+
+{% block product_orchestration %}
+const cloud = 'gcp';
+let cur = 0;
+
+function getAllModuleNames() {
+  const names = [];
+  gcpNets.forEach(n => { names.push(n.module_name); names.push(n.client_subnet_module); names.push(n.backup_subnet_module); });
+  gcpInfras.forEach(n => names.push(n.module_name));
+  gcpClusters.forEach(n => names.push(n.module_name));
+  gcpOciDbs.forEach(n => { names.push(n.module_name+'_dbhome'); names.push(n.module_name+'_cdb'); if(n.create_pdb&&n.pdb_name) names.push(n.module_name+'_pdb'); });
+  return names;
+}
+const mn  = i => getAllModuleNames()[i] || ('module_'+i);
+const gmn = i => getAllModuleNames()[i] || ('module_'+i);
+
+function switchTab(i) {
+  cur = i;
+  document.querySelectorAll('#gcp-tabs .tab').forEach(t => {
+    const onclick = t.getAttribute('onclick') || '';
+    t.classList.toggle('active', onclick.includes('('+i+','));
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('gcp-page-'+i).classList.add('active');
+  activeFile = 'root-main';
+  updateTree(); renderEditor();
+}
+
+function buildPayload() {
+  return {
+    cloud,
+    iac_tool: iacTool,
+    customer: getCustName(),
+    gcp_networks:      gcpNets,
+    gcp_infras:        gcpInfras,
+    gcp_clusters:      gcpClusters,
+    gcp_oci_databases: gcpOciDbs,
+  };
+}
+
+function applyConfig(doc) {
+  if (doc.gcp_networks && doc.gcp_networks.length) {
+    gcpNets     = doc.gcp_networks.map((d,i) => ({...defGcpNet(i),     ...d}));
+    gcpInfras   = doc.gcp_infras   && doc.gcp_infras.length   ? doc.gcp_infras.map((d,i)   => ({...defGcpInfra(i),   ...d})) : [defGcpInfra(0)];
+    gcpClusters = doc.gcp_clusters && doc.gcp_clusters.length ? doc.gcp_clusters.map((d,i) => ({...defGcpCluster(i), ...d})) : [defGcpCluster(0)];
+    gcpOciDbs   = doc.gcp_oci_databases && doc.gcp_oci_databases.length ? doc.gcp_oci_databases.map((d,i) => ({...defGcpOciDb(i), ...d})) : [];
+  } else {
+    const d0 = doc.gcp_module_0 || {}, d1 = doc.gcp_module_1 || {}, d2 = doc.gcp_module_2 || {};
+    const d3 = doc.gcp_module_3 || {}, d4 = doc.gcp_module_4 || {};
+    const mn = doc.gcp_module_names || {};
+    const netMn = mn['0'] || 'gcp_odb_network';
+    const csMn  = mn['1'] || 'gcp_odb_client_subnet';
+    const bsMn  = mn['2'] || 'gcp_odb_backup_subnet';
+    gcpNets = [{...defGcpNet(0), ...d0, module_name: netMn,
+                client_subnet_module: csMn, backup_subnet_module: bsMn,
+                client_subnet_id: d1.odb_subnet_id || csMn,
+                client_cidr: d1.cidr_range || '',
+                backup_subnet_id: d2.odb_subnet_id || bsMn,
+                backup_cidr: d2.cidr_range || ''}];
+    gcpInfras   = [{...defGcpInfra(0),   ...d3, module_name: mn['3'] || 'gcp_exadb_infra'}];
+    gcpClusters = [{...defGcpCluster(0), ...d4, module_name: mn['4'] || 'gcp_exadb_vm_cluster',
+                    ssh_public_keys: d4.ssh_public_keys || []}];
+    gcpOciDbs = [];
+  }
+  renderAll();
+  refresh();
+  updateTestBtn();
+}
+
+function renderAll() {
+  renderGcpNets(); renderGcpInfras(); renderGcpClusters(); renderGcpOciDbs();
+  updateTree();
+}
+{% endblock %}
+
+{% block product_seed %}
+gcpNets.push(defGcpNet(0));
+gcpInfras.push(defGcpInfra(0));
+gcpClusters.push(defGcpCluster(0));
+{% endblock %}

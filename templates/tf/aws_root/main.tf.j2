@@ -34,31 +34,18 @@ provider "aws" {
 provider "oci" {
   auth             = var.oci_auth_method
   region           = var.oci_region
-  tenancy_ocid     = var.oci_auth_method == "APIKey" ? var.oci_tenancy_ocid    : null
-  user_ocid        = var.oci_auth_method == "APIKey" ? var.oci_user_ocid       : null
-  fingerprint      = var.oci_auth_method == "APIKey" ? var.oci_fingerprint     : null
+  tenancy_ocid     = var.oci_auth_method == "APIKey" ? var.oci_tenancy_ocid     : null
+  user_ocid        = var.oci_auth_method == "APIKey" ? var.oci_user_ocid        : null
+  fingerprint      = var.oci_auth_method == "APIKey" ? var.oci_fingerprint      : null
   private_key_path = var.oci_auth_method == "APIKey" ? var.oci_private_key_path : null
 }
-variable "oci_auth_method"      { type = string; default = "APIKey" }
-variable "oci_region"           { type = string; default = "{{ oci_region }}" }
-variable "oci_tenancy_ocid"     { type = string; default = ""; sensitive = true }
-variable "oci_user_ocid"        { type = string; default = ""; sensitive = true }
-variable "oci_fingerprint"      { type = string; default = ""; sensitive = true }
-variable "oci_private_key_path" { type = string; default = "~/.oci/oci_api_key.pem" }
 {% endif %}
 
 {% for net in networks %}
 # ── ODB Network: {{ net.module_name }} ──────────────────────────────────────────
 module "{{ net.module_name }}" {
   source = "./modules/{{ net.module_name }}"
-
-  display_name         = var.{{ net.module_name }}_display_name
-  availability_zone_id = var.{{ net.module_name }}_availability_zone_id
-  client_subnet_cidr   = var.{{ net.module_name }}_client_subnet_cidr
-  backup_subnet_cidr   = var.{{ net.module_name }}_backup_subnet_cidr
-  s3_access            = var.{{ net.module_name }}_s3_access
-  zero_etl_access      = var.{{ net.module_name }}_zero_etl_access
-  tags                 = var.tags
+  tags   = var.tags
 }
 
 {% endfor %}
@@ -66,25 +53,16 @@ module "{{ net.module_name }}" {
 # ── Exadata Infrastructure: {{ inf.module_name }} ──────────────────────────────
 module "{{ inf.module_name }}" {
   source = "./modules/{{ inf.module_name }}"
-
-  display_name         = var.{{ inf.module_name }}_display_name
-  shape                = var.{{ inf.module_name }}_shape
-  compute_count        = var.{{ inf.module_name }}_compute_count
-  storage_count        = var.{{ inf.module_name }}_storage_count
-  availability_zone_id = var.{{ inf.module_name }}_availability_zone_id
-  tags                 = var.tags
+  tags   = var.tags
 }
 
 {% endfor %}
 {% for peer in peerings %}
 # ── Network Peering: {{ peer.module_name }} ────────────────────────────────────
 module "{{ peer.module_name }}" {
-  source = "./modules/{{ peer.module_name }}"
-
-  display_name    = var.{{ peer.module_name }}_display_name
-  odb_network_id  = module.{{ peer.network_ref }}.network_id
-  peer_network_id = var.{{ peer.module_name }}_peer_network_id
-  tags            = var.tags
+  source         = "./modules/{{ peer.module_name }}"
+  odb_network_id = module.{{ peer.network_ref }}.network_id
+  tags           = var.tags
 
   depends_on = [module.{{ peer.network_ref }}]
 }
@@ -95,20 +73,8 @@ module "{{ peer.module_name }}" {
 module "{{ cl.module_name }}" {
   source = "./modules/{{ cl.module_name }}"
 
-  display_name                    = var.{{ cl.module_name }}_display_name
-  cpu_core_count                  = var.{{ cl.module_name }}_cpu_core_count
-  gi_version                      = var.{{ cl.module_name }}_gi_version
-  hostname_prefix                 = var.{{ cl.module_name }}_hostname_prefix
-  license_model                   = var.{{ cl.module_name }}_license_model
-{% if cl.vm_mode == 'id' %}
   cloud_exadata_infrastructure_id = module.{{ cl.infra_ref }}.infra_id
   odb_network_id                  = module.{{ cl.network_ref }}.network_id
-{% else %}
-  cloud_exadata_infrastructure_arn = module.{{ cl.infra_ref }}.infra_arn
-  odb_network_arn                  = module.{{ cl.network_ref }}.network_arn
-{% endif %}
-  ssh_public_keys                 = var.{{ cl.module_name }}_ssh_public_keys
-  db_servers                      = var.{{ cl.module_name }}_db_servers
   tags                            = var.tags
 
   depends_on = [module.{{ cl.infra_ref }}, module.{{ cl.network_ref }}]
@@ -120,21 +86,11 @@ module "{{ cl.module_name }}" {
 module "{{ av.module_name }}" {
   source = "./modules/{{ av.module_name }}"
 
-  display_name                          = var.{{ av.module_name }}_display_name
-  autonomous_data_storage_size_in_tbs   = var.{{ av.module_name }}_autonomous_data_storage_size_in_tbs
-  cpu_core_count_per_node               = var.{{ av.module_name }}_cpu_core_count_per_node
-  memory_per_oracle_compute_unit_in_gbs = var.{{ av.module_name }}_memory_per_oracle_compute_unit_in_gbs
-  total_container_databases             = var.{{ av.module_name }}_total_container_databases
-  scan_listener_port_non_tls            = var.{{ av.module_name }}_scan_listener_port_non_tls
-  scan_listener_port_tls                = var.{{ av.module_name }}_scan_listener_port_tls
-  license_model                         = var.{{ av.module_name }}_license_model
-  is_mtls_enabled_vm_cluster            = var.{{ av.module_name }}_is_mtls_enabled_vm_cluster
-  cloud_exadata_infrastructure_id       = module.{{ av.infra_ref }}.infra_id
-  odb_network_id                        = module.{{ av.network_ref }}.network_id
-  cloud_exadata_infrastructure_arn      = module.{{ av.infra_ref }}.infra_arn
-  odb_network_arn                       = module.{{ av.network_ref }}.network_arn
-  db_servers                            = var.{{ av.module_name }}_db_servers
-  tags                                  = var.tags
+  cloud_exadata_infrastructure_id  = module.{{ av.infra_ref }}.infra_id
+  odb_network_id                   = module.{{ av.network_ref }}.network_id
+  cloud_exadata_infrastructure_arn = module.{{ av.infra_ref }}.infra_arn
+  odb_network_arn                  = module.{{ av.network_ref }}.network_arn
+  tags                             = var.tags
 
   depends_on = [module.{{ av.infra_ref }}, module.{{ av.network_ref }}]
 }
@@ -145,8 +101,6 @@ module "{{ av.module_name }}" {
 module "{{ db.module_name }}_dbhome" {
   source          = "./modules/{{ db.module_name }}_dbhome"
   vm_cluster_ocid = module.{{ db.vmcluster_ref }}.ocid
-  display_name    = var.{{ db.module_name }}_db_home_display_name
-  db_version      = var.{{ db.module_name }}_db_version
   depends_on      = [module.{{ db.vmcluster_ref }}]
 }
 
@@ -154,14 +108,7 @@ module "{{ db.module_name }}_dbhome" {
 module "{{ db.module_name }}_cdb" {
   source         = "./modules/{{ db.module_name }}_cdb"
   db_home_id     = module.{{ db.module_name }}_dbhome.db_home_id
-  db_name        = var.{{ db.module_name }}_db_name
   admin_password = var.{{ db.module_name }}_admin_password
-  character_set  = var.{{ db.module_name }}_character_set
-  ncharacter_set = var.{{ db.module_name }}_ncharacter_set
-{% if db.pdb_name %}
-  pdb_name       = var.{{ db.module_name }}_pdb_name
-{% endif %}
-  auto_backup_enabled = var.{{ db.module_name }}_auto_backup_enabled
   depends_on     = [module.{{ db.module_name }}_dbhome]
 }
 
@@ -170,27 +117,15 @@ module "{{ db.module_name }}_cdb" {
 module "{{ db.module_name }}_pdb" {
   source                = "./modules/{{ db.module_name }}_pdb"
   container_database_id = module.{{ db.module_name }}_cdb.cdb_id
-  pdb_name              = var.{{ db.module_name }}_pdb_name
   pdb_admin_password    = var.{{ db.module_name }}_admin_password
   depends_on            = [module.{{ db.module_name }}_cdb]
 }
 {% endif %}
 
-variable "{{ db.module_name }}_db_home_display_name" { type = string; default = "{{ db.db_home_display_name }}" }
-variable "{{ db.module_name }}_db_version"            { type = string; default = "{{ db.db_version }}" }
-variable "{{ db.module_name }}_db_name"               { type = string; default = "{{ db.db_name }}" }
-variable "{{ db.module_name }}_admin_password"        { type = string; sensitive = true }
-variable "{{ db.module_name }}_character_set"         { type = string; default = "{{ db.character_set }}" }
-variable "{{ db.module_name }}_ncharacter_set"        { type = string; default = "{{ db.ncharacter_set }}" }
-{% if db.pdb_name %}
-variable "{{ db.module_name }}_pdb_name"              { type = string; default = "{{ db.pdb_name }}" }
-{% endif %}
-variable "{{ db.module_name }}_auto_backup_enabled"   { type = bool;   default = {{ 'true' if db.auto_backup_enabled else 'false' }} }
-
 output "{{ db.module_name }}_db_home_id" { value = module.{{ db.module_name }}_dbhome.db_home_id }
 output "{{ db.module_name }}_cdb_id"     { value = module.{{ db.module_name }}_cdb.cdb_id }
 {% if db.create_pdb and db.pdb_name %}
-output "{{ db.module_name }}_pdb_id"     { value = module.{{ db.module_name }}_pdb.pdb_id }
+output "{{ db.module_name }}_pdb_id" { value = module.{{ db.module_name }}_pdb.pdb_id }
 {% endif %}
 
 {% endfor %}

@@ -1,0 +1,818 @@
+{% extends "base.html" %}
+
+{% block body_class %}{% endblock %}
+
+{% block cloud_nav %}{% endblock %}
+
+{% block provider_badge %}hashicorp/aws ≥ 6.15.0{% endblock %}
+
+{% block product_tabs %}
+<div class="tgroup show" id="aws-tabs">
+  <div class="tab active" onclick="switchTab(0,false)"><span class="tab-num">1</span><span class="tab-label">odb_network</span></div>
+  <div class="tab" onclick="switchTab(1,false)"><span class="tab-num">2</span><span class="tab-label">odb_cloud_exadata_infrastructure</span></div>
+  <div class="tab" onclick="switchTab(2,false)"><span class="tab-num">3</span><span class="tab-label">odb_network_peering_connection</span></div>
+  <div class="tab" onclick="switchTab(3,false)"><span class="tab-num">4</span><span class="tab-label">odb_cloud_vm_cluster</span></div>
+  <div class="tab" onclick="switchTab(4,false)"><span class="tab-num">5</span><span class="tab-label">odb_cloud_autonomous_vm_cluster</span></div>
+  <div class="tab" onclick="switchTab(6,false)"><span class="tab-num">6</span><span class="tab-label">DB Home · CDB · PDB</span></div>
+</div>
+{% endblock %}
+
+{% block product_pages %}
+<!-- ─── AWS PAGE 1: odb_network (multi-instance) ─── -->
+<div class="page active" id="aws-page-0">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:32px">aws_odb_<em>network</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/odb_network" target="_blank">docs ↗</a></div>
+  <div id="aws-net-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAwsNet()">＋ Add ODB Network</button>
+    <span class="inst-count-lbl" id="aws-net-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(0,false)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── AWS PAGE 2: exadata_infrastructure (multi-instance) ─── -->
+<div class="page" id="aws-page-1">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:20px;line-height:1.2">aws_odb_cloud_<em>exadata_infrastructure</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/odb_cloud_exadata_infrastructure" target="_blank">docs ↗</a></div>
+  <div id="aws-infra-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAwsInfra()">＋ Add Exadata Infrastructure</button>
+    <span class="inst-count-lbl" id="aws-infra-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(1,false)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── AWS PAGE 3: peering (multi-instance) ─── -->
+<div class="page" id="aws-page-2">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:19px;line-height:1.25">aws_odb_network_<em>peering_connection</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/odb_network_peering_connection" target="_blank">docs ↗</a></div>
+  <div class="notice"><span style="font-size:14px;flex-shrink:0">ℹ</span> Each peering connection links one ODB Network to one peer VPC. Add one per VPC you need to peer.</div>
+  <div id="aws-peering-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAwsPeering()">＋ Add Peering Connection</button>
+    <span class="inst-count-lbl" id="aws-peering-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(2,false)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── AWS PAGE 4: vm_cluster (multi-instance) ─── -->
+<div class="page" id="aws-page-3">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:26px">aws_odb_cloud_<em>vm_cluster</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/odb_cloud_vm_cluster" target="_blank">docs ↗</a></div>
+  <div id="aws-cluster-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAwsCluster()">＋ Add VM Cluster</button>
+    <span class="inst-count-lbl" id="aws-cluster-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(3,false)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── AWS PAGE 5: odb_cloud_autonomous_vm_cluster (multi-instance) ─── -->
+<div class="page" id="aws-page-4">
+  <div class="page-hero"><div class="page-resource-name" style="font-size:18px;line-height:1.25">aws_odb_cloud_<em>autonomous_vm_cluster</em></div><a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/odb_cloud_autonomous_vm_cluster" target="_blank">docs ↗</a></div>
+  <div id="aws-avmc-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAwsAvmc()">＋ Add Autonomous VM Cluster</button>
+    <span class="inst-count-lbl" id="aws-avmc-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(4,false)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── AWS PAGE 6: DB Home / CDB / PDB ─── -->
+<div class="page" id="aws-page-6">
+  <div class="page-hero">
+    <div>
+      <div class="page-resource-name" style="font-size:20px;line-height:1.2">DB Home · CDB · <em>PDB</em></div>
+      <div style="font-family:var(--font-m);font-size:10px;color:var(--ink3);margin-top:4px">oracle/oci provider — oci_database_db_home → oci_database_database → oci_database_pluggable_database</div>
+    </div>
+    <a class="page-doc-link" href="https://docs.oracle.com/en-us/iaas/Content/database-at-aws-exadata-awscr/awscr-create-exadata-database.html" target="_blank">docs ↗</a>
+  </div>
+  <div class="notice" style="margin-bottom:16px"><span style="font-size:13px;flex-shrink:0">ℹ</span> Uses the <strong>oracle/oci</strong> provider. OCI provider block auto-added to root <code>main.tf</code>. VM Cluster OCID auto-wired from <code>module.&lt;vmcluster&gt;.ocid</code>. Each entry generates 3 separate modules: <code>_dbhome</code>, <code>_cdb</code>, <code>_pdb</code>.</div>
+  <div id="aws-ocidb-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAwsOciDb()">＋ Add DB Home / CDB / PDB</button>
+    <span class="inst-count-lbl" id="aws-ocidb-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(6,false)">Validate &amp; Generate All</button>
+</div>
+{% endblock %}
+
+{% block product_data %}
+// ── ODB@AWS Region & AZ data ──────────────────────────────────────────────────
+const ODB_REGIONS = [
+  { region: 'us-east-1',      label: 'US East (N. Virginia)',    azs: ['use1-az4', 'use1-az6'],  oci: 'US East (Ashburn)',           status: 'live'    },
+  { region: 'us-east-2',      label: 'US East (Ohio)',           azs: ['use2-az1', 'use2-az2'],  oci: 'US Central (Columbus)',        status: 'live'    },
+  { region: 'us-west-2',      label: 'US West (Oregon)',         azs: ['usw2-az3', 'usw2-az4'],  oci: 'US West (Boardman)',           status: 'live'    },
+  { region: 'eu-central-1',   label: 'Europe (Frankfurt)',       azs: ['euc1-az1', 'euc1-az2'],  oci: 'Germany Central (Frankfurt)',  status: 'live'    },
+  { region: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)',     azs: ['apne1-az1', 'apne1-az4'],oci: 'Japan East (Tokyo)',           status: 'live'    },
+  { region: 'ca-central-1',   label: 'Canada (Central)',         azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'us-west-1',      label: 'US West (N. California)',  azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'eu-west-1',      label: 'Europe (Ireland)',         azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'eu-west-2',      label: 'Europe (London)',          azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'eu-south-1',     label: 'Europe (Milan)',           azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'eu-west-3',      label: 'Europe (Paris)',           azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'eu-south-2',     label: 'Europe (Spain)',           azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'eu-north-1',     label: 'Europe (Stockholm)',       azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'eu-central-2',   label: 'Europe (Zurich)',          azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'ap-south-2',     label: 'Asia Pacific (Hyderabad)', azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'ap-southeast-4', label: 'Asia Pacific (Melbourne)', azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'ap-south-1',     label: 'Asia Pacific (Mumbai)',    azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'ap-northeast-3', label: 'Asia Pacific (Osaka)',     azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'ap-northeast-2', label: 'Asia Pacific (Seoul)',     azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'ap-southeast-1', label: 'Asia Pacific (Singapore)', azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'ap-southeast-2', label: 'Asia Pacific (Sydney)',    azs: [],                        oci: 'TBD',                          status: 'planned' },
+  { region: 'sa-east-1',      label: 'South America (Sao Paulo)',azs: [],                        oci: 'TBD',                          status: 'planned' },
+];
+
+const ODB_AZ_MAP = Object.fromEntries(ODB_REGIONS.map(r => [r.region, r.azs]));
+
+function regionSelectHTML(id, value, onchange) {
+  const liveOpts = ODB_REGIONS.filter(r => r.status === 'live').map(r =>
+    `<option value="${r.region}"${r.region === value ? ' selected' : ''}>${r.label} (${r.region})</option>`
+  ).join('');
+  const plannedOpts = ODB_REGIONS.filter(r => r.status === 'planned').map(r =>
+    `<option value="${r.region}"${r.region === value ? ' selected' : ''} style="color:var(--ink3)">${r.label} — planned</option>`
+  ).join('');
+  return `<select id="${id}" class="ref-select" onchange="${onchange}">
+    <option value="">— select region —</option>
+    <optgroup label="Live">${liveOpts}</optgroup>
+    <optgroup label="Planned (coming soon)">${plannedOpts}</optgroup>
+  </select>`;
+}
+
+function azSelectHTML(id, regionId, value, onchange) {
+  const regionEl = document.getElementById ? document.getElementById(regionId) : null;
+  const regionVal = regionEl ? regionEl.value : '';
+  return azOptionsHTML(id, regionVal || '', value, onchange);
+}
+
+function azOptionsHTML(id, regionVal, azVal, onchange) {
+  const azs = ODB_AZ_MAP[regionVal] || [];
+  let opts = `<option value="">— select AZ ID —</option>`;
+  if (azs.length === 0 && regionVal) {
+    opts += `<option value="" disabled>No live AZs for this region yet</option>`;
+  }
+  azs.forEach(az => { opts += `<option value="${az}"${az === azVal ? ' selected' : ''}>${az}</option>`; });
+  if (azVal && !azs.includes(azVal)) {
+    opts += `<option value="${azVal}" selected>${azVal} (custom)</option>`;
+  }
+  return `<select id="${id}" class="ref-select" onchange="${onchange}">${opts}</select>`;
+}
+
+function onRegionChange(regionSelectId, azSelectId, readFn) {
+  const regionEl = document.getElementById(regionSelectId);
+  const azEl     = document.getElementById(azSelectId);
+  if (!regionEl || !azEl) return;
+  const regionVal = regionEl.value;
+  const azs = ODB_AZ_MAP[regionVal] || [];
+  let opts = `<option value="">— select AZ ID —</option>`;
+  azs.forEach(az => { opts += `<option value="${az}">${az}</option>`; });
+  if (azs.length === 0 && regionVal) {
+    opts += `<option value="" disabled>No live AZs for this region yet</option>`;
+  }
+  azEl.innerHTML = opts;
+  if (readFn) readFn();
+  refresh();
+}
+{% endblock %}
+
+{% block product_state %}
+let awsNets = [], awsInfras = [], awsPeerings = [], awsClusters = [], awsAvmcs = [];
+let awsOciDbs = [];
+
+// ── Defaults factories ────────────────────────────────────────────────────────
+function defAwsNet(i)     { return {module_name: i===0?'odb_network':`odb_network_${i+1}`,    display_name:'',availability_zone_id:'',client_subnet_cidr:'',backup_subnet_cidr:'',s3_access:false,zero_etl_access:false,availability_zone:'',region:'',default_dns_prefix:'',custom_domain_name:'',delete_associated_resources:false,tags:{}}; }
+function defAwsInfra(i)   { return {module_name: i===0?'odb_exaInfra':`odb_exaInfra_${i+1}`,      display_name:'',shape:'Exadata.X11M',availability_zone_id:'',compute_count:2,storage_count:3,database_server_type:'',storage_server_type:'',customer_contacts:[],mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',tags:{}}; }
+function defAwsCluster(i) { return {module_name: i===0?'odb_vmcluster':`odb_vmcluster_${i+1}`,    display_name:'',cpu_core_count:16,gi_version:'',hostname_prefix:'',license_model:'LICENSE_INCLUDED',vm_mode:'arn',cloud_exadata_infrastructure_id:'',odb_network_id:'',cloud_exadata_infrastructure_arn:'',odb_network_arn:'',infra_ref:'',network_ref:'',ssh_public_keys:[],db_servers:[],db_servers_mode:'auto',dco_is_diagnostics_events_enabled:true,dco_is_health_monitoring_enabled:true,dco_is_incident_logs_enabled:true,cluster_name:'',timezone:'',data_storage_size_in_tbs:'',db_node_storage_size_in_gbs:'',memory_size_in_gbs:'',scan_listener_port_tcp:'',system_version:'',is_local_backup_enabled:false,is_sparse_diskgroup_enabled:false,region:'',tags:{}}; }
+function defAwsAvmc(i)    { return {module_name: i===0?'odb_avmcluster':`odb_avmcluster_${i+1}`, display_name:'',autonomous_data_storage_size_in_tbs:5,cpu_core_count_per_node:40,memory_per_oracle_compute_unit_in_gbs:2,total_container_databases:2,scan_listener_port_non_tls:1521,scan_listener_port_tls:2484,license_model:'LICENSE_INCLUDED',is_mtls_enabled_vm_cluster:false,infra_ref:'',network_ref:'',db_servers:[],db_servers_mode:'auto',description:'',time_zone:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,tags:{}}; }
+function defAwsOciDb(i)   { return {module_name: i===0?'oci_database':`oci_database_${i+1}`, vmcluster_ref:'', db_home_display_name:'dbhome', db_version:'19.0.0.0', db_name:'MYDB', character_set:'AL32UTF8', ncharacter_set:'AL16UTF16', pdb_name:'MYPDB', db_unique_name:'', sid_prefix:'', create_pdb:true, auto_backup_enabled:false, auto_backup_window:'SLOT_TWO', recovery_window_in_days:7}; }
+function defAwsPeering(i)   { return {module_name: i===0?'odb_peering':`odb_peering_${i+1}`,     display_name:'',peer_network_id:'',network_ref:'',region:'',peer_network_cidrs:[],tags:{}}; }
+
+// ── Card add helpers ──────────────────────────────────────────────────────────
+function addAwsNet()     { awsNets.push(defAwsNet(awsNets.length));       renderAwsNets();    refresh(); }
+function addAwsInfra()   { awsInfras.push(defAwsInfra(awsInfras.length)); renderAwsInfras();  refresh(); }
+function addAwsCluster() { awsClusters.push(defAwsCluster(awsClusters.length)); renderAwsClusters(); refresh(); }
+function addAwsAvmc()    { awsAvmcs.push(defAwsAvmc(awsAvmcs.length));          renderAwsAvmcs();    refresh(); }
+function addAwsOciDb()   { awsOciDbs.push(defAwsOciDb(awsOciDbs.length));       renderAwsOciDbs();   refresh(); }
+function addAwsPeering() { awsPeerings.push(defAwsPeering(awsPeerings.length)); renderAwsPeerings(); refresh(); }
+
+function removeInst(arr, i, renderFn) { arr.splice(i,1); renderFn(); refresh(); }
+
+// ── Read card values back into state arrays ───────────────────────────────────
+function readAwsNet(i) {
+  const p = `an${i}_`;
+  awsNets[i] = {...awsNets[i],
+    module_name:   fv(`${p}mn`)  || awsNets[i].module_name,
+    display_name:  fv(`${p}dn`),
+    availability_zone_id: fv(`${p}az`),
+    client_subnet_cidr:   fv(`${p}cc`),
+    backup_subnet_cidr:   fv(`${p}bc`),
+    s3_access:     fcb(`${p}s3`),
+    zero_etl_access: fcb(`${p}zetl`),
+    availability_zone: fv(`${p}azn`),
+    region:        fv(`${p}reg`),
+    default_dns_prefix:  fv(`${p}dns`),
+    custom_domain_name:  fv(`${p}cdn`),
+    delete_associated_resources: fcb(`${p}del`),
+  };
+}
+function readAwsInfra(i) {
+  const p = `ai${i}_`;
+  awsInfras[i] = {...awsInfras[i],
+    module_name:   fv(`${p}mn`)  || awsInfras[i].module_name,
+    display_name:  fv(`${p}dn`),
+    shape:         fv(`${p}shape`) || 'Exadata.X11M',
+    availability_zone_id: fv(`${p}az`),
+    compute_count: parseInt(fv(`${p}cc`)) || 2,
+    storage_count: parseInt(fv(`${p}sc`)) || 3,
+    database_server_type: fv(`${p}dst`),
+    storage_server_type:  fv(`${p}sst`),
+    mw_preference: fv(`${p}mwp`) || 'NO_PREFERENCE',
+    mw_patching_mode: fv(`${p}mwpm`) || 'ROLLING',
+    mw_is_custom_action_timeout_enabled: fcb(`${p}mwtoe`),
+    mw_custom_action_timeout_mins: parseInt(fv(`${p}mwtom`)) || 15,
+    mw_lead_time_week:  fv(`${p}mwlead`),
+    mw_hours_of_day:    fv(`${p}mwhours`),
+    mw_weeks_of_month:  fv(`${p}mwweeks`),
+    mw_days_of_week:    fv(`${p}mwdays`),
+    mw_months:          fv(`${p}mwmonths`),
+  };
+}
+function readAwsCluster(i) {
+  const p = `ac${i}_`;
+  awsClusters[i] = {...awsClusters[i],
+    module_name:   fv(`${p}mn`)  || awsClusters[i].module_name,
+    display_name:  fv(`${p}dn`),
+    cpu_core_count: parseInt(fv(`${p}cpu`)) || 16,
+    gi_version:    fv(`${p}gi`),
+    hostname_prefix: fv(`${p}hp`),
+    license_model: fv(`${p}lm`) || 'LICENSE_INCLUDED',
+    vm_mode:       awsClusters[i].vm_mode || 'arn',
+    infra_ref:     fv(`${p}infra_ref`),
+    network_ref:   fv(`${p}net_ref`),
+    cloud_exadata_infrastructure_id: fv(`${p}infraid`),
+    odb_network_id: fv(`${p}netid`),
+    cloud_exadata_infrastructure_arn: fv(`${p}infraarn`),
+    odb_network_arn: fv(`${p}netarn`),
+    ssh_public_keys: awsClusters[i].ssh_public_keys || [],
+    db_servers_mode: (document.querySelector(`input[name="${p}dbsrvmode"]:checked`) || {}).value || 'auto',
+    db_servers: awsClusters[i].db_servers || [],
+    dco_is_diagnostics_events_enabled: fcb(`${p}dcodiag`),
+    dco_is_health_monitoring_enabled:  fcb(`${p}dcohealth`),
+    dco_is_incident_logs_enabled:      fcb(`${p}dcologs`),
+    cluster_name:  fv(`${p}cn`),
+    timezone:      fv(`${p}tz`),
+    data_storage_size_in_tbs: fv(`${p}ds`),
+    db_node_storage_size_in_gbs: fv(`${p}dng`),
+    memory_size_in_gbs: fv(`${p}mem`),
+    scan_listener_port_tcp: fv(`${p}scan`),
+    system_version: fv(`${p}sv`),
+    is_local_backup_enabled: fcb(`${p}lb`),
+    is_sparse_diskgroup_enabled: fcb(`${p}sp`),
+    region: fv(`${p}reg`),
+  };
+}
+function readAwsPeering(i) {
+  const p=`ap${i}_`;
+  awsPeerings[i] = {...awsPeerings[i],
+    module_name:    fv(`${p}mn`)  || awsPeerings[i].module_name,
+    display_name:   fv(`${p}dn`),
+    peer_network_id: fv(`${p}peerid`),
+    network_ref:    fv(`${p}net_ref`),
+    region:         fv(`${p}reg`),
+  };
+}
+function readAwsAvmc(i) {
+  const p = `av${i}_`;
+  awsAvmcs[i] = {...awsAvmcs[i],
+    module_name:    fv(`${p}mn`) || awsAvmcs[i].module_name,
+    display_name:   fv(`${p}dn`),
+    autonomous_data_storage_size_in_tbs: parseFloat(fv(`${p}ads`)) || 5,
+    cpu_core_count_per_node:             parseInt(fv(`${p}cpu`)) || 40,
+    memory_per_oracle_compute_unit_in_gbs: parseInt(fv(`${p}mem`)) || 2,
+    total_container_databases:           parseInt(fv(`${p}tcd`)) || 2,
+    scan_listener_port_non_tls:          parseInt(fv(`${p}pnontls`)) || 1521,
+    scan_listener_port_tls:              parseInt(fv(`${p}ptls`)) || 2484,
+    license_model:  fv(`${p}lm`) || 'LICENSE_INCLUDED',
+    is_mtls_enabled_vm_cluster: fcb(`${p}mtls`),
+    infra_ref:      fv(`${p}infra_ref`),
+    network_ref:    fv(`${p}net_ref`),
+    db_servers:     awsAvmcs[i].db_servers || [],
+    db_servers_mode: (document.querySelector(`input[name="${p}dbsrvmode"]:checked`) || {}).value || 'auto',
+    description:    fv(`${p}desc`),
+    time_zone:      fv(`${p}tz`),
+    mw_preference:  fv(`${p}mwpref`) || 'NO_PREFERENCE',
+    mw_patching_mode: fv(`${p}mwpm`) || 'ROLLING',
+    mw_is_custom_action_timeout_enabled: fcb(`${p}mwcat`),
+    mw_custom_action_timeout_mins: parseInt(fv(`${p}mwcatm`)) || 15,
+  };
+}
+function readAwsOciDb(i) {
+  const p = `od${i}_`;
+  awsOciDbs[i] = {...awsOciDbs[i],
+    module_name:          fv(`${p}mn`) || awsOciDbs[i].module_name,
+    vmcluster_ref:        fv(`${p}vcref`),
+    db_home_display_name: fv(`${p}hdn`),
+    db_version:           fv(`${p}dbv`) || '19.0.0.0',
+    db_name:              fv(`${p}dbn`),
+    pdb_name:             fv(`${p}pdb`),
+    db_unique_name:       fv(`${p}dun`),
+    sid_prefix:           fv(`${p}sid`),
+    character_set:        fv(`${p}cs`)  || 'AL32UTF8',
+    ncharacter_set:       fv(`${p}ncs`) || 'AL16UTF16',
+    create_pdb:           fcb(`${p}cpdb`),
+    auto_backup_enabled:  fcb(`${p}bak`),
+    auto_backup_window:   fv(`${p}bakw`) || 'SLOT_TWO',
+    recovery_window_in_days: parseInt(fv(`${p}bakr`)) || 7,
+  };
+}
+
+// ── Card HTML builders ────────────────────────────────────────────────────────
+function awsNetCardHTML(d, i) {
+  const p=`an${i}_`, open=i===0?'open':'';
+  return `<div class="inst-card ${open}" id="an-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('an-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${awsNets.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(awsNets,${i},renderAwsNets)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAwsNet(${i});renderRefDropdowns();refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name}" placeholder="odb-net-prod" oninput="readAwsNet(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">region <span class="req-star">*</span></div><div class="field-hint">ODB@AWS live regions</div>${regionSelectHTML(`${p}reg`, d.region||'', `onRegionChange('${p}reg','${p}az',()=>readAwsNet(${i}))`)}</div>
+        <div class="field"><div class="field-lbl">availability_zone_id <span class="req-star">*</span></div><div class="field-hint">Physical zone within region</div>${azOptionsHTML(`${p}az`, d.region||'', d.availability_zone_id||'', `readAwsNet(${i});refresh()`)}</div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">client_subnet_cidr <span class="req-star">*</span></div><input type="text" id="${p}cc" value="${d.client_subnet_cidr}" placeholder="10.2.0.0/24" oninput="readAwsNet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">backup_subnet_cidr <span class="req-star">*</span></div><input type="text" id="${p}bc" value="${d.backup_subnet_cidr}" placeholder="10.2.1.0/24" oninput="readAwsNet(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">s3_access</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}s3" ${d.s3_access?'checked':''} onchange="readAwsNet(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl" id="${p}s3l">${d.s3_access?'ENABLED':'DISABLED'}</span></div></div>
+        <div class="field"><div class="field-lbl">zero_etl_access</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}zetl" ${d.zero_etl_access?'checked':''} onchange="readAwsNet(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl" id="${p}zetll">${d.zero_etl_access?'ENABLED':'DISABLED'}</span></div></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">default_dns_prefix</div><input type="text" id="${p}dns" value="${d.default_dns_prefix||''}" placeholder="myodb" oninput="if(this.value){var o=document.getElementById('${p}cdn');if(o)o.value='';} readAwsNet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">custom_domain_name</div><input type="text" id="${p}cdn" value="${d.custom_domain_name||''}" placeholder="myodb.corp.example.com" oninput="if(this.value){var o=document.getElementById('${p}dns');if(o)o.value='';} readAwsNet(${i});refresh()"></div>
+      </div>
+      <div class="field"><div class="field-lbl">delete_associated_resources</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}del" ${d.delete_associated_resources?'checked':''} onchange="readAwsNet(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.delete_associated_resources?'true':'false'}</span></div></div>
+    </div>
+  </div>
+</div>`;
+}
+
+function awsInfraCardHTML(d, i) {
+  const p=`ai${i}_`, open=i===0?'open':'';
+  const isCust = d.mw_preference==='CUSTOM_PREFERENCE';
+  return `<div class="inst-card ${open}" id="ai-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('ai-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${awsInfras.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(awsInfras,${i},renderAwsInfras)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAwsInfra(${i});renderRefDropdowns();refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name}" placeholder="exadb-infra-prod" oninput="readAwsInfra(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">shape <span class="req-star">*</span></div><select id="${p}shape" onchange="readAwsInfra(${i});refresh()"><option value="Exadata.X9M"${d.shape==='Exadata.X9M'?' selected':''}>Exadata.X9M</option><option value="Exadata.X10M"${d.shape==='Exadata.X10M'?' selected':''}>Exadata.X10M</option><option value="Exadata.X11M"${d.shape==='Exadata.X11M'||!d.shape?' selected':''}>Exadata.X11M</option></select></div>
+        <div class="field"><div class="field-lbl">region <span class="req-star">*</span></div>${regionSelectHTML(`${p}reg`, d.region||'', `onRegionChange('${p}reg','${p}az',()=>readAwsInfra(${i}))`)}</div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">availability_zone_id <span class="req-star">*</span></div>${azOptionsHTML(`${p}az`, d.region||'', d.availability_zone_id||'', `readAwsInfra(${i});refresh()`)}</div>
+        <div class="field"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">compute_count <span class="req-star">*</span></div><div class="field-hint">Min 2</div><input type="number" id="${p}cc" value="${d.compute_count||2}" min="2" oninput="readAwsInfra(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">storage_count <span class="req-star">*</span></div><div class="field-hint">Min 3</div><input type="number" id="${p}sc" value="${d.storage_count||3}" min="3" oninput="readAwsInfra(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">database_server_type</div><input type="text" id="${p}dst" value="${d.database_server_type||''}" placeholder="X11M" oninput="readAwsInfra(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">storage_server_type</div><input type="text" id="${p}sst" value="${d.storage_server_type||''}" placeholder="X11M-HC" oninput="readAwsInfra(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Maintenance Window</div><span class="badge-req">required block</span><div class="section-line"></div></div>
+      <div class="inner-card">
+        <div class="g2">
+          <div class="field"><div class="field-lbl">preference</div><select id="${p}mwp" onchange="readAwsInfra(${i});toggleMWCard('${p}');refresh()"><option value="NO_PREFERENCE"${!isCust?' selected':''}>NO_PREFERENCE</option><option value="CUSTOM_PREFERENCE"${isCust?' selected':''}>CUSTOM_PREFERENCE</option></select></div>
+          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAwsInfra(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NONROLLING'?' selected':''}>ROLLING</option><option value="NONROLLING"${d.mw_patching_mode==='NONROLLING'?' selected':''}>NONROLLING</option></select></div>
+        </div>
+        <div id="${p}mwcustom" style="${isCust?'':'display:none'}; margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
+          <div class="g3">
+            <div class="field"><div class="field-lbl">lead_time_in_weeks</div><input type="number" id="${p}mwlead" value="${d.mw_lead_time_week||''}" min="1" max="4" oninput="readAwsInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">hours_of_day</div><input type="text" id="${p}mwhours" value="${d.mw_hours_of_day||''}" placeholder="0,4,8" oninput="readAwsInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">weeks_of_month</div><input type="text" id="${p}mwweeks" value="${d.mw_weeks_of_month||''}" placeholder="1,3" oninput="readAwsInfra(${i});refresh()"></div>
+          </div>
+          <div class="g2">
+            <div class="field"><div class="field-lbl">days_of_week</div><input type="text" id="${p}mwdays" value="${d.mw_days_of_week||''}" placeholder="MONDAY,FRIDAY" oninput="readAwsInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">months</div><input type="text" id="${p}mwmonths" value="${d.mw_months||''}" placeholder="JANUARY,JULY" oninput="readAwsInfra(${i});refresh()"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function awsClusterCardHTML(d, i) {
+  const p=`ac${i}_`, open=i===0?'open':'';
+  const infOpts = infraOptions(d.infra_ref);
+  const netOpts = netOptions(d.network_ref);
+  const sshChips = (d.ssh_public_keys||[]).map((k,ki)=>`<span class="chip"><span>${k.substring(0,40)}…</span><button class="chip-rm" onclick="awsClusters[${i}].ssh_public_keys.splice(${ki},1);renderAwsClusters();refresh()">×</button></span>`).join('');
+  return `<div class="inst-card ${open}" id="ac-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('ac-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${awsClusters.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(awsClusters,${i},renderAwsClusters)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAwsCluster(${i});refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">References</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice" style="margin-bottom:8px"><span style="font-size:13px;flex-shrink:0">✓</span> <strong>Auto-wired in root main.tf</strong> — select which infrastructure and network this cluster uses.</div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">Exadata Infrastructure</div><div class="field-hint">Which infra module this cluster runs on</div><select class="ref-select" id="${p}infra_ref" onchange="readAwsCluster(${i});refresh()">${infOpts||'<option value="">— add infra first —</option>'}</select></div>
+        <div class="field"><div class="field-lbl">ODB Network</div><div class="field-hint">Which network module this cluster uses</div><select class="ref-select" id="${p}net_ref" onchange="readAwsCluster(${i});refresh()">${netOpts||'<option value="">— add network first —</option>'}</select></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name}" placeholder="vm-cluster-prod" oninput="readAwsCluster(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">cpu_core_count <span class="req-star">*</span></div><div class="field-hint">Min 2</div><input type="number" id="${p}cpu" value="${d.cpu_core_count||16}" min="2" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">gi_version <span class="req-star">*</span></div><input type="text" id="${p}gi" value="${d.gi_version||''}" placeholder="23.0.0.0" oninput="readAwsCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">hostname_prefix <span class="req-star">*</span></div><input type="text" id="${p}hp" value="${d.hostname_prefix||''}" placeholder="vm" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">license_model</div><select id="${p}lm" onchange="readAwsCluster(${i});refresh()"><option value="LICENSE_INCLUDED"${d.license_model!=='BRING_YOUR_OWN_LICENSE'?' selected':''}>LICENSE_INCLUDED</option><option value="BRING_YOUR_OWN_LICENSE"${d.license_model==='BRING_YOUR_OWN_LICENSE'?' selected':''}>BRING_YOUR_OWN_LICENSE</option></select></div>
+      </div>
+      <div class="field"><div class="field-lbl">ssh_public_keys <span class="req-star">*</span></div>
+        <div class="chip-list">${sshChips}</div>
+        <textarea id="${p}sshin" placeholder="Paste ssh-rsa or ssh-ed25519 key…" style="min-height:54px"></textarea>
+        <button class="add-btn" style="margin-top:6px;height:32px" onclick="addSshToCluster(${i},false)">+ Add SSH Key</button>
+      </div>
+    </div>
+      <div class="field" id="${p}dbsrv-field">
+        <div class="field-lbl">db_servers <span class="req-star">*</span></div>
+        <div class="field-hint">DB server IDs to place this cluster on. <strong>Auto-discover</strong> uses <code>data.aws_odb_db_servers</code> (recommended). Manual lets you hardcode IDs.</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-family:var(--font-m);font-size:12px">
+            <input type="radio" name="${p}dbsrvmode" id="${p}dbsrvmode_auto" value="auto" ${(d.db_servers_mode||'auto')==='auto'?'checked':''} onchange="readAwsCluster(${i});renderAwsClusters();refresh()">
+            🔍 Auto-discover (data source)
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-family:var(--font-m);font-size:12px">
+            <input type="radio" name="${p}dbsrvmode" id="${p}dbsrvmode_manual" value="manual" ${d.db_servers_mode==='manual'?'checked':''} onchange="readAwsCluster(${i});renderAwsClusters();refresh()">
+            ✏️ Manual IDs
+          </label>
+        </div>
+        ${(d.db_servers_mode||'auto')==='auto' ? `
+        <div class="notice"><span style="font-size:13px;flex-shrink:0">✓</span>
+          Generates: <code>data "aws_odb_db_servers" "${d.module_name||'this'}" { cloud_exadata_infrastructure_id = module.${d.infra_ref||'&lt;infra_module&gt;'}.infra_id }</code><br>
+          and sets: <code>db_servers = data.aws_odb_db_servers.${d.module_name||'this'}.db_servers[*].id</code>
+        </div>` : `
+        <div class="chip-list" id="${p}dbsrv-chips">${(d.db_servers||[]).map((s,si)=>`<span class="chip"><span>${s}</span><button class="chip-rm" onclick="awsClusters[${i}].db_servers.splice(${si},1);renderAwsClusters();refresh()">×</button></span>`).join('')}</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input type="text" id="${p}dbsrv-inp" placeholder="db-server-ocid1.dbserver…" style="flex:1">
+          <button class="add-btn" style="height:32px;white-space:nowrap" onclick="addDbServerToCluster(${i})">+ Add</button>
+        </div>`}
+      </div>
+      <div class="inner-card"><div class="g3">
+        <div class="field"><div class="field-lbl" style="font-size:10px">is_diagnostics_events_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcodiag" ${d.dco_is_diagnostics_events_enabled!==false?'checked':''} onchange="readAwsCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_is_diagnostics_events_enabled!==false?'true':'false'}</span></div></div>
+        <div class="field"><div class="field-lbl" style="font-size:10px">is_health_monitoring_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcohealth" ${d.dco_is_health_monitoring_enabled!==false?'checked':''} onchange="readAwsCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_is_health_monitoring_enabled!==false?'true':'false'}</span></div></div>
+        <div class="field"><div class="field-lbl" style="font-size:10px">is_incident_logs_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcologs" ${d.dco_is_incident_logs_enabled!==false?'checked':''} onchange="readAwsCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_is_incident_logs_enabled!==false?'true':'false'}</span></div></div>
+      </div></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2"><div class="field"><div class="field-lbl">cluster_name</div><input type="text" id="${p}cn" value="${d.cluster_name||''}" placeholder="gic-prod" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">timezone</div><input type="text" id="${p}tz" value="${d.timezone||''}" placeholder="UTC" oninput="readAwsCluster(${i});refresh()"></div></div>
+      <div class="g3"><div class="field"><div class="field-lbl">data_storage_size_in_tbs</div><input type="number" id="${p}ds" value="${d.data_storage_size_in_tbs||''}" placeholder="2" step="0.5" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">db_node_storage_size_in_gbs</div><input type="number" id="${p}dng" value="${d.db_node_storage_size_in_gbs||''}" placeholder="120" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">memory_size_in_gbs</div><input type="number" id="${p}mem" value="${d.memory_size_in_gbs||''}" placeholder="60" oninput="readAwsCluster(${i});refresh()"></div></div>
+      <div class="g2"><div class="field"><div class="field-lbl">system_version</div><input type="text" id="${p}sv" value="${d.system_version||''}" placeholder="23.8.0.25.04" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">region</div><input type="text" id="${p}reg" value="${d.region||''}" placeholder="us-west-2" oninput="readAwsCluster(${i});refresh()"></div></div>
+    </div>
+  </div>
+</div>`;
+}
+
+function awsAvmcCardHTML(d, i) {
+  const p = `av${i}_`, open = i===0 ? 'open' : '';
+  const infOpts = infraOptions(d.infra_ref);
+  const netOpts = netOptions(d.network_ref);
+  return `<div class="inst-card ${open}" id="av-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('av-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${awsAvmcs.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(awsAvmcs,${i},renderAwsAvmcs)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAwsAvmc(${i});refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+
+    <div class="section"><div class="section-head"><div class="section-title">References</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice" style="margin-bottom:8px"><span style="font-size:13px;flex-shrink:0">✓</span> <strong>Auto-wired in root main.tf</strong> — select which infrastructure and network this cluster uses.</div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">Exadata Infrastructure</div><div class="field-hint">Which infra module to run on</div><select class="ref-select" id="${p}infra_ref" onchange="readAwsAvmc(${i});refresh()">${infOpts||'<option value="">— add infra first —</option>'}</select></div>
+        <div class="field"><div class="field-lbl">ODB Network</div><div class="field-hint">Which network module to use</div><select class="ref-select" id="${p}net_ref" onchange="readAwsAvmc(${i});refresh()">${netOpts||'<option value="">— add network first —</option>'}</select></div>
+      </div>
+    </div>
+
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name}" placeholder="tf-avmc-prod" oninput="readAwsAvmc(${i});refresh()"></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">autonomous_data_storage_size_in_tbs <span class="req-star">*</span></div><div class="field-hint">TB for Autonomous DBs</div><input type="number" id="${p}ads" value="${d.autonomous_data_storage_size_in_tbs||5}" min="1" step="1" oninput="readAwsAvmc(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">total_container_databases <span class="req-star">*</span></div><div class="field-hint">Max ACDBs</div><input type="number" id="${p}tcd" value="${d.total_container_databases||2}" min="1" oninput="readAwsAvmc(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">cpu_core_count_per_node <span class="req-star">*</span></div><input type="number" id="${p}cpu" value="${d.cpu_core_count_per_node||40}" min="1" oninput="readAwsAvmc(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">memory_per_oracle_compute_unit_in_gbs <span class="req-star">*</span></div><input type="number" id="${p}mem" value="${d.memory_per_oracle_compute_unit_in_gbs||2}" min="1" oninput="readAwsAvmc(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">scan_listener_port_non_tls</div><div class="field-hint">Default 1521, range 1024–8999</div><input type="number" id="${p}pnontls" value="${d.scan_listener_port_non_tls||1521}" min="1024" max="8999" oninput="readAwsAvmc(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">scan_listener_port_tls</div><div class="field-hint">Default 2484, range 1024–8999</div><input type="number" id="${p}ptls" value="${d.scan_listener_port_tls||2484}" min="1024" max="8999" oninput="readAwsAvmc(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">license_model</div><select id="${p}lm" onchange="readAwsAvmc(${i});refresh()"><option value="LICENSE_INCLUDED"${d.license_model!=='BRING_YOUR_OWN_LICENSE'?' selected':''}>LICENSE_INCLUDED</option><option value="BRING_YOUR_OWN_LICENSE"${d.license_model==='BRING_YOUR_OWN_LICENSE'?' selected':''}>BRING_YOUR_OWN_LICENSE</option></select></div>
+        <div class="field"><div class="field-lbl">is_mtls_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}mtls" ${d.is_mtls_enabled_vm_cluster?'checked':''} onchange="readAwsAvmc(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.is_mtls_enabled_vm_cluster?'true':'false'}</span></div></div>
+      </div>
+    </div>
+
+    <div class="section"><div class="section-head"><div class="section-title">DB Servers</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="field">
+        <div class="field-hint">Auto-discover (recommended) uses <code>data.aws_odb_db_servers</code>. Manual lets you hardcode IDs.</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-family:var(--font-m);font-size:12px">
+            <input type="radio" name="${p}dbsrvmode" value="auto" ${(d.db_servers_mode||'auto')==='auto'?'checked':''} onchange="readAwsAvmc(${i});renderAwsAvmcs();refresh()">
+            🔍 Auto-discover (data source)
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-family:var(--font-m);font-size:12px">
+            <input type="radio" name="${p}dbsrvmode" value="manual" ${d.db_servers_mode==='manual'?'checked':''} onchange="readAwsAvmc(${i});renderAwsAvmcs();refresh()">
+            ✏️ Manual IDs
+          </label>
+        </div>
+        ${(d.db_servers_mode||'auto')==='auto' ? `
+        <div class="notice"><span style="font-size:13px;flex-shrink:0">✓</span>
+          Generates: <code>data "aws_odb_db_servers" "${d.module_name||'this'}" { cloud_exadata_infrastructure_arn = module.${d.infra_ref||'&lt;infra_module&gt;'}.infra_arn }</code>
+        </div>` : `
+        <div class="chip-list" id="${p}dbsrv-chips">${(d.db_servers||[]).map((s,si)=>`<span class="chip"><span>${s}</span><button class="chip-rm" onclick="awsAvmcs[${i}].db_servers.splice(${si},1);renderAwsAvmcs();refresh()">×</button></span>`).join('')}</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input type="text" id="${p}dbsrv-inp" placeholder="db-server-ocid1.dbserver…" style="flex:1">
+          <button class="add-btn" style="height:32px;white-space:nowrap" onclick="addDbServerToAvmc(${i})">+ Add</button>
+        </div>`}
+      </div>
+    </div>
+
+    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">description</div><input type="text" id="${p}desc" value="${d.description||''}" placeholder="" oninput="readAwsAvmc(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">time_zone</div><input type="text" id="${p}tz" value="${d.time_zone||''}" placeholder="UTC" oninput="readAwsAvmc(${i});refresh()"></div>
+      </div>
+      <div class="inner-card">
+        <div class="section-head" style="margin-bottom:8px"><div class="section-title" style="font-size:11px">Maintenance Window</div><div class="section-line"></div></div>
+        <div class="g2">
+          <div class="field"><div class="field-lbl">preference</div><select id="${p}mwpref" onchange="readAwsAvmc(${i});refresh()"><option value="NO_PREFERENCE"${(d.mw_preference||'NO_PREFERENCE')==='NO_PREFERENCE'?' selected':''}>NO_PREFERENCE</option><option value="CUSTOM_PREFERENCE"${d.mw_preference==='CUSTOM_PREFERENCE'?' selected':''}>CUSTOM_PREFERENCE</option></select></div>
+          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAwsAvmc(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NONROLLING'?' selected':''}>ROLLING</option><option value="NONROLLING"${d.mw_patching_mode==='NONROLLING'?' selected':''}>NONROLLING</option></select></div>
+        </div>
+        <div class="g2">
+          <div class="field"><div class="field-lbl">is_custom_action_timeout_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}mwcat" ${d.mw_is_custom_action_timeout_enabled?'checked':''} onchange="readAwsAvmc(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.mw_is_custom_action_timeout_enabled?'true':'false'}</span></div></div>
+          <div class="field"><div class="field-lbl">custom_action_timeout_mins</div><input type="number" id="${p}mwcatm" value="${d.mw_custom_action_timeout_mins||15}" min="15" max="120" oninput="readAwsAvmc(${i});refresh()"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function awsOciDbCardHTML(d, i) {
+  const p = `od${i}_`, open = i===0 ? 'open' : '';
+  const vcOpts = awsClusters.map(c=>`<option value="${c.module_name}"${c.module_name===d.vmcluster_ref?' selected':''}>${c.module_name}</option>`).join('') || '<option value="">— add VM Cluster first —</option>';
+  return `<div class="inst-card ${open}" id="od-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('od-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${awsOciDbs.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(awsOciDbs,${i},renderAwsOciDbs)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAwsOciDb(${i});refresh()"><span style="color:var(--ink4)">_dbhome · _cdb · _pdb</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">VM Cluster Reference</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice" style="margin-bottom:8px"><span style="font-size:12px;flex-shrink:0">✓</span> Auto-wires <code>vm_cluster_ocid = module.&lt;vmcluster&gt;.ocid</code></div>
+      <div class="field"><div class="field-lbl">VM Cluster module</div><select class="ref-select" id="${p}vcref" onchange="readAwsOciDb(${i});refresh()">${vcOpts}</select></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">DB Home</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">display_name</div><input type="text" id="${p}hdn" value="${d.db_home_display_name||''}" placeholder="dbhome" oninput="readAwsOciDb(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">db_version <span class="req-star">*</span></div><input type="text" id="${p}dbv" value="${d.db_version||'19.0.0.0'}" placeholder="19.0.0.0" oninput="readAwsOciDb(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Container Database (CDB)</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice" style="margin-bottom:8px"><span style="font-size:12px;flex-shrink:0">🔒</span> <code>admin_password</code> is sensitive — set via: <code>export TF_VAR_${d.module_name}_cdb_admin_password="..."</code></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">db_name <span class="req-star">*</span></div><div class="field-hint">Max 8 chars, starts with letter</div><input type="text" id="${p}dbn" value="${d.db_name||''}" placeholder="MYDB" maxlength="8" oninput="readAwsOciDb(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">db_unique_name</div><input type="text" id="${p}dun" value="${d.db_unique_name||''}" placeholder="optional" oninput="readAwsOciDb(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">character_set</div><select id="${p}cs" onchange="readAwsOciDb(${i});refresh()"><option value="AL32UTF8"${(d.character_set||'AL32UTF8')==='AL32UTF8'?' selected':''}>AL32UTF8</option><option value="WE8ISO8859P1"${d.character_set==='WE8ISO8859P1'?' selected':''}>WE8ISO8859P1</option><option value="WE8MSWIN1252"${d.character_set==='WE8MSWIN1252'?' selected':''}>WE8MSWIN1252</option></select></div>
+        <div class="field"><div class="field-lbl">ncharacter_set</div><select id="${p}ncs" onchange="readAwsOciDb(${i});refresh()"><option value="AL16UTF16"${(d.ncharacter_set||'AL16UTF16')==='AL16UTF16'?' selected':''}>AL16UTF16</option><option value="UTF8"${d.ncharacter_set==='UTF8'?' selected':''}>UTF8</option></select></div>
+      </div>
+      <div class="field"><div class="field-lbl">sid_prefix</div><input type="text" id="${p}sid" value="${d.sid_prefix||''}" placeholder="optional" oninput="readAwsOciDb(${i});refresh()"></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Pluggable Database (PDB)</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">Create PDB</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}cpdb" ${d.create_pdb?'checked':''} onchange="readAwsOciDb(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.create_pdb?'yes':'no'}</span></div></div>
+        <div class="field"><div class="field-lbl">pdb_name</div><input type="text" id="${p}pdb" value="${d.pdb_name||''}" placeholder="MYPDB" oninput="readAwsOciDb(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Backup</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">auto_backup_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}bak" ${d.auto_backup_enabled?'checked':''} onchange="readAwsOciDb(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.auto_backup_enabled?'true':'false'}</span></div></div>
+        <div class="field"><div class="field-lbl">auto_backup_window</div><select id="${p}bakw" onchange="readAwsOciDb(${i});refresh()"><option value="SLOT_TWO"${(d.auto_backup_window||'SLOT_TWO')==='SLOT_TWO'?' selected':''}>SLOT_TWO (02:00–04:00)</option><option value="SLOT_ONE"${d.auto_backup_window==='SLOT_ONE'?' selected':''}>SLOT_ONE (00:00–02:00)</option><option value="SLOT_THREE"${d.auto_backup_window==='SLOT_THREE'?' selected':''}>SLOT_THREE (04:00–06:00)</option><option value="SLOT_FOUR"${d.auto_backup_window==='SLOT_FOUR'?' selected':''}>SLOT_FOUR (06:00–08:00)</option></select></div>
+      </div>
+      <div class="field"><div class="field-lbl">recovery_window_in_days</div><input type="number" id="${p}bakr" value="${d.recovery_window_in_days||7}" min="1" max="60" oninput="readAwsOciDb(${i});refresh()"></div>
+    </div>
+  </div>
+</div>`;
+}
+
+function awsPeeringCardHTML(d, i) {
+  const p=`ap${i}_`, open=i===0?'open':'';
+  const netOpts = netOptions(d.network_ref);
+  const cidrChips = (d.peer_network_cidrs||[]).map((c,ci)=>`<span class="chip"><span>${c}</span><button class="chip-rm" onclick="awsPeerings[${i}].peer_network_cidrs.splice(${ci},1);renderAwsPeerings();refresh()">×</button></span>`).join('');
+  return `<div class="inst-card ${open}" id="ap-card-${i}">
+  <div class="inst-card-head" onclick="toggleCard('ap-card-${i}')">
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${awsPeerings.length>1?`<button class="inst-rm" onclick="event.stopPropagation();removeInst(awsPeerings,${i},renderAwsPeerings)">Remove</button>`:''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAwsPeering(${i});refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice" style="margin-bottom:8px"><span style="font-size:13px;flex-shrink:0">✓</span> <strong>Auto-wired in root main.tf</strong> — select which ODB Network to peer.</div>
+      <div class="field"><div class="field-lbl">ODB Network <span class="req-star">*</span></div><div class="field-hint">Which ODB Network module this peering connects</div><select class="ref-select" id="${p}net_ref" onchange="readAwsPeering(${i});refresh()">${netOpts||'<option value="">— add network first —</option>'}</select></div>
+      <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="odb-peering-conn" oninput="readAwsPeering(${i});refresh()"></div>
+      <div class="field"><div class="field-lbl">peer_network_id <span class="req-star">*</span></div><div class="field-hint">ID of the peer AWS VPC e.g. <code>vpc-0abc123</code></div><input type="text" id="${p}peerid" value="${d.peer_network_id||''}" placeholder="vpc-0abc123" oninput="readAwsPeering(${i});refresh()"></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="field"><div class="field-lbl">region</div><input type="text" id="${p}reg" value="${d.region||''}" placeholder="us-east-1" oninput="readAwsPeering(${i});refresh()"></div>
+      <div class="field"><div class="field-lbl">peer_network_cidrs</div><div class="field-hint">Only supported during update operations, not during initial creation.</div>
+        <div class="chip-list">${cidrChips}</div>
+        <div class="chip-add-row">
+          <input type="text" id="${p}cidrin" placeholder="10.0.0.0/16">
+          <button class="add-btn" onclick="addCidrToPeer(${i})">+ Add CIDR</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+// ── Render functions ──────────────────────────────────────────────────────────
+function renderAwsPeerings() {
+  const el=document.getElementById('aws-peering-list'); if(!el)return;
+  el.innerHTML=awsPeerings.map((d,i)=>awsPeeringCardHTML(d,i)).join('');
+  const cl=document.getElementById('aws-peering-count'); if(cl) cl.textContent=`${awsPeerings.length} peering${awsPeerings.length!==1?'s':''}`;
+  updateTree(); injectTooltips();
+}
+function renderAwsNets() {
+  const el=document.getElementById('aws-net-list'); if(!el)return;
+  el.innerHTML=awsNets.map((d,i)=>awsNetCardHTML(d,i)).join('');
+  const cl=document.getElementById('aws-net-count'); if(cl) cl.textContent=`${awsNets.length} network${awsNets.length!==1?'s':''}`;
+  updateTree(); injectTooltips();
+  _renderClusterAndPeeringDropdowns();
+}
+function renderAwsInfras() {
+  const el=document.getElementById('aws-infra-list'); if(!el)return;
+  el.innerHTML=awsInfras.map((d,i)=>awsInfraCardHTML(d,i)).join('');
+  const cl=document.getElementById('aws-infra-count'); if(cl) cl.textContent=`${awsInfras.length} infra${awsInfras.length!==1?'s':''}`;
+  updateTree(); injectTooltips();
+  _renderClusterAndPeeringDropdowns();
+}
+function renderAwsClusters() {
+  const el=document.getElementById('aws-cluster-list'); if(!el)return;
+  el.innerHTML=awsClusters.map((d,i)=>awsClusterCardHTML(d,i)).join('');
+  const cl=document.getElementById('aws-cluster-count'); if(cl) cl.textContent=`${awsClusters.length} cluster${awsClusters.length!==1?'s':''}`;
+  updateTree(); injectTooltips();
+}
+function renderAwsAvmcs() {
+  const el = document.getElementById('aws-avmc-list');
+  if (!el) return;
+  el.innerHTML = awsAvmcs.map((d,i) => awsAvmcCardHTML(d,i)).join('');
+  const ct = document.getElementById('aws-avmc-count');
+  if (ct) ct.textContent = awsAvmcs.length > 1 ? `${awsAvmcs.length} instances` : '';
+  _renderAvmcDropdowns();
+}
+function _renderAvmcDropdowns() {
+  awsAvmcs.forEach((d,i) => {
+    const p = `av${i}_`;
+    const infSel = document.getElementById(`${p}infra_ref`);
+    const netSel = document.getElementById(`${p}net_ref`);
+    if (infSel) infSel.innerHTML = infraOptions(d.infra_ref) || '<option value="">— add infra first —</option>';
+    if (netSel) netSel.innerHTML = netOptions(d.network_ref)  || '<option value="">— add network first —</option>';
+  });
+}
+function renderAwsOciDbs() {
+  const el = document.getElementById('aws-ocidb-list');
+  if (!el) return;
+  el.innerHTML = awsOciDbs.map((d,i) => awsOciDbCardHTML(d,i)).join('');
+  const ct = document.getElementById('aws-ocidb-count');
+  if (ct) ct.textContent = awsOciDbs.length > 1 ? `${awsOciDbs.length} instances` : '';
+}
+function _renderClusterAndPeeringDropdowns() {
+  awsClusters.forEach((d,i) => {
+    const infSel = document.getElementById(`ac${i}_infra_ref`);
+    const netSel = document.getElementById(`ac${i}_net_ref`);
+    if (infSel) { const cur=infSel.value; infSel.innerHTML=infraOptions(cur)||'<option value="">— add infra first —</option>'; }
+    if (netSel) { const cur=netSel.value; netSel.innerHTML=netOptions(cur)||'<option value="">— add network first —</option>'; }
+  });
+  awsAvmcs.forEach((d,i) => {
+    const infSel = document.getElementById(`av${i}_infra_ref`);
+    const netSel = document.getElementById(`av${i}_net_ref`);
+    if (infSel) { const cur=infSel.value; infSel.innerHTML=infraOptions(cur)||'<option value="">— add infra first —</option>'; }
+    if (netSel) { const cur=netSel.value; netSel.innerHTML=netOptions(cur)||'<option value="">— add network first —</option>'; }
+  });
+  awsPeerings.forEach((d,i) => {
+    const netSel = document.getElementById(`ap${i}_net_ref`);
+    if (netSel) { const cur=netSel.value; netSel.innerHTML=netOptions(cur)||'<option value="">— add network first —</option>'; }
+  });
+}
+function renderRefDropdowns() {
+  _renderClusterAndPeeringDropdowns();
+}
+{% endblock %}
+
+{% block product_orchestration %}
+const cloud = 'aws';
+let cur = 0;
+
+function getAllModuleNames() {
+  const names = [];
+  awsNets.forEach(n => names.push(n.module_name));
+  awsInfras.forEach(n => names.push(n.module_name));
+  awsPeerings.forEach(n => names.push(n.module_name));
+  awsClusters.forEach(n => names.push(n.module_name));
+  return names;
+}
+const mn  = i => getAllModuleNames()[i] || ('module_'+i);
+const gmn = i => getAllModuleNames()[i] || ('module_'+i);
+
+function switchTab(i) {
+  cur = i;
+  document.querySelectorAll('#aws-tabs .tab').forEach(t => {
+    const onclick = t.getAttribute('onclick') || '';
+    t.classList.toggle('active', onclick.includes('('+i+','));
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('aws-page-'+i).classList.add('active');
+  activeFile = 'root-main';
+  updateTree(); renderEditor();
+}
+
+function buildPayload() {
+  return {
+    cloud,
+    iac_tool: iacTool,
+    customer: getCustName(),
+    aws_networks:      awsNets,
+    aws_infras:        awsInfras,
+    aws_peerings:      awsPeerings,
+    aws_clusters:      awsClusters,
+    aws_avmclusters:   awsAvmcs,
+    aws_oci_databases: awsOciDbs,
+  };
+}
+
+function applyConfig(doc) {
+  if (doc.aws_networks && doc.aws_networks.length) {
+    awsNets     = doc.aws_networks.map((d,i) => ({...defAwsNet(i), ...d}));
+    awsInfras   = doc.aws_infras   && doc.aws_infras.length   ? doc.aws_infras.map((d,i)   => ({...defAwsInfra(i),   ...d})) : [defAwsInfra(0)];
+    awsPeerings = doc.aws_peerings && doc.aws_peerings.length ? doc.aws_peerings.map((d,i) => ({...defAwsPeering(i), ...d})) : [defAwsPeering(0)];
+    awsClusters = doc.aws_clusters && doc.aws_clusters.length ? doc.aws_clusters.map((d,i) => ({...defAwsCluster(i), ...d})) : [defAwsCluster(0)];
+    awsAvmcs    = doc.aws_avmclusters && doc.aws_avmclusters.length ? doc.aws_avmclusters.map((d,i) => ({...defAwsAvmc(i), ...d})) : [];
+    awsOciDbs   = doc.aws_oci_databases && doc.aws_oci_databases.length ? doc.aws_oci_databases.map((d,i) => ({...defAwsOciDb(i), ...d})) : [];
+  } else {
+    const d0 = doc.module_0 || {}, d1 = doc.module_1 || {}, d2 = doc.module_2 || {}, d3 = doc.module_3 || {};
+    const mn = doc.module_names || {};
+    awsNets     = [{...defAwsNet(0),     ...d0, module_name: mn['0'] || 'odb_network'}];
+    awsInfras   = [{...defAwsInfra(0),   ...d1, module_name: mn['1'] || 'odb_exadata_infra'}];
+    awsPeerings = [{...defAwsPeering(0), ...d2, module_name: mn['2'] || 'odb_peering',
+                    peer_network_id: d2.peer_network_id || '',
+                    peer_network_cidrs: d2.peer_network_cidrs || []}];
+    awsClusters = [{...defAwsCluster(0), ...d3, module_name: mn['3'] || 'odb_vm_cluster',
+                    ssh_public_keys: d3.ssh_public_keys || []}];
+  }
+  renderAll();
+  refresh();
+  updateTestBtn();
+}
+
+function renderAll() {
+  renderAwsNets(); renderAwsInfras(); renderAwsPeerings(); renderAwsClusters(); renderAwsAvmcs(); renderAwsOciDbs();
+  updateTree();
+}
+{% endblock %}
+
+{% block product_seed %}
+awsNets.push(defAwsNet(0));
+awsInfras.push(defAwsInfra(0));
+awsPeerings.push(defAwsPeering(0));
+awsClusters.push(defAwsCluster(0));
+{% endblock %}

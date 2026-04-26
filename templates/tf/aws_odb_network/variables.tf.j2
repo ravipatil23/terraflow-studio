@@ -58,10 +58,19 @@ variable "region" {
   default = "{{ region }}"
 }
 
-variable "default_dns_prefix" {
-  type    = string
-  default = "{{ default_dns_prefix }}"
+{% if custom_domain_name %}
+variable "custom_domain_name" {
+  description = "Custom domain for ODB network hostnames — mutually exclusive with default_dns_prefix."
+  type        = string
+  default     = "{{ custom_domain_name }}"
 }
+{% else %}
+variable "default_dns_prefix" {
+  description = "DNS prefix for ODB network hostnames — mutually exclusive with custom_domain_name."
+  type        = string
+  default     = "{{ default_dns_prefix }}"
+}
+{% endif %}
 
 variable "delete_associated_resources" {
   type    = bool

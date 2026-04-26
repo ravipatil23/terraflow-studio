@@ -32,10 +32,10 @@ variable "region" {
   default = "{{ region }}"
 }
 
-variable "additional_peer_network_cidrs" {
-  description = "Extra CIDRs from the peered VPC."
-  type        = list(string)
-  default     = [{{ cidrs | map("tojson") | join(", ") }}]
+variable "peer_network_cidrs" {
+  description = "CIDRs to allow through the peering — update-only, add after initial create."
+  type        = set(string)
+  default     = []
 }
 
 variable "tags" {
