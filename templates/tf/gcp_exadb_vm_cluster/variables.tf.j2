@@ -70,12 +70,30 @@ variable "deletion_protection" {
 
 # ── properties block ──────────────────────────────────────────────────────────
 
-variable "gi_version" {
-  description = "Oracle Grid Infrastructure version e.g. 23.0.0.0."
+variable "grid_image_id" {
+  description = "ExaDB Grid Image resource ID e.g. projects/P/locations/L/giVersions/V/dbServerVersions/D."
   type = string
-{% if gi_version %}
-  default = "{{ gi_version }}"
+{% if grid_image_id %}
+  default = "{{ grid_image_id }}"
 {% endif %}
+}
+
+variable "exascale_db_storage_vault" {
+  description = "Full resource path of the Exascale DB Storage Vault."
+  type = string
+{% if exascale_db_storage_vault %}
+  default = "{{ exascale_db_storage_vault }}"
+{% endif %}
+}
+
+variable "shape_attribute" {
+  description = "Shape of the Exadata infrastructure — SMART_STORAGE or BLOCK_STORAGE."
+  type    = string
+  default = "{{ shape_attribute }}"
+  validation {
+    condition     = contains(["SMART_STORAGE", "BLOCK_STORAGE"], var.shape_attribute)
+    error_message = "Must be SMART_STORAGE or BLOCK_STORAGE."
+  }
 }
 
 variable "hostname_prefix" {
@@ -135,10 +153,6 @@ variable "time_zone" {
   default = "{{ time_zone }}"
 }
 
-variable "system_version" {
-  type    = string
-  default = "{{ system_version }}"
-}
 
 variable "memory_per_node_in_gbs" {
   type    = number

@@ -1,2 +1,5 @@
 flask>=3.0.0
 python-dotenv>=1.0.0
+oci>=2.126.0
+# RAG vector DB — optional, falls back to BM25 if not installed
+chromadb>=0.5.0

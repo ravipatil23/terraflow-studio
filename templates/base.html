@@ -16,14 +16,16 @@
   --gcp:#4285F4;--gcp-dim:rgba(66,133,244,0.10);--gcp-dim2:rgba(66,133,244,0.18);
   --accent:var(--orange);--accent2:var(--orange2);--a-dim:var(--o-dim);--a-dim2:var(--o-dim2);
   --radius:6px;--radius-lg:10px;
-  --shadow-sm:0 1px 3px rgba(0,0,0,0.07);--shadow:0 2px 8px rgba(0,0,0,0.09);
+  --shadow-sm:0 1px 0 rgba(255,255,255,0.85) inset,0 2px 6px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.05);
+  --shadow:0 1px 0 rgba(255,255,255,0.65) inset,0 4px 16px rgba(0,0,0,0.11),0 2px 4px rgba(0,0,0,0.07);
+  --shadow-lifted:0 1px 0 rgba(255,255,255,0.7) inset,0 8px 28px rgba(0,0,0,0.14),0 3px 8px rgba(0,0,0,0.09);
   --font-d:'Barlow Condensed',sans-serif;--font-b:'Barlow',sans-serif;--font-m:'DM Mono',monospace;
 }
-body.gcp{--accent:var(--gcp);--accent2:#5a9cff;--a-dim:var(--gcp-dim);--a-dim2:var(--gcp-dim2);}
+body.gcp{--accent:var(--gcp);--accent2:#5a9cff;--a-dim:var(--gcp-dim);--a-dim2:var(--gcp-dim2);background:linear-gradient(150deg,#f0f2f6 0%,#e3e8f0 100%);}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{font-size:14px;}
-body{background:var(--off);color:var(--ink);font-family:var(--font-b);height:100vh;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;}
-header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:300;}
+body{background:linear-gradient(150deg,#f4f2ee 0%,#e8e5dc 100%);color:var(--ink);font-family:var(--font-b);height:100vh;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;}
+header{background:linear-gradient(180deg,#252320 0%,#1a1916 100%);padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:300;box-shadow:0 2px 16px rgba(0,0,0,0.45),0 1px 0 rgba(255,255,255,0.04) inset;}
 .logo{display:flex;align-items:baseline;gap:14px;}
 .logo-name{font-family:var(--font-d);font-weight:800;font-size:22px;color:var(--white);line-height:1;}
 .logo-name .ac{color:var(--accent2);}
@@ -61,6 +63,9 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .llm-tpl-tag.aws{background:rgba(232,80,10,.2);color:#ff6b2b;}.llm-tpl-tag.gcp{background:rgba(66,133,244,.2);color:#5a9cff;}.llm-tpl-tag.both{background:rgba(123,66,188,.2);color:#b080e0;}
 .llm-tpl-title{font-family:var(--font-d);font-weight:700;font-size:12px;color:#ccc;margin-bottom:3px;}
 .llm-tpl-desc{font-family:var(--font-m);font-size:9.5px;color:#555;line-height:1.5;}
+.llm-tpl-pill{font-family:var(--font-d);font-weight:700;font-size:9px;letter-spacing:.07em;text-transform:uppercase;padding:3px 10px;border-radius:4px;cursor:pointer;border:1.5px solid #2a2a2a;background:none;color:#555;transition:all .15s;}
+.llm-tpl-pill:hover{border-color:#555;color:#aaa;}
+.llm-tpl-pill.active{border-color:#7b42bc;background:rgba(123,66,188,.15);color:#b080e0;}
 .cust-label{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#C9A227;white-space:nowrap;}
 .cust-input{font-family:var(--font-b);font-size:13px;background:#1a1a17;border:1.5px solid #2a2a26;border-radius:var(--radius);color:var(--white);padding:5px 12px;min-width:220px;outline:none;transition:border-color .15s;}
 .cust-input:focus{border-color:var(--accent2);}
@@ -115,32 +120,49 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .save-toast{font-family:var(--font-m);font-size:11px;color:#4aaf79;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none;}
 .save-toast.show{opacity:1;}
 .backend-pill{font-family:var(--font-m);font-size:9px;color:#333;letter-spacing:.04em;margin-left:auto;white-space:nowrap;}
-.tab-bar{background:var(--white);border-bottom:2px solid var(--line);display:flex;align-items:stretch;overflow-x:auto;flex-shrink:0;height:46px;}
-.tab-bar::-webkit-scrollbar{height:0;}
-.tgroup{display:none;align-items:stretch;}.tgroup.show{display:contents;}
-.tab{position:relative;padding:0 18px;height:46px;display:flex;align-items:center;gap:9px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:border-color .15s;user-select:none;flex-shrink:0;}
-.tab-num{font-family:var(--font-d);font-weight:700;font-size:10px;color:var(--ink4);background:var(--off);border:1.5px solid var(--line);border-radius:4px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
-.tab-label{font-family:var(--font-m);font-size:11px;color:var(--ink3);transition:color .15s;white-space:nowrap;}
-.tab.active{border-bottom-color:var(--accent);}
-.tab.active .tab-label{color:var(--ink);font-weight:500;}
-.tab.active .tab-num{background:var(--accent);border-color:var(--accent);color:var(--white);}
-.app{display:grid;grid-template-columns:1fr 500px;flex:1;min-height:0;overflow:hidden;}
-.form-panel{overflow-y:auto;padding:28px 28px 40px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
+/* ── Left nav panel ── */
+.nav-panel{background:linear-gradient(180deg,#f5f4f0 0%,#eceae4 100%);border-right:1px solid var(--line2);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:5;box-shadow:2px 0 10px rgba(0,0,0,0.07);scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
+.nav-panel::-webkit-scrollbar{width:3px;}
+.nav-panel::-webkit-scrollbar-thumb{background:var(--line2);border-radius:2px;}
+.nav-cloud-head{padding:13px 14px 10px;border-bottom:1px solid var(--line);margin-bottom:2px;display:flex;align-items:center;gap:8px;}
+.nav-cloud-label{font-family:var(--font-d);font-weight:800;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);}
+.nav-section-label{font-family:var(--font-d);font-weight:700;font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink4);padding:10px 14px 5px;}
+.tgroup{display:none;flex-direction:column;width:100%;}.tgroup.show{display:flex;}
+.tab{position:relative;padding:12px 14px 12px 13px;display:flex;align-items:center;gap:11px;cursor:pointer;border-left:4px solid transparent;transition:background .18s,border-color .18s;user-select:none;}
+.tab:hover{background:var(--off2);}
+.tab-num{font-family:var(--font-d);font-weight:800;font-size:12px;color:var(--ink4);background:var(--white);border:1.5px solid var(--line2);border-radius:5px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;transition:all .18s;flex-shrink:0;box-shadow:var(--shadow-sm);}
+.tab-label{font-family:var(--font-b);font-weight:500;font-size:13.5px;color:var(--ink3);transition:color .18s;line-height:1.3;word-break:break-word;flex:1;}
+.tab:hover .tab-label{color:var(--ink2);}
+.tab:hover .tab-num{color:var(--ink2);border-color:var(--line2);background:var(--white);}
+.tab.active{background:linear-gradient(90deg,var(--a-dim) 0%,transparent 100%);border-left-color:var(--accent);}
+.tab.active .tab-label{color:var(--ink);font-weight:600;}
+.tab.active .tab-num{background:var(--accent);border-color:var(--accent);color:var(--white);box-shadow:0 2px 8px var(--a-dim2);}
+.app{display:grid;grid-template-columns:var(--nav-width,220px) 1fr 6px var(--rhs-width,500px);flex:1;min-height:0;overflow:hidden;}
+.resizer{cursor:col-resize;background:var(--line2);flex-shrink:0;transition:background .12s;position:relative;z-index:10;}
+.resizer::after{content:'';position:absolute;inset:-4px 0;}
+.form-panel{overflow-y:auto;padding:28px 28px 40px;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
 .form-panel::-webkit-scrollbar{width:4px;}
 .form-panel::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
 .page{display:none;}.page.active{display:block;}
-.page-hero{margin-bottom:20px;padding-bottom:18px;border-bottom:2px solid var(--ink);display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
+.page-hero{margin-bottom:20px;padding-bottom:18px;border-bottom:2px solid transparent;border-image:linear-gradient(90deg,var(--ink) 0%,var(--line) 100%) 1;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;}
 .page-resource-name{font-family:var(--font-d);font-weight:800;line-height:1;letter-spacing:-0.01em;color:var(--ink);}
 .page-resource-name em{font-style:normal;color:var(--accent);}
 .page-doc-link{font-family:var(--font-m);font-size:10px;color:var(--ink3);text-decoration:none;border:1px solid var(--line2);border-radius:var(--radius);padding:4px 9px;white-space:nowrap;flex-shrink:0;transition:all .15s;}
 .page-doc-link:hover{border-color:var(--accent);color:var(--accent);}
-.module-path-row{display:flex;align-items:center;gap:8px;background:var(--off2);border:1.5px solid var(--line2);border-radius:var(--radius-lg);padding:9px 14px;margin-bottom:20px;font-family:var(--font-m);font-size:11px;color:var(--ink3);}
+.module-path-row{display:flex;align-items:center;gap:8px;background:linear-gradient(180deg,#f8f7f3 0%,#eeecea 100%);border:1px solid rgba(210,207,200,0.8);border-top-color:rgba(255,255,255,0.9);border-radius:var(--radius-lg);padding:9px 14px;margin-bottom:20px;font-family:var(--font-m);font-size:11px;color:var(--ink3);box-shadow:var(--shadow-sm);}
 .mp-dir{color:var(--blue);}
 .module-name-field{background:transparent;border:none;outline:none;font-family:var(--font-m);font-size:11px;color:var(--accent);font-weight:500;width:160px;}
 .section{margin-bottom:22px;}
 .section-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
 .section-title{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);}
-.section-line{flex:1;height:1px;background:var(--line);}
+.section-line{flex:1;height:1px;background:linear-gradient(90deg,var(--line2) 0%,transparent 100%);}
+.section-head.clickable{cursor:pointer;user-select:none;border-radius:var(--radius);padding:2px 4px;margin:-2px -4px;transition:background .15s;}
+.section-head.clickable:hover{background:var(--off2);}
+.section-head.clickable:hover .section-title{color:var(--ink);}
+.opt-chevron{font-size:9px;color:var(--ink4);transition:transform .2s;flex-shrink:0;margin-left:2px;}
+.section.collapsed .opt-chevron{transform:rotate(-90deg);}
+.section.collapsed>.section-head{margin-bottom:0;}
+.section.collapsed>*:not(.section-head){display:none;}
 .badge-req{font-family:var(--font-d);font-weight:700;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--red);background:var(--r-dim);border:1px solid rgba(192,57,43,.2);border-radius:4px;padding:1px 6px;}
 .badge-opt{font-family:var(--font-d);font-weight:600;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);background:var(--off2);border:1px solid var(--line2);border-radius:4px;padding:1px 6px;}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -153,8 +175,8 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .field.invalid .field-err{display:block;}
 .field.invalid input,.field.invalid select,.field.invalid textarea{border-color:var(--red)!important;}
 .field.invalid .field-lbl{color:var(--red);}
-input[type=text],input[type=number],input[type=email],select,textarea{width:100%;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);color:var(--ink);font-family:var(--font-m);font-size:11.5px;padding:7px 10px;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;box-shadow:var(--shadow-sm);}
-input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--a-dim2);}
+input[type=text],input[type=number],input[type=email],select,textarea{width:100%;background:#fefefe;border:1.5px solid var(--line2);border-radius:var(--radius);color:var(--ink);font-family:var(--font-m);font-size:11.5px;padding:7px 10px;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none;box-shadow:inset 0 2px 4px rgba(0,0,0,0.055),inset 0 1px 2px rgba(0,0,0,0.03);}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:inset 0 1px 3px rgba(0,0,0,0.03),0 0 0 3px var(--a-dim2);}
 input:hover:not(:focus),select:hover:not(:focus),textarea:hover:not(:focus){border-color:var(--ink3);}
 select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888480' d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:26px;}
 select option{background:var(--white);color:var(--ink);}
@@ -173,21 +195,22 @@ textarea{resize:vertical;min-height:60px;line-height:1.6;}
 .chip-rm{background:none;border:none;cursor:pointer;padding:0;color:var(--ink4);font-size:15px;line-height:1;flex-shrink:0;transition:color .12s;}
 .chip-rm:hover{color:var(--red);}
 .chip-add-row{display:flex;gap:8px;}.chip-add-row input{flex:1;}
-.add-btn{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);padding:0 14px;font-family:var(--font-m);font-size:11px;color:var(--ink2);cursor:pointer;white-space:nowrap;height:36px;transition:all .15s;box-shadow:var(--shadow-sm);}
-.add-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--a-dim);}
-.seg{display:flex;border:1.5px solid var(--line2);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-sm);}
-.seg button{flex:1;height:36px;border:none;background:var(--white);font-family:var(--font-m);font-size:11px;cursor:pointer;color:var(--ink3);border-right:1.5px solid var(--line2);transition:all .15s;}
+.add-btn{background:linear-gradient(180deg,#ffffff 0%,#f6f5f1 100%);border:1px solid rgba(210,207,200,0.9);border-top-color:rgba(255,255,255,0.95);border-radius:var(--radius);padding:0 14px;font-family:var(--font-m);font-size:11px;color:var(--ink2);cursor:pointer;white-space:nowrap;height:36px;transition:all .15s;box-shadow:var(--shadow-sm);}
+.add-btn:hover{border-color:var(--accent);color:var(--accent);background:linear-gradient(180deg,var(--a-dim) 0%,var(--off) 100%);}
+.seg{display:flex;border:1px solid rgba(210,207,200,0.9);border-radius:var(--radius);overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05),0 1px 0 rgba(255,255,255,0.7);}
+.seg button{flex:1;height:36px;border:none;background:linear-gradient(180deg,#fefefe 0%,#f5f4f0 100%);font-family:var(--font-m);font-size:11px;cursor:pointer;color:var(--ink3);border-right:1px solid var(--line2);transition:all .15s;}
 .seg button:last-child{border-right:none;}
-.seg button.on{background:var(--a-dim);color:var(--accent);font-weight:500;}
-.inner-card{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow-sm);}
+.seg button.on{background:linear-gradient(180deg,var(--a-dim) 0%,rgba(232,80,10,0.04) 100%);color:var(--accent);font-weight:500;}
+.inner-card{background:linear-gradient(180deg,#f8f7f3 0%,#f2f0ea 100%);border:1px solid rgba(210,207,200,0.7);border-top-color:rgba(255,255,255,0.6);border-radius:var(--radius-lg);padding:18px;box-shadow:inset 0 2px 5px rgba(0,0,0,0.04),inset 0 1px 2px rgba(0,0,0,0.03),0 1px 0 rgba(255,255,255,0.7);}
 .notice{display:flex;gap:8px;align-items:flex-start;background:#fffbf5;border:1.5px solid #f0d090;border-radius:var(--radius);padding:8px 12px;font-size:11px;color:#7a5a10;margin-bottom:16px;line-height:1.55;}
 .notice.gcp{background:var(--gcp-dim);border-color:rgba(66,133,244,.3);color:#1a56a0;}
 .notice code{font-family:var(--font-m);font-size:10px;background:#faefd0;padding:1px 4px;border-radius:3px;}
-.vbtn{width:100%;margin-top:12px;background:var(--ink);border:none;border-radius:var(--radius);color:var(--white);font-family:var(--font-d);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;padding:12px;cursor:pointer;transition:background .15s;box-shadow:var(--shadow);}
-.vbtn:hover{background:var(--accent);}
-.output-panel{border-left:2px solid var(--ink);background:var(--white);display:flex;flex-direction:column;overflow:hidden;}
+.vbtn{width:100%;margin-top:12px;background:linear-gradient(180deg,#2c2a27 0%,#1a1916 100%);border:none;border-radius:var(--radius);color:var(--white);font-family:var(--font-d);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;padding:12px;cursor:pointer;transition:background .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.07) inset;}
+.vbtn:hover{background:linear-gradient(180deg,var(--orange2) 0%,var(--accent) 100%);box-shadow:0 4px 18px rgba(232,80,10,0.38),0 1px 0 rgba(255,255,255,0.12) inset;}
+.resizer:hover,.resizer.dragging{background:var(--accent);}
+.output-panel{background:var(--white);display:flex;flex-direction:column;overflow:hidden;min-height:0;border-left:1px solid var(--line2);}
 .out-layout{display:flex;flex:1;overflow:hidden;}
-.file-tree{width:190px;border-right:1.5px solid var(--line);background:var(--off);flex-shrink:0;overflow-y:auto;padding:12px 0;}
+.file-tree{width:190px;border-right:1px solid var(--line2);background:linear-gradient(180deg,#f3f2ee 0%,#ebe9e3 100%);flex-shrink:0;overflow-y:auto;padding:12px 0;}
 .ft-section{padding:0 12px 6px;font-family:var(--font-d);font-weight:700;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink4);margin-top:6px;}
 .ft-dir{padding:3px 12px;font-family:var(--font-m);font-size:10px;color:var(--ink3);display:flex;align-items:center;gap:5px;}
 .ft-dir::before{content:'📁';font-size:11px;}
@@ -196,21 +219,29 @@ textarea{resize:vertical;min-height:60px;line-height:1.6;}
 .ft-file:hover,.ft-root-file:hover{background:var(--off2);color:var(--ink);}
 .ft-file.active,.ft-root-file.active{background:var(--a-dim);color:var(--accent);border-left-color:var(--accent);font-weight:500;}
 .editor-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-.editor-header{padding:10px 16px;border-bottom:1px solid var(--line);background:var(--off);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;}
+.editor-header{padding:10px 16px;border-bottom:1px solid var(--line2);background:linear-gradient(180deg,#f8f7f3 0%,#efede7 100%);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;box-shadow:0 2px 6px rgba(0,0,0,0.04);}
 .editor-filepath{font-family:var(--font-m);font-size:11px;color:var(--ink3);display:flex;align-items:center;gap:4px;}
 .editor-filepath .ep-dir{color:var(--blue);}
 .editor-filepath .ep-file{color:var(--ink);}
 .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px rgba(26,122,74,.2);animation:blink 2.5s ease-in-out infinite;flex-shrink:0;}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
 .editor-actions{display:flex;gap:6px;}
-.icon-btn{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding:4px 10px;cursor:pointer;transition:all .15s;white-space:nowrap;}
-.icon-btn:hover{background:var(--ink);color:var(--white);border-color:var(--ink);}
+.icon-btn{background:linear-gradient(180deg,#ffffff 0%,#f4f3ef 100%);border:1px solid rgba(210,207,200,0.9);border-top-color:rgba(255,255,255,0.95);border-radius:var(--radius);font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);padding:4px 10px;cursor:pointer;transition:all .15s;white-space:nowrap;box-shadow:var(--shadow-sm);}
+.icon-btn:hover{background:linear-gradient(180deg,#2c2a27 0%,var(--ink) 100%);color:var(--white);border-color:transparent;box-shadow:0 3px 10px rgba(0,0,0,0.25);}
 .icon-btn.green{border-color:rgba(26,122,74,.4);color:var(--green);}
 .icon-btn.green:hover{background:var(--green);color:var(--white);border-color:var(--green);}
 .icon-btn.copied{background:var(--green);color:var(--white);border-color:var(--green);}
-pre.code-editor{flex:1;overflow-y:auto;padding:18px 20px;font-family:var(--font-m);font-size:12px;line-height:1.85;color:var(--ink2);white-space:pre;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
+.icon-btn.muted{opacity:.4;cursor:not-allowed;}.icon-btn.muted:hover{background:var(--white);color:var(--ink2);border-color:var(--line2);}
+pre.code-editor{flex:1;min-height:80px;overflow-y:auto;padding:18px 20px;font-family:var(--font-m);font-size:12px;line-height:1.85;color:var(--ink2);white-space:pre;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
 pre.code-editor::-webkit-scrollbar{width:4px;}
 pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
+.explain-panel{flex-shrink:0;max-height:45%;border-top:2px solid var(--line2);background:linear-gradient(180deg,#fafaf7 0%,#f5f4f0 100%);display:flex;flex-direction:column;overflow:hidden;}
+.explain-ph{padding:8px 16px;border-bottom:1px solid var(--line2);background:linear-gradient(180deg,#f3f2ee 0%,#ece9e2 100%);display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.explain-ph-title{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);}
+.explain-ph-file{font-family:var(--font-m);font-size:10px;color:var(--ink3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.explain-body{flex:1;overflow-y:auto;padding:14px 18px;font-family:var(--font-b);font-size:12.5px;line-height:1.75;color:var(--ink2);white-space:pre-wrap;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
+.explain-body::-webkit-scrollbar{width:4px;}
+.explain-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
 /* ── Tooltips ── */
 .tip-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--off2);border:1px solid var(--line2);color:var(--ink3);font-size:9px;font-family:var(--font-d);font-weight:700;cursor:default;flex-shrink:0;transition:all .15s;line-height:1;position:relative;}
 .tip-icon:hover{background:var(--accent);border-color:var(--accent);color:var(--white);}
@@ -222,12 +253,12 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
 .hkw{color:var(--red);font-weight:500;}.hres{color:#854F0B;font-weight:500;}.hgres{color:#185FA5;font-weight:500;}.hstr{color:var(--green);}.hnum{color:#534AB7;}.hbol{color:#854F0B;font-weight:500;}.href{color:var(--green);font-style:italic;}.hvar{color:#534AB7;font-style:italic;}.htype{color:var(--blue);}.hcmt{color:var(--ink4);font-style:italic;}
 /* ── Multi-instance cards ── */
 .inst-list{display:flex;flex-direction:column;gap:12px;}
-.inst-card{background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden;}
+.inst-card{background:linear-gradient(180deg,#ffffff 0%,#fafaf7 100%);border:1px solid rgba(210,207,200,0.8);border-top-color:rgba(255,255,255,0.95);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden;transition:box-shadow .2s;}
 .inst-card.open .inst-body{display:block;}
-.inst-card-head{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;background:var(--off);border-bottom:1px solid transparent;transition:border-color .15s;}
-.inst-card.open .inst-card-head{border-bottom-color:var(--line);}
-.inst-card-head:hover{background:var(--off2);}
-.inst-num{font-family:var(--font-d);font-weight:800;font-size:11px;color:var(--white);background:var(--accent);border-radius:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.inst-card-head{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;background:linear-gradient(180deg,#f8f7f3 0%,#efede7 100%);border-bottom:1px solid transparent;transition:background .15s,border-color .15s;}
+.inst-card.open .inst-card-head{border-bottom-color:var(--line2);}
+.inst-card-head:hover{background:linear-gradient(180deg,#f3f1ec 0%,#e8e5dc 100%);}
+.inst-num{font-family:var(--font-d);font-weight:800;font-size:11px;color:var(--white);background:linear-gradient(135deg,var(--accent2) 0%,var(--accent) 100%);border-radius:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 6px var(--a-dim2),0 1px 0 rgba(255,255,255,0.18) inset;text-shadow:0 1px 2px rgba(0,0,0,0.2);}
 .inst-title{font-family:var(--font-m);font-size:11px;font-weight:500;color:var(--ink2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .inst-modname{font-family:var(--font-m);font-size:10px;color:var(--accent);background:var(--a-dim);border:1px solid var(--a-dim2);border-radius:3px;padding:1px 6px;flex-shrink:0;}
 .inst-chevron{font-size:10px;color:var(--ink4);transition:transform .2s;flex-shrink:0;}
@@ -235,9 +266,13 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
 .inst-rm{background:none;border:1px solid rgba(192,57,43,.25);border-radius:4px;color:var(--red);font-size:11px;padding:2px 8px;cursor:pointer;flex-shrink:0;transition:all .15s;font-family:var(--font-d);font-weight:700;letter-spacing:.04em;}
 .inst-rm:hover{background:var(--r-dim);border-color:var(--red);}
 .inst-body{display:none;padding:18px 18px 12px;}
+.drag-handle{cursor:grab;color:var(--ink4);font-size:13px;flex-shrink:0;user-select:none;padding:0 4px 0 0;line-height:1;opacity:.6;}.drag-handle:active{cursor:grabbing;}
+.inst-card.dragging{opacity:.35;box-shadow:none;}
+.inst-card.drag-over-top{border-top:3px solid var(--accent) !important;}
+.inst-card.drag-over-bottom{border-bottom:3px solid var(--accent) !important;}
 .inst-add-row{display:flex;align-items:center;gap:10px;margin-top:8px;}
-.inst-add-btn{display:flex;align-items:center;gap:6px;background:var(--a-dim);border:1.5px solid var(--a-dim2);border-radius:var(--radius);color:var(--accent);font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:7px 16px;cursor:pointer;transition:all .15s;}
-.inst-add-btn:hover{background:var(--accent);color:var(--white);}
+.inst-add-btn{display:flex;align-items:center;gap:6px;background:linear-gradient(180deg,var(--a-dim) 0%,rgba(232,80,10,0.05) 100%);border:1.5px solid var(--a-dim2);border-radius:var(--radius);color:var(--accent);font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:7px 16px;cursor:pointer;transition:all .15s;box-shadow:0 2px 8px var(--a-dim2),0 1px 0 rgba(255,255,255,0.5) inset;}
+.inst-add-btn:hover{background:linear-gradient(180deg,var(--orange2) 0%,var(--accent) 100%);color:var(--white);box-shadow:0 3px 12px rgba(232,80,10,0.35);border-color:transparent;}
 .inst-count-lbl{font-family:var(--font-m);font-size:10px;color:var(--ink3);}
 .ref-select{font-family:var(--font-m);font-size:11px;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);color:var(--ink);padding:7px 26px 7px 10px;outline:none;cursor:pointer;width:100%;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888480' d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;}
 .ref-select:focus{border-color:var(--accent);}
@@ -291,7 +326,8 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
     <span style="font-family:var(--font-d);font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#666">⚡ Prompt Templates</span>
     <button onclick="toggleTemplates()" style="background:none;border:none;color:#444;cursor:pointer;font-size:16px;line-height:1;padding:0 4px">✕</button>
   </div>
-  <div id="llm-template-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px"></div>
+  <div id="llm-tpl-pills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+  <div id="llm-template-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px"></div>
 </div>
 
 <!-- ── Test Modal ── -->
@@ -318,14 +354,22 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
   </div>
 </div>
 
-<div class="tab-bar">
+<div class="app">
+<!-- LEFT NAV PANEL -->
+<div class="nav-panel">
+  <div class="nav-cloud-head">
+    <span class="nav-cloud-label">Resources</span>
+  </div>
+  <div class="nav-section-label">Types</div>
   {% block product_tabs %}{% endblock %}
 </div>
 
-<div class="app">
 <div class="form-panel">
   {% block product_pages %}{% endblock %}
 </div><!-- /form-panel -->
+
+<!-- PANEL RESIZER -->
+<div class="resizer" id="panel-resizer" title="Drag to resize"></div>
 
 <!-- OUTPUT PANEL -->
 <div class="output-panel">
@@ -343,12 +387,21 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
           <button class="icon-btn green" onclick="dlZip()">⬇ Download ZIP</button>
           <button class="icon-btn" onclick="loadZip()" title="Load a previously downloaded Terraflow ZIP to restore its configuration">⬆ Load ZIP</button>
           <input type="file" id="load-zip-input" accept=".zip" style="display:none" onchange="onLoadZipFile(this)">
-          <button class="icon-btn" id="gh-push-btn" onclick="pushToGithub()" style="display:none" title="Push all Terraform files to GitHub">⬆ GitHub</button>
+          <button class="icon-btn muted" id="gh-push-btn" onclick="pushToGithub()" title="Set GITHUB_TOKEN and GITHUB_REPO in .env to enable Git push">⬆ Push to Git</button>
           <span id="gh-status-badge" style="font-family:var(--font-m);font-size:9px;color:#444;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis"></span>
           <button class="icon-btn" id="copybtn" onclick="copyFile()">⎘ Copy</button>
+          <button class="icon-btn" id="explain-btn" onclick="explainCurrentFile()" title="Ask AI to explain the currently viewed file">✦ Explain</button>
         </div>
       </div>
       <pre class="code-editor" id="code-out"><span style="color:var(--ink4);font-style:italic"># Fill in the form — output appears here in real time.</span></pre>
+      <div id="explain-panel" class="explain-panel" style="display:none">
+        <div class="explain-ph">
+          <span class="explain-ph-title">✦ AI Explanation</span>
+          <span id="explain-file-label" class="explain-ph-file"></span>
+          <button class="icon-btn" onclick="closeExplain()" style="padding:2px 8px;flex-shrink:0">✕ Close</button>
+        </div>
+        <div id="explain-body" class="explain-body"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -388,7 +441,65 @@ function gcpInfraOptions(selected='') {
 {% block product_orchestration %}{% endblock %}
 
 // ── Card toggle ───────────────────────────────────────────────────────────────
-function toggleCard(id) { document.getElementById(id)?.classList.toggle('open'); }
+const _cardOpen = {};
+function toggleCard(id) {
+  const el = document.getElementById(id);  if (!el) return;
+  el.classList.toggle('open');
+  _cardOpen[id] = el.classList.contains('open');
+}
+function toggleOptSection(headEl) {
+  headEl.closest('.section').classList.toggle('collapsed');
+}
+// ── Card drag-to-reorder ──────────────────────────────────────────────────────
+let _dragSrc = null;
+function onCardDragStart(e, arr, i, renderFn, prefix) {
+  if (!e.target.closest('.drag-handle')) { e.preventDefault(); return; }
+  _dragSrc = {arr, i, renderFn, prefix};
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(i));
+  e.currentTarget.classList.add('dragging');
+}
+function onCardDragOver(e, arr, i) {
+  if (!_dragSrc || _dragSrc.arr !== arr) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const {top, height} = e.currentTarget.getBoundingClientRect();
+  e.currentTarget.classList.toggle('drag-over-top',    e.clientY < top + height / 2);
+  e.currentTarget.classList.toggle('drag-over-bottom', e.clientY >= top + height / 2);
+}
+function onCardDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over-top', 'drag-over-bottom');
+}
+function onCardDrop(e, arr, i, renderFn, prefix) {
+  if (!_dragSrc || _dragSrc.arr !== arr) return;
+  e.preventDefault();
+  const from = _dragSrc.i;
+  const {top, height} = e.currentTarget.getBoundingClientRect();
+  let to = e.clientY < top + height / 2 ? i : i + 1;
+  if (from < to) to--;
+  e.currentTarget.classList.remove('drag-over-top', 'drag-over-bottom');
+  if (from === to) return;
+  const states = arr.map((_, j) => _cardOpen[prefix + j] ?? (j === 0));
+  arr.splice(to, 0, arr.splice(from, 1)[0]);
+  states.splice(to, 0, states.splice(from, 1)[0]);
+  states.forEach((s, j) => { _cardOpen[prefix + j] = s; });
+  renderFn();
+}
+function onCardDragEnd(e) {
+  _dragSrc = null;
+  document.querySelectorAll('.inst-card').forEach(c =>
+    c.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom'));
+}
+
+function _safeRender(containerId, html) {
+  const focusId = document.activeElement?.id;
+  const scrollY = window.scrollY;
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = html;
+  window.scrollTo(0, scrollY);
+  if (focusId) document.getElementById(focusId)?.focus();
+}
 
 // ── MW card toggle ────────────────────────────────────────────────────────────
 function toggleMWCard(p) {
@@ -591,31 +702,112 @@ function hl(code){
     .replace(/=\s*(-?\d+\.?\d*)\b/g,'= <span class="hnum">$1</span>');
 }
 
+// ── Terraform Explain ─────────────────────────────────────────────────────────
+async function explainCurrentFile(){
+  const btn   = document.getElementById('explain-btn');
+  const panel = document.getElementById('explain-panel');
+  const body  = document.getElementById('explain-body');
+  const lbl   = document.getElementById('explain-file-label');
+  const path  = document.getElementById('ep-path').innerText || 'main.tf';
+
+  // If panel is already open for the same file, just close it
+  if(panel.style.display !== 'none' && lbl.textContent === path){
+    closeExplain(); return;
+  }
+
+  btn.textContent = '⟳ …';
+  btn.disabled = true;
+  lbl.textContent = path;
+  body.innerHTML = '<span style="color:var(--ink4);font-style:italic">Generating explanation…</span>';
+  panel.style.display = 'flex';
+
+  const rawCode = await fetchFile(fkToApiPath(activeFile));
+  try{
+    const r = await fetch('/api/llm/explain',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:rawCode,filename:path})});
+    const d = await r.json();
+    if(d.error){body.innerHTML='<span style="color:var(--red)">Error: '+d.error+'</span>';}
+    else{body.textContent=d.explanation;}
+  }catch(e){
+    body.innerHTML='<span style="color:var(--red)">Network error: '+e.message+'</span>';
+  }finally{
+    btn.textContent='✦ Explain'; btn.disabled=false;
+  }
+}
+function closeExplain(){document.getElementById('explain-panel').style.display='none';}
+
 // ── LLM Prompt Templates ──────────────────────────────────────────────────────
 const LLM_TEMPLATES = [
-  {cloud:'aws',tag:'aws',title:'Quick start — AWS prod',desc:'Network + X11M infra + 16-core VM cluster in us-east-1',prompt:'Set up a production ODB@AWS environment in us-east-1 (AZ use1-az6). ODB network CIDRs 10.2.0.0/24 and 10.2.1.0/24. Exadata.X11M infra 2 compute 3 storage. VM cluster prod-vmcluster 16 CPU cores GI 23.0.0.0 hostname vm LICENSE_INCLUDED.'},
-  {cloud:'aws',tag:'aws',title:'Dev/test — small footprint',desc:'Minimal X9M + 8 cores for dev workloads',prompt:'Create a dev/test ODB@AWS setup in us-west-2 (AZ usw2-az3). Network CIDRs 10.10.0.0/24 and 10.10.1.0/24. Exadata.X9M infra 2 compute 3 storage. VM cluster dev-cluster 8 CPU cores GI 19.0.0.0 hostname dev BRING_YOUR_OWN_LICENSE.'},
-  {cloud:'aws',tag:'aws',title:'19c Database on VM Cluster',desc:'DB Home + CDB PROD19 + PDB SALESDB with auto-backup',prompt:'Add a 19c Oracle database on the first VM cluster. DB home display name dbhome19. CDB name PROD19 PDB name SALESDB character set AL32UTF8. Enable auto-backup SLOT_TWO window 14 day recovery.'},
-  {cloud:'aws',tag:'aws',title:'23c Database on VM Cluster',desc:'DB Home + CDB on latest Oracle 23c',prompt:'Add a 23c Oracle database on the first VM cluster. DB home named dbhome23. CDB name MYDB23 PDB name MYPDB23. No auto-backup.'},
-  {cloud:'aws',tag:'aws',title:'S3 + Zero-ETL access',desc:'Network with S3 and Zero-ETL access for data lake',prompt:'Create an ODB network in us-east-1 AZ use1-az6 CIDRs 10.4.0.0/24 and 10.4.1.0/24. Enable s3_access and zero_etl_access. Add Exadata.X11M infra and VM cluster 32 cores GI 23.0.0.0.'},
-  {cloud:'aws',tag:'aws',title:'Autonomous VM Cluster',desc:'40 cores/node, 5TB ADS, 2 CDBs',prompt:'Add an Autonomous VM Cluster named odb-avmcluster on the first infra and network. 40 CPU cores per node 5TB autonomous data storage 2 container databases memory 2GB per OCU LICENSE_INCLUDED. mTLS disabled.'},
-  {cloud:'aws',tag:'aws',title:'VPC peering connection',desc:'Peer the ODB network to an existing VPC',prompt:'Add a network peering connection named prod-peering connecting the ODB network to peer VPC vpc-0abc123456def7890.'},
-  {cloud:'aws',tag:'aws',title:'Multi-region DR',desc:'Second stack in us-west-2 for disaster recovery',prompt:'Create a second ODB@AWS disaster recovery stack in us-west-2 (AZ usw2-az3). Network CIDRs 10.3.0.0/24 and 10.3.1.0/24. Exadata.X11M infra named dr-exaInfra 2 compute 3 storage. VM cluster dr-vmcluster 16 cores GI 23.0.0.0 hostname drvm LICENSE_INCLUDED.'},
-  {cloud:'aws',tag:'aws',title:'BYOL licensing',desc:'Switch all clusters to Bring Your Own License',prompt:'Change the license model on all VM clusters and Autonomous VM clusters to BRING_YOUR_OWN_LICENSE.'},
-  {cloud:'gcp',tag:'gcp',title:'Quick start — GCP prod',desc:'ODB network + X9M infra + ExaDB cluster in us-east4',prompt:'Set up a production DB@GCP environment. ODB network my-odb-network in us-east4 project my-gcp-project VPC projects/my-gcp-project/global/networks/default CIDRs 10.5.0.0/24 and 10.5.1.0/24. Exadata.X9M infra gcp-infra 2 compute 3 storage. ExaDB cluster gcp-cluster 2 nodes 8 ECPU per node GI 23.0.0.0 hostname vm LICENSE_INCLUDED.'},
-  {cloud:'gcp',tag:'gcp',title:'Dev cluster — GCP',desc:'Minimal GCP setup for development',prompt:'Create a minimal DB@GCP dev setup in us-central1 project dev-project. ODB network dev-odb-net CIDRs 10.20.0.0/24 and 10.20.1.0/24. Exadata.X9M infra 2 compute 3 storage. ExaDB cluster dev-cluster 2 nodes 4 ECPU GI 19.0.0.0 hostname dev BRING_YOUR_OWN_LICENSE.'},
-  {cloud:'gcp',tag:'gcp',title:'EU region — GCP',desc:'DB@GCP in europe-west4',prompt:'Create a DB@GCP setup in europe-west4 project eu-project. ODB network eu-odb-net CIDRs 10.6.0.0/24 and 10.6.1.0/24. Exadata.X9M infra eu-exaInfra 2 compute 3 storage. ExaDB cluster eu-cluster 2 nodes 8 ECPU GI 23.0.0.0 hostname eu LICENSE_INCLUDED.'},
-  {cloud:'aws',tag:'both',title:'Reset to blank',desc:'Clear all resources and start fresh',prompt:'Remove all configured resources and reset to a blank AWS configuration with no networks infras clusters or databases.'},
-  {cloud:'aws',tag:'both',title:'Add maintenance window',desc:'Set custom weekly maintenance on Sunday 2–4am',prompt:'Update the Exadata infrastructure maintenance window to CUSTOM_PREFERENCE. Patching mode ROLLING. Schedule Sunday hours_of_day 2 week 1 of month.'},
+  // ── AWS — Networking ──
+  {cloud:'aws',tag:'aws',cat:'Networking',title:'Quick start — AWS prod',desc:'Network + X11M infra + 16-core VM cluster in us-east-1',prompt:'Set up a production ODB@AWS environment in us-east-1 (AZ use1-az6). ODB network CIDRs 10.2.0.0/24 and 10.2.1.0/24. Exadata.X11M infra 2 compute 3 storage. VM cluster prod-vmcluster 16 CPU cores GI 23.0.0.0 hostname vm LICENSE_INCLUDED.'},
+  {cloud:'aws',tag:'aws',cat:'Networking',title:'S3 + Zero-ETL access',desc:'Network with S3 and Zero-ETL enabled for data lake',prompt:'Create an ODB network in us-east-1 AZ use1-az6 CIDRs 10.4.0.0/24 and 10.4.1.0/24. Enable s3_access and zero_etl_access. Add Exadata.X11M infra and VM cluster 32 cores GI 23.0.0.0 hostname dl LICENSE_INCLUDED.'},
+  {cloud:'aws',tag:'aws',cat:'Networking',title:'Custom DNS prefix',desc:'ODB network with custom_domain_name',prompt:'Create an ODB network in us-east-1 AZ use1-az6 CIDRs 10.8.0.0/24 and 10.8.1.0/24. Set custom_domain_name to odb.corp.example.com. Add Exadata.X11M infra 2 compute 3 storage and VM cluster 16 cores GI 23.0.0.0.'},
+  {cloud:'aws',tag:'aws',cat:'Networking',title:'VPC peering connection',desc:'Peer the ODB network to an existing VPC',prompt:'Add a network peering connection named prod-peering connecting the ODB network to peer VPC vpc-0abc123456def7890. Add peer CIDR ranges 172.16.0.0/16 and 172.17.0.0/16.'},
+  {cloud:'aws',tag:'aws',cat:'Networking',title:'Multi-region DR',desc:'Second stack in us-west-2 for disaster recovery',prompt:'Create a second ODB@AWS disaster recovery stack in us-west-2 (AZ usw2-az3). Network CIDRs 10.3.0.0/24 and 10.3.1.0/24. Exadata.X11M infra named dr-exaInfra 2 compute 3 storage. VM cluster dr-vmcluster 16 cores GI 23.0.0.0 hostname drvm LICENSE_INCLUDED.'},
+
+  // ── AWS — Infra ──
+  {cloud:'aws',tag:'aws',cat:'Infra',title:'X11M — 4 compute nodes',desc:'High-compute X11M with 4 compute 6 storage servers',prompt:'Update the Exadata infrastructure to Exadata.X11M shape with 4 compute nodes and 6 storage nodes.'},
+  {cloud:'aws',tag:'aws',cat:'Infra',title:'Maintenance window — Sunday 2am',desc:'Custom weekly maintenance ROLLING patching',prompt:'Update the Exadata infrastructure maintenance window to CUSTOM_PREFERENCE patching mode ROLLING. Schedule Sunday hours_of_day 2 week 1 of month lead time 1 week.'},
+  {cloud:'aws',tag:'aws',cat:'Infra',title:'Maintenance window — Saturday off-hours',desc:'Custom Saturday 10pm maintenance window',prompt:'Set the Exadata infrastructure maintenance window to CUSTOM_PREFERENCE ROLLING. Schedule Saturday hours_of_day 22 every week of month.'},
+  {cloud:'aws',tag:'aws',cat:'Infra',title:'Customer contact for patching alerts',desc:'Add ops team email to infra customer_contacts',prompt:'Add customer contact alerts@mycompany.com to the Exadata infrastructure.'},
+
+  // ── AWS — VM Cluster ──
+  {cloud:'aws',tag:'aws',cat:'VM Cluster',title:'Dev/test — small footprint',desc:'Minimal X9M + 8 cores for dev workloads',prompt:'Create a dev/test ODB@AWS setup in us-west-2 (AZ usw2-az3). Network CIDRs 10.10.0.0/24 and 10.10.1.0/24. Exadata.X9M infra 2 compute 3 storage. VM cluster dev-cluster 8 CPU cores GI 19.0.0.0 hostname dev BRING_YOUR_OWN_LICENSE.'},
+  {cloud:'aws',tag:'aws',cat:'VM Cluster',title:'32-core production cluster',desc:'X11M 4c/6s with 32 CPU cores, 23c GI',prompt:'Add a second ODB network in us-east-1 AZ use1-az6 CIDRs 10.12.0.0/24 and 10.12.1.0/24. Add Exadata.X11M infra 4 compute 6 storage. VM cluster named prod-large 32 CPU cores GI 23.0.0.0 hostname plvm data_storage_size_in_tbs 20 memory_size_in_gbs 720 LICENSE_INCLUDED.'},
+  {cloud:'aws',tag:'aws',cat:'VM Cluster',title:'Custom SCAN listener port',desc:'Set scan_listener_port_tcp to 1522',prompt:'Set the VM cluster scan_listener_port_tcp to 1522.'},
+  {cloud:'aws',tag:'aws',cat:'VM Cluster',title:'BYOL — switch all clusters',desc:'Change all clusters to Bring Your Own License',prompt:'Change the license model on all VM clusters and Autonomous VM clusters to BRING_YOUR_OWN_LICENSE.'},
+  {cloud:'aws',tag:'aws',cat:'VM Cluster',title:'Enable DCO diagnostics',desc:'Turn on all three diagnostic/monitoring flags',prompt:'Enable dco_is_diagnostics_events_enabled, dco_is_health_monitoring_enabled, and dco_is_incident_logs_enabled on all VM clusters.'},
+  {cloud:'aws',tag:'aws',cat:'VM Cluster',title:'Large storage cluster',desc:'64 cores, 40TB data, 900GB node storage',prompt:'Create a VM cluster named dwh-cluster 64 CPU cores GI 23.0.0.0 hostname dwh data_storage_size_in_tbs 40 db_node_storage_size_in_gbs 900 memory_size_in_gbs 1440 LICENSE_INCLUDED.'},
+
+  // ── AWS — Autonomous VM Cluster ──
+  {cloud:'aws',tag:'aws',cat:'Autonomous',title:'Autonomous VM Cluster',desc:'40 cores/node, 5TB ADS, 2 CDBs',prompt:'Add an Autonomous VM Cluster named odb-avmcluster on the first infra and network. 40 CPU cores per node 5TB autonomous data storage 2 container databases memory 2GB per OCU LICENSE_INCLUDED. mTLS disabled.'},
+  {cloud:'aws',tag:'aws',cat:'Autonomous',title:'Large AVMC — 80 cores/node',desc:'80 cores, 20TB ADS, 4 CDBs, mTLS on',prompt:'Add an Autonomous VM Cluster named avmc-large on the first infra and network. 80 CPU cores per node 20TB autonomous data storage 4 container databases memory 4GB per OCU LICENSE_INCLUDED. Enable mTLS.'},
+  {cloud:'aws',tag:'aws',cat:'Autonomous',title:'AVMC — BYOL dev',desc:'16 cores, 2TB ADS, minimal dev AVMC',prompt:'Add an Autonomous VM Cluster named avmc-dev 16 CPU cores per node 2TB autonomous data storage 1 container database memory 2GB per OCU BRING_YOUR_OWN_LICENSE mTLS disabled.'},
+
+  // ── AWS — Database ──
+  {cloud:'aws',tag:'aws',cat:'Database',title:'19c DB + PDB + auto-backup',desc:'DB Home, CDB PROD19, PDB SALESDB, 14-day retention',prompt:'Add a 19c Oracle database on the first VM cluster. DB home display name dbhome19. CDB name PROD19 character set AL32UTF8 PDB name SALESDB. Enable auto-backup SLOT_TWO 14 day recovery window.'},
+  {cloud:'aws',tag:'aws',cat:'Database',title:'23c DB on VM Cluster',desc:'Latest Oracle 23c DB Home + CDB + PDB',prompt:'Add a 23c Oracle database on the first VM cluster. DB home named dbhome23. CDB name MYDB23 PDB name MYPDB23. No auto-backup.'},
+  {cloud:'aws',tag:'aws',cat:'Database',title:'19c BYOL + custom SID',desc:'19c DB with SID prefix and BYOL licensing',prompt:'Add a 19c Oracle database on the first VM cluster. DB home dbhome-byol. CDB name BYOLDB SID prefix BY PDB name BYLPDB. Auto-backup disabled. Use BRING_YOUR_OWN_LICENSE on the cluster.'},
+  {cloud:'aws',tag:'aws',cat:'Database',title:'Multi-PDB setup',desc:'CDB with 3 different PDB configurations',prompt:'Add three Oracle database entries on the first VM cluster. First: DB home dbhome1 CDB COREDB PDB COREAPP 23c auto-backup 7 days. Second: DB home dbhome2 CDB ANALYTDB PDB ANALYTIC 19c no backup. Third: DB home dbhome3 CDB DEVDB PDB DEVAPP 19c no backup.'},
+
+  // ── GCP — Networking ──
+  {cloud:'gcp',tag:'gcp',cat:'Networking',title:'Quick start — GCP prod',desc:'ODB network + X9M infra + ExaDB cluster in us-east4',prompt:'Set up a production DB@GCP environment. ODB network my-odb-network in us-east4 project my-gcp-project VPC projects/my-gcp-project/global/networks/default CIDRs 10.5.0.0/24 and 10.5.1.0/24. Exadata.X9M infra gcp-infra 2 compute 3 storage. ExaDB cluster gcp-cluster 2 nodes 8 ECPU per node GI 23.0.0.0 hostname vm LICENSE_INCLUDED.'},
+  {cloud:'gcp',tag:'gcp',cat:'Networking',title:'EU region — GCP',desc:'DB@GCP in europe-west4',prompt:'Create a DB@GCP setup in europe-west4 project eu-project. ODB network eu-odb-net CIDRs 10.6.0.0/24 and 10.6.1.0/24. Exadata.X9M infra eu-exaInfra 2 compute 3 storage. ExaDB cluster eu-cluster 2 nodes 8 ECPU GI 23.0.0.0 hostname eu LICENSE_INCLUDED.'},
+  {cloud:'gcp',tag:'gcp',cat:'Networking',title:'Asia Pacific — GCP',desc:'DB@GCP in asia-east1 (Taiwan)',prompt:'Create a DB@GCP setup in asia-east1 project apac-project. ODB network apac-odb-net CIDRs 10.7.0.0/24 and 10.7.1.0/24. Exadata.X9M infra apac-infra 2 compute 3 storage. ExaDB cluster apac-cluster 2 nodes 8 ECPU GI 23.0.0.0 hostname apac LICENSE_INCLUDED.'},
+
+  // ── GCP — Infra ──
+  {cloud:'gcp',tag:'gcp',cat:'Infra',title:'Dev cluster — GCP',desc:'Minimal GCP setup for development',prompt:'Create a minimal DB@GCP dev setup in us-central1 project dev-project. ODB network dev-odb-net CIDRs 10.20.0.0/24 and 10.20.1.0/24. Exadata.X9M infra 2 compute 3 storage. ExaDB cluster dev-cluster 2 nodes 4 ECPU GI 19.0.0.0 hostname dev BRING_YOUR_OWN_LICENSE.'},
+  {cloud:'gcp',tag:'gcp',cat:'Infra',title:'GCP maintenance window',desc:'Custom Saturday off-hours maintenance',prompt:'Set the GCP Exadata infrastructure maintenance window to CUSTOM_PREFERENCE ROLLING patching mode. Schedule Saturday hours_of_day 22 every week of month.'},
+
+  // ── GCP — VM Cluster ──
+  {cloud:'gcp',tag:'gcp',cat:'VM Cluster',title:'4-node high availability',desc:'4 nodes, 16 ECPU each — HA setup',prompt:'Set the ExaDB VM cluster to 4 nodes with 16 enabled ECPU per node. Keep all other settings. This is for a high-availability production workload.'},
+  {cloud:'gcp',tag:'gcp',cat:'VM Cluster',title:'Memory-optimized cluster',desc:'High memory_per_node_in_gbs for in-memory workloads',prompt:'Set the GCP ExaDB cluster to 2 nodes 16 ECPU per node memory_per_node_in_gbs 240 data_storage_size_in_tbs 10 vm_file_system_storage_size_gbs 200 GI 23.0.0.0 LICENSE_INCLUDED.'},
+  {cloud:'gcp',tag:'gcp',cat:'VM Cluster',title:'Custom SCAN listener port',desc:'Set scan listener port on GCP cluster',prompt:'Set the GCP ExaDB cluster scan_listener_port_tcp to 1522.'},
+  {cloud:'gcp',tag:'gcp',cat:'VM Cluster',title:'BYOL — GCP cluster',desc:'Switch GCP cluster to Bring Your Own License',prompt:'Change the GCP ExaDB VM cluster license_type to BRING_YOUR_OWN_LICENSE.'},
+  {cloud:'gcp',tag:'gcp',cat:'VM Cluster',title:'HIGH disk redundancy',desc:'Set disk_redundancy to HIGH (3-way mirror)',prompt:'Set disk_redundancy on the GCP ExaDB cluster to HIGH.'},
+
+  // ── GCP — Database ──
+  {cloud:'gcp',tag:'gcp',cat:'Database',title:'19c DB on GCP cluster',desc:'DB Home + CDB + PDB with auto-backup',prompt:'Add a 19c Oracle database on the first GCP ExaDB cluster. DB home dbhome19. CDB name GCPDB PDB name GCPPDB character set AL32UTF8. Enable auto-backup SLOT_TWO 14 day recovery.'},
+  {cloud:'gcp',tag:'gcp',cat:'Database',title:'23c DB on GCP cluster',desc:'Latest Oracle 23c on GCP ExaDB',prompt:'Add a 23c Oracle database on the first GCP ExaDB cluster. DB home dbhome23. CDB name GCP23DB PDB name GCP23PDB. No auto-backup.'},
+
+  // ── Both clouds ──
+  {cloud:'aws',tag:'both',cat:'Utility',title:'Reset to blank',desc:'Clear all resources and start fresh',prompt:'Remove all configured resources and reset to a blank configuration with no networks infras clusters or databases.'},
+  {cloud:'aws',tag:'both',cat:'Utility',title:'Enable all diagnostics',desc:'Turn on DCO monitoring across all resources',prompt:'Enable all diagnostic settings: dco_is_diagnostics_events_enabled, dco_is_health_monitoring_enabled, and dco_is_incident_logs_enabled on every VM cluster and infra.'},
 ];
 
+let _tplCat = 'All';
 function renderTemplates() {
   const grid = document.getElementById('llm-template-grid');
+  const pills = document.getElementById('llm-tpl-pills');
   if (!grid) return;
-  const filtered = LLM_TEMPLATES.filter(t => t.tag === 'both' || t.cloud === cloud);
-  grid.innerHTML = filtered.map(t => `
-    <button class="llm-tpl-card" onclick="useTemplate(${JSON.stringify(t.prompt).replace(/'/g,'&apos;')})">
-      <div><span class="llm-tpl-tag ${t.tag}">${t.tag.toUpperCase()}</span></div>
+  const forCloud = LLM_TEMPLATES.filter(t => t.tag === 'both' || t.cloud === cloud);
+  const cats = ['All', ...new Set(forCloud.map(t => t.cat))];
+  if (pills) pills.innerHTML = cats.map(c =>
+    `<button class="llm-tpl-pill${c===_tplCat?' active':''}" onclick="_tplCat='${c}';renderTemplates()">${c}</button>`
+  ).join('');
+  const show = _tplCat === 'All' ? forCloud : forCloud.filter(t => t.cat === _tplCat);
+  grid.innerHTML = show.map(t => `
+    <button class="llm-tpl-card" onclick="useTemplate(${JSON.stringify(t.prompt).replace(/"/g,'&quot;')})">
+      <div><span class="llm-tpl-tag ${t.tag}">${t.cat}</span></div>
       <div class="llm-tpl-title">${t.title}</div>
       <div class="llm-tpl-desc">${t.desc}</div>
     </button>`).join('');
@@ -628,7 +820,7 @@ function toggleTemplates() {
   panel.style.display = open ? 'block' : 'none';
   btn.style.borderColor = open ? '#7b42bc' : '#333';
   btn.style.color       = open ? '#b080e0' : '#666';
-  if (open) renderTemplates();
+  if (open) { _tplCat = 'All'; renderTemplates(); }
 }
 
 function useTemplate(prompt) {
@@ -686,10 +878,16 @@ async function sendLlmPrompt() {
       body: JSON.stringify({prompt, cloud, current: buildPayload()}),
     });
     const d = await r.json();
+    console.log('[LLM fill] response:', JSON.stringify(d, null, 2));
     if (d.error) {
       reply.textContent = '✗ ' + d.error; reply.style.color = '#c0392b';
     } else {
-      if (d.payload && Object.keys(d.payload).length) applyConfig(d.payload);
+      if (d.payload && Object.keys(d.payload).length) {
+        console.log('[LLM fill] applying payload keys:', Object.keys(d.payload));
+        applyConfig(d.payload);
+      } else {
+        console.warn('[LLM fill] payload empty or missing:', d.payload);
+      }
       reply.textContent = '✓ ' + (d.explanation || 'Done');
       reply.style.color = '#1a7a4a'; inp.value = '';
     }
@@ -708,11 +906,14 @@ async function initGithub() {
     const btn = document.getElementById('gh-push-btn');
     const badge = document.getElementById('gh-status-badge');
     if (d.configured) {
-      btn.style.display = '';
-      btn.style.borderColor = 'rgba(26,122,74,.4)';
-      btn.style.color = 'var(--green)';
+      btn.dataset.configured = 'true';
+      btn.classList.remove('muted');
+      btn.classList.add('green');
+      btn.title = `Push all Terraform files to ${d.repo} / ${d.branch}`;
       badge.textContent = `${d.repo} / ${d.branch}`;
       badge.style.color = '#2a7a4a';
+    } else {
+      btn.title = `Git push not configured — set GITHUB_TOKEN and GITHUB_REPO in .env: ${d.error||''}`;
     }
   } catch(e) {}
 }
@@ -720,6 +921,11 @@ async function initGithub() {
 async function pushToGithub() {
   const btn = document.getElementById('gh-push-btn');
   const badge = document.getElementById('gh-status-badge');
+  if (btn.dataset.configured !== 'true') {
+    badge.textContent = '✗ Not configured — add GITHUB_TOKEN and GITHUB_REPO to .env';
+    badge.style.color = '#c0392b';
+    return;
+  }
   const prev = btn.textContent;
   btn.disabled = true; btn.textContent = '↑ Pushing…';
   badge.textContent = ''; badge.style.color = '#555';
@@ -1120,7 +1326,6 @@ const TOOLTIPS = {
   'db_node_storage_size_in_gbs':    'Local DB node storage per VM in GiB. Used for OS, Grid Infrastructure, and database files. Minimum 60 GiB.',
   'memory_size_in_gbs':             'Total memory per VM in GiB. Minimum 30 GiB per VM. Must be a multiple of 1 GiB. More memory improves database performance.',
   'scan_listener_port_tcp':         'TCP port for the SCAN (Single Client Access Name) listener. Default 1521. Cannot be changed after creation. Ensure firewall allows this port.',
-  'system_version':                  'Operating system image version, e.g. <code>23.8.0.25.04</code>. Leave blank to use the latest validated OS image.',
   'is_local_backup_enabled':        'Enables backup to local Exadata storage. Faster recovery, but uses cluster storage capacity. Cannot be changed after creation.',
   'is_sparse_diskgroup_enabled':    'Enables sparse disk group for thin-provisioned clones (Oracle Multitenant). Cannot be changed after creation. Enable only if using snapshot-based cloning.',
   'location':                        'GCP region where this resource is created. Example: <code>us-east4</code>. Must match the zone of all dependent resources (subnets, infra, cluster).',
@@ -1194,6 +1399,41 @@ renderEditor();
 renderAll();
 initLlmBar();
 initGithub();
+
+// ── Panel resizer ─────────────────────────────────────────────────────────────
+(function() {
+  const app   = document.querySelector('.app');
+  const rz    = document.getElementById('panel-resizer');
+  if (!app || !rz) return;
+  const MIN = 280, MAX_FRAC = 0.82;
+  const saved = localStorage.getItem('tf-rhs-width');
+  if (saved) app.style.setProperty('--rhs-width', saved + 'px');
+  let startX, startW;
+  rz.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX;
+    startW = parseFloat(getComputedStyle(app).getPropertyValue('--rhs-width')) || 500;
+    rz.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  function onMove(e) {
+    const delta = startX - e.clientX;
+    const newW = Math.max(MIN, Math.min(window.innerWidth * MAX_FRAC, startW + delta));
+    app.style.setProperty('--rhs-width', newW + 'px');
+  }
+  function onUp() {
+    rz.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    const w = parseFloat(getComputedStyle(app).getPropertyValue('--rhs-width'));
+    if (w) localStorage.setItem('tf-rhs-width', Math.round(w));
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+})();
 </script>
 </body>
 </html>

@@ -155,6 +155,27 @@ function azOptionsHTML(id, regionVal, azVal, onchange) {
   return `<select id="${id}" class="ref-select" onchange="${onchange}">${opts}</select>`;
 }
 
+const VM_CLUSTER_TIMEZONES = [
+  { group: 'UTC',            zones: ['UTC'] },
+  { group: 'Americas',       zones: ['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Phoenix','America/Anchorage','America/Sao_Paulo','America/Toronto','America/Vancouver'] },
+  { group: 'Europe',         zones: ['Europe/London','Europe/Paris','Europe/Berlin','Europe/Amsterdam','Europe/Stockholm','Europe/Helsinki','Europe/Warsaw','Europe/Istanbul','Europe/Zurich','Europe/Rome'] },
+  { group: 'Asia Pacific',   zones: ['Asia/Tokyo','Asia/Seoul','Asia/Shanghai','Asia/Singapore','Asia/Hong_Kong','Asia/Kolkata','Asia/Dubai','Asia/Bangkok','Asia/Jakarta','Australia/Sydney','Australia/Melbourne','Pacific/Auckland'] },
+  { group: 'US Aliases',     zones: ['US/Eastern','US/Central','US/Mountain','US/Pacific'] },
+];
+
+function tzSelectHTML(id, value, onchange) {
+  let opts = `<option value="">— UTC (default) —</option>`;
+  VM_CLUSTER_TIMEZONES.forEach(g => {
+    opts += `<optgroup label="${g.group}">`;
+    g.zones.forEach(z => { opts += `<option value="${z}"${z === value ? ' selected' : ''}>${z}</option>`; });
+    opts += `</optgroup>`;
+  });
+  if (value && !VM_CLUSTER_TIMEZONES.flatMap(g => g.zones).includes(value)) {
+    opts += `<option value="${value}" selected>${value} (custom)</option>`;
+  }
+  return `<select id="${id}" class="ref-select" onchange="${onchange}">${opts}</select>`;
+}
+
 function onRegionChange(regionSelectId, azSelectId, readFn) {
   const regionEl = document.getElementById(regionSelectId);
   const azEl     = document.getElementById(azSelectId);
@@ -179,7 +200,7 @@ let awsOciDbs = [];
 // ── Defaults factories ────────────────────────────────────────────────────────
 function defAwsNet(i)     { return {module_name: i===0?'odb_network':`odb_network_${i+1}`,    display_name:'',availability_zone_id:'',client_subnet_cidr:'',backup_subnet_cidr:'',s3_access:false,zero_etl_access:false,availability_zone:'',region:'',default_dns_prefix:'',custom_domain_name:'',delete_associated_resources:false,tags:{}}; }
 function defAwsInfra(i)   { return {module_name: i===0?'odb_exaInfra':`odb_exaInfra_${i+1}`,      display_name:'',shape:'Exadata.X11M',availability_zone_id:'',compute_count:2,storage_count:3,database_server_type:'',storage_server_type:'',customer_contacts:[],mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',tags:{}}; }
-function defAwsCluster(i) { return {module_name: i===0?'odb_vmcluster':`odb_vmcluster_${i+1}`,    display_name:'',cpu_core_count:16,gi_version:'',hostname_prefix:'',license_model:'LICENSE_INCLUDED',vm_mode:'arn',cloud_exadata_infrastructure_id:'',odb_network_id:'',cloud_exadata_infrastructure_arn:'',odb_network_arn:'',infra_ref:'',network_ref:'',ssh_public_keys:[],db_servers:[],db_servers_mode:'auto',dco_is_diagnostics_events_enabled:true,dco_is_health_monitoring_enabled:true,dco_is_incident_logs_enabled:true,cluster_name:'',timezone:'',data_storage_size_in_tbs:'',db_node_storage_size_in_gbs:'',memory_size_in_gbs:'',scan_listener_port_tcp:'',system_version:'',is_local_backup_enabled:false,is_sparse_diskgroup_enabled:false,region:'',tags:{}}; }
+function defAwsCluster(i) { return {module_name: i===0?'odb_vmcluster':`odb_vmcluster_${i+1}`,    display_name:'',cpu_core_count:16,gi_version:'',hostname_prefix:'',license_model:'LICENSE_INCLUDED',vm_mode:'arn',cloud_exadata_infrastructure_id:'',odb_network_id:'',cloud_exadata_infrastructure_arn:'',odb_network_arn:'',infra_ref:'',network_ref:'',ssh_public_keys:[],db_servers:[],db_servers_mode:'auto',dco_is_diagnostics_events_enabled:true,dco_is_health_monitoring_enabled:true,dco_is_incident_logs_enabled:true,cluster_name:'',timezone:'',data_storage_size_in_tbs:'',db_node_storage_size_in_gbs:'',memory_size_in_gbs:'',scan_listener_port_tcp:'',is_local_backup_enabled:false,is_sparse_diskgroup_enabled:false,region:'',tags:{}}; }
 function defAwsAvmc(i)    { return {module_name: i===0?'odb_avmcluster':`odb_avmcluster_${i+1}`, display_name:'',autonomous_data_storage_size_in_tbs:5,cpu_core_count_per_node:40,memory_per_oracle_compute_unit_in_gbs:2,total_container_databases:2,scan_listener_port_non_tls:1521,scan_listener_port_tls:2484,license_model:'LICENSE_INCLUDED',is_mtls_enabled_vm_cluster:false,infra_ref:'',network_ref:'',db_servers:[],db_servers_mode:'auto',description:'',time_zone:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,tags:{}}; }
 function defAwsOciDb(i)   { return {module_name: i===0?'oci_database':`oci_database_${i+1}`, vmcluster_ref:'', db_home_display_name:'dbhome', db_version:'19.0.0.0', db_name:'MYDB', character_set:'AL32UTF8', ncharacter_set:'AL16UTF16', pdb_name:'MYPDB', db_unique_name:'', sid_prefix:'', create_pdb:true, auto_backup_enabled:false, auto_backup_window:'SLOT_TWO', recovery_window_in_days:7}; }
 function defAwsPeering(i)   { return {module_name: i===0?'odb_peering':`odb_peering_${i+1}`,     display_name:'',peer_network_id:'',network_ref:'',region:'',peer_network_cidrs:[],tags:{}}; }
@@ -191,6 +212,17 @@ function addAwsCluster() { awsClusters.push(defAwsCluster(awsClusters.length)); 
 function addAwsAvmc()    { awsAvmcs.push(defAwsAvmc(awsAvmcs.length));          renderAwsAvmcs();    refresh(); }
 function addAwsOciDb()   { awsOciDbs.push(defAwsOciDb(awsOciDbs.length));       renderAwsOciDbs();   refresh(); }
 function addAwsPeering() { awsPeerings.push(defAwsPeering(awsPeerings.length)); renderAwsPeerings(); refresh(); }
+
+function addContactToInfra(i) {
+  const el = document.getElementById(`ai${i}_ccin`);
+  const email = el ? el.value.trim() : '';
+  if (!email) return;
+  if (!awsInfras[i].customer_contacts) awsInfras[i].customer_contacts = [];
+  awsInfras[i].customer_contacts.push(email);
+  el.value = '';
+  renderAwsInfras();
+  refresh();
+}
 
 function removeInst(arr, i, renderFn) { arr.splice(i,1); renderFn(); refresh(); }
 
@@ -262,7 +294,6 @@ function readAwsCluster(i) {
     db_node_storage_size_in_gbs: fv(`${p}dng`),
     memory_size_in_gbs: fv(`${p}mem`),
     scan_listener_port_tcp: fv(`${p}scan`),
-    system_version: fv(`${p}sv`),
     is_local_backup_enabled: fcb(`${p}lb`),
     is_sparse_diskgroup_enabled: fcb(`${p}sp`),
     region: fv(`${p}reg`),
@@ -325,9 +356,10 @@ function readAwsOciDb(i) {
 
 // ── Card HTML builders ────────────────────────────────────────────────────────
 function awsNetCardHTML(d, i) {
-  const p=`an${i}_`, open=i===0?'open':'';
-  return `<div class="inst-card ${open}" id="an-card-${i}">
+  const p=`an${i}_`, open=(_cardOpen[`an-card-${i}`]??i===0)?'open':'';
+  return `<div class="inst-card ${open}" id="an-card-${i}" draggable="true" ondragstart="onCardDragStart(event,awsNets,${i},renderAwsNets,'an-card-')" ondragover="onCardDragOver(event,awsNets,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,awsNets,${i},renderAwsNets,'an-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('an-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -350,7 +382,7 @@ function awsNetCardHTML(d, i) {
         <div class="field"><div class="field-lbl">zero_etl_access</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}zetl" ${d.zero_etl_access?'checked':''} onchange="readAwsNet(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl" id="${p}zetll">${d.zero_etl_access?'ENABLED':'DISABLED'}</span></div></div>
       </div>
     </div>
-    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
       <div class="g2">
         <div class="field"><div class="field-lbl">default_dns_prefix</div><input type="text" id="${p}dns" value="${d.default_dns_prefix||''}" placeholder="myodb" oninput="if(this.value){var o=document.getElementById('${p}cdn');if(o)o.value='';} readAwsNet(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">custom_domain_name</div><input type="text" id="${p}cdn" value="${d.custom_domain_name||''}" placeholder="myodb.corp.example.com" oninput="if(this.value){var o=document.getElementById('${p}dns');if(o)o.value='';} readAwsNet(${i});refresh()"></div>
@@ -362,10 +394,11 @@ function awsNetCardHTML(d, i) {
 }
 
 function awsInfraCardHTML(d, i) {
-  const p=`ai${i}_`, open=i===0?'open':'';
+  const p=`ai${i}_`, open=(_cardOpen[`ai-card-${i}`]??i===0)?'open':'';
   const isCust = d.mw_preference==='CUSTOM_PREFERENCE';
-  return `<div class="inst-card ${open}" id="ai-card-${i}">
+  return `<div class="inst-card ${open}" id="ai-card-${i}" draggable="true" ondragstart="onCardDragStart(event,awsInfras,${i},renderAwsInfras,'ai-card-')" ondragover="onCardDragOver(event,awsInfras,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,awsInfras,${i},renderAwsInfras,'ai-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('ai-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -388,17 +421,26 @@ function awsInfraCardHTML(d, i) {
         <div class="field"><div class="field-lbl">storage_count <span class="req-star">*</span></div><div class="field-hint">Min 3</div><input type="number" id="${p}sc" value="${d.storage_count||3}" min="3" oninput="readAwsInfra(${i});refresh()"></div>
       </div>
     </div>
-    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
       <div class="g2">
         <div class="field"><div class="field-lbl">database_server_type</div><input type="text" id="${p}dst" value="${d.database_server_type||''}" placeholder="X11M" oninput="readAwsInfra(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">storage_server_type</div><input type="text" id="${p}sst" value="${d.storage_server_type||''}" placeholder="X11M-HC" oninput="readAwsInfra(${i});refresh()"></div>
+      </div>
+      <div class="field">
+        <div class="field-lbl">customer_contacts_to_send_to_oci</div>
+        <div class="field-hint">Email addresses Oracle support will use for infrastructure notifications.</div>
+        <div class="chip-list">${(d.customer_contacts||[]).map((e,ci)=>`<span class="chip"><span>${e}</span><button class="chip-rm" onclick="awsInfras[${i}].customer_contacts.splice(${ci},1);renderAwsInfras();refresh()">×</button></span>`).join('')}</div>
+        <div class="chip-add-row">
+          <input type="email" id="${p}ccin" placeholder="ops@example.com">
+          <button class="add-btn" onclick="addContactToInfra(${i})">+ Add Email</button>
+        </div>
       </div>
     </div>
     <div class="section"><div class="section-head"><div class="section-title">Maintenance Window</div><span class="badge-req">required block</span><div class="section-line"></div></div>
       <div class="inner-card">
         <div class="g2">
           <div class="field"><div class="field-lbl">preference</div><select id="${p}mwp" onchange="readAwsInfra(${i});toggleMWCard('${p}');refresh()"><option value="NO_PREFERENCE"${!isCust?' selected':''}>NO_PREFERENCE</option><option value="CUSTOM_PREFERENCE"${isCust?' selected':''}>CUSTOM_PREFERENCE</option></select></div>
-          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAwsInfra(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NONROLLING'?' selected':''}>ROLLING</option><option value="NONROLLING"${d.mw_patching_mode==='NONROLLING'?' selected':''}>NONROLLING</option></select></div>
+          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAwsInfra(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NON_ROLLING'?' selected':''}>ROLLING</option><option value="NON_ROLLING"${d.mw_patching_mode==='NON_ROLLING'?' selected':''}>NON_ROLLING</option></select></div>
         </div>
         <div id="${p}mwcustom" style="${isCust?'':'display:none'}; margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
           <div class="g3">
@@ -418,12 +460,13 @@ function awsInfraCardHTML(d, i) {
 }
 
 function awsClusterCardHTML(d, i) {
-  const p=`ac${i}_`, open=i===0?'open':'';
+  const p=`ac${i}_`, open=(_cardOpen[`ac-card-${i}`]??i===0)?'open':'';
   const infOpts = infraOptions(d.infra_ref);
   const netOpts = netOptions(d.network_ref);
   const sshChips = (d.ssh_public_keys||[]).map((k,ki)=>`<span class="chip"><span>${k.substring(0,40)}…</span><button class="chip-rm" onclick="awsClusters[${i}].ssh_public_keys.splice(${ki},1);renderAwsClusters();refresh()">×</button></span>`).join('');
-  return `<div class="inst-card ${open}" id="ac-card-${i}">
+  return `<div class="inst-card ${open}" id="ac-card-${i}" draggable="true" ondragstart="onCardDragStart(event,awsClusters,${i},renderAwsClusters,'ac-card-')" ondragover="onCardDragOver(event,awsClusters,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,awsClusters,${i},renderAwsClusters,'ac-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('ac-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -478,27 +521,34 @@ function awsClusterCardHTML(d, i) {
           <button class="add-btn" style="height:32px;white-space:nowrap" onclick="addDbServerToCluster(${i})">+ Add</button>
         </div>`}
       </div>
+      <div class="g3">
+        <div class="field"><div class="field-lbl">data_storage_size_in_tbs <span class="req-star">*</span></div><div class="field-hint">Min 2 TB</div><input type="number" id="${p}ds" value="${d.data_storage_size_in_tbs||''}" placeholder="2" step="0.5" min="2" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">memory_size_in_gbs <span class="req-star">*</span></div><div class="field-hint">Total memory in GB</div><input type="number" id="${p}mem" value="${d.memory_size_in_gbs||''}" placeholder="60" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">db_node_storage_size_in_gbs <span class="req-star">*</span></div><div class="field-hint">Local node storage</div><input type="number" id="${p}dng" value="${d.db_node_storage_size_in_gbs||''}" placeholder="120" oninput="readAwsCluster(${i});refresh()"></div>
+      </div>
       <div class="inner-card"><div class="g3">
         <div class="field"><div class="field-lbl" style="font-size:10px">is_diagnostics_events_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcodiag" ${d.dco_is_diagnostics_events_enabled!==false?'checked':''} onchange="readAwsCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_is_diagnostics_events_enabled!==false?'true':'false'}</span></div></div>
         <div class="field"><div class="field-lbl" style="font-size:10px">is_health_monitoring_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcohealth" ${d.dco_is_health_monitoring_enabled!==false?'checked':''} onchange="readAwsCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_is_health_monitoring_enabled!==false?'true':'false'}</span></div></div>
         <div class="field"><div class="field-lbl" style="font-size:10px">is_incident_logs_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcologs" ${d.dco_is_incident_logs_enabled!==false?'checked':''} onchange="readAwsCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_is_incident_logs_enabled!==false?'true':'false'}</span></div></div>
       </div></div>
-    </div>
-    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
-      <div class="g2"><div class="field"><div class="field-lbl">cluster_name</div><input type="text" id="${p}cn" value="${d.cluster_name||''}" placeholder="gic-prod" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">timezone</div><input type="text" id="${p}tz" value="${d.timezone||''}" placeholder="UTC" oninput="readAwsCluster(${i});refresh()"></div></div>
-      <div class="g3"><div class="field"><div class="field-lbl">data_storage_size_in_tbs</div><input type="number" id="${p}ds" value="${d.data_storage_size_in_tbs||''}" placeholder="2" step="0.5" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">db_node_storage_size_in_gbs</div><input type="number" id="${p}dng" value="${d.db_node_storage_size_in_gbs||''}" placeholder="120" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">memory_size_in_gbs</div><input type="number" id="${p}mem" value="${d.memory_size_in_gbs||''}" placeholder="60" oninput="readAwsCluster(${i});refresh()"></div></div>
-      <div class="g2"><div class="field"><div class="field-lbl">system_version</div><input type="text" id="${p}sv" value="${d.system_version||''}" placeholder="23.8.0.25.04" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">region</div><input type="text" id="${p}reg" value="${d.region||''}" placeholder="us-west-2" oninput="readAwsCluster(${i});refresh()"></div></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+      <div class="g2"><div class="field"><div class="field-lbl">cluster_name</div><input type="text" id="${p}cn" value="${d.cluster_name||''}" placeholder="gic-prod" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">timezone</div>${tzSelectHTML(`${p}tz`, d.timezone||'', `readAwsCluster(${i});refresh()`)}</div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">scan_listener_port_tcp</div><div class="field-hint">Default 1521, range 1024–8999</div><input type="number" id="${p}scan" value="${d.scan_listener_port_tcp||''}" placeholder="1521" min="1024" max="8999" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">region</div><div class="field-hint">ODB@AWS live regions</div>${regionSelectHTML(`${p}reg`, d.region||'', `readAwsCluster(${i});refresh()`)}</div>
+      </div>
     </div>
   </div>
 </div>`;
 }
 
 function awsAvmcCardHTML(d, i) {
-  const p = `av${i}_`, open = i===0 ? 'open' : '';
+  const p = `av${i}_`, open = (_cardOpen[`av-card-${i}`]??i===0) ? 'open' : '';
   const infOpts = infraOptions(d.infra_ref);
   const netOpts = netOptions(d.network_ref);
-  return `<div class="inst-card ${open}" id="av-card-${i}">
+  return `<div class="inst-card ${open}" id="av-card-${i}" draggable="true" ondragstart="onCardDragStart(event,awsAvmcs,${i},renderAwsAvmcs,'av-card-')" ondragover="onCardDragOver(event,awsAvmcs,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,awsAvmcs,${i},renderAwsAvmcs,'av-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('av-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -560,7 +610,7 @@ function awsAvmcCardHTML(d, i) {
       </div>
     </div>
 
-    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
       <div class="g2">
         <div class="field"><div class="field-lbl">description</div><input type="text" id="${p}desc" value="${d.description||''}" placeholder="" oninput="readAwsAvmc(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">time_zone</div><input type="text" id="${p}tz" value="${d.time_zone||''}" placeholder="UTC" oninput="readAwsAvmc(${i});refresh()"></div>
@@ -569,7 +619,7 @@ function awsAvmcCardHTML(d, i) {
         <div class="section-head" style="margin-bottom:8px"><div class="section-title" style="font-size:11px">Maintenance Window</div><div class="section-line"></div></div>
         <div class="g2">
           <div class="field"><div class="field-lbl">preference</div><select id="${p}mwpref" onchange="readAwsAvmc(${i});refresh()"><option value="NO_PREFERENCE"${(d.mw_preference||'NO_PREFERENCE')==='NO_PREFERENCE'?' selected':''}>NO_PREFERENCE</option><option value="CUSTOM_PREFERENCE"${d.mw_preference==='CUSTOM_PREFERENCE'?' selected':''}>CUSTOM_PREFERENCE</option></select></div>
-          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAwsAvmc(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NONROLLING'?' selected':''}>ROLLING</option><option value="NONROLLING"${d.mw_patching_mode==='NONROLLING'?' selected':''}>NONROLLING</option></select></div>
+          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAwsAvmc(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NON_ROLLING'?' selected':''}>ROLLING</option><option value="NON_ROLLING"${d.mw_patching_mode==='NON_ROLLING'?' selected':''}>NON_ROLLING</option></select></div>
         </div>
         <div class="g2">
           <div class="field"><div class="field-lbl">is_custom_action_timeout_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}mwcat" ${d.mw_is_custom_action_timeout_enabled?'checked':''} onchange="readAwsAvmc(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.mw_is_custom_action_timeout_enabled?'true':'false'}</span></div></div>
@@ -582,10 +632,11 @@ function awsAvmcCardHTML(d, i) {
 }
 
 function awsOciDbCardHTML(d, i) {
-  const p = `od${i}_`, open = i===0 ? 'open' : '';
+  const p = `od${i}_`, open = (_cardOpen[`od-card-${i}`]??i===0) ? 'open' : '';
   const vcOpts = awsClusters.map(c=>`<option value="${c.module_name}"${c.module_name===d.vmcluster_ref?' selected':''}>${c.module_name}</option>`).join('') || '<option value="">— add VM Cluster first —</option>';
-  return `<div class="inst-card ${open}" id="od-card-${i}">
+  return `<div class="inst-card ${open}" id="od-card-${i}" draggable="true" ondragstart="onCardDragStart(event,awsOciDbs,${i},renderAwsOciDbs,'od-card-')" ondragover="onCardDragOver(event,awsOciDbs,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,awsOciDbs,${i},renderAwsOciDbs,'od-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('od-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -633,11 +684,12 @@ function awsOciDbCardHTML(d, i) {
 }
 
 function awsPeeringCardHTML(d, i) {
-  const p=`ap${i}_`, open=i===0?'open':'';
+  const p=`ap${i}_`, open=(_cardOpen[`ap-card-${i}`]??i===0)?'open':'';
   const netOpts = netOptions(d.network_ref);
   const cidrChips = (d.peer_network_cidrs||[]).map((c,ci)=>`<span class="chip"><span>${c}</span><button class="chip-rm" onclick="awsPeerings[${i}].peer_network_cidrs.splice(${ci},1);renderAwsPeerings();refresh()">×</button></span>`).join('');
-  return `<div class="inst-card ${open}" id="ap-card-${i}">
+  return `<div class="inst-card ${open}" id="ap-card-${i}" draggable="true" ondragstart="onCardDragStart(event,awsPeerings,${i},renderAwsPeerings,'ap-card-')" ondragover="onCardDragOver(event,awsPeerings,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,awsPeerings,${i},renderAwsPeerings,'ap-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('ap-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -651,7 +703,7 @@ function awsPeeringCardHTML(d, i) {
       <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="odb-peering-conn" oninput="readAwsPeering(${i});refresh()"></div>
       <div class="field"><div class="field-lbl">peer_network_id <span class="req-star">*</span></div><div class="field-hint">ID of the peer AWS VPC e.g. <code>vpc-0abc123</code></div><input type="text" id="${p}peerid" value="${d.peer_network_id||''}" placeholder="vpc-0abc123" oninput="readAwsPeering(${i});refresh()"></div>
     </div>
-    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
       <div class="field"><div class="field-lbl">region</div><input type="text" id="${p}reg" value="${d.region||''}" placeholder="us-east-1" oninput="readAwsPeering(${i});refresh()"></div>
       <div class="field"><div class="field-lbl">peer_network_cidrs</div><div class="field-hint">Only supported during update operations, not during initial creation.</div>
         <div class="chip-list">${cidrChips}</div>
@@ -667,35 +719,29 @@ function awsPeeringCardHTML(d, i) {
 
 // ── Render functions ──────────────────────────────────────────────────────────
 function renderAwsPeerings() {
-  const el=document.getElementById('aws-peering-list'); if(!el)return;
-  el.innerHTML=awsPeerings.map((d,i)=>awsPeeringCardHTML(d,i)).join('');
+  _safeRender('aws-peering-list', awsPeerings.map((d,i)=>awsPeeringCardHTML(d,i)).join(''));
   const cl=document.getElementById('aws-peering-count'); if(cl) cl.textContent=`${awsPeerings.length} peering${awsPeerings.length!==1?'s':''}`;
   updateTree(); injectTooltips();
 }
 function renderAwsNets() {
-  const el=document.getElementById('aws-net-list'); if(!el)return;
-  el.innerHTML=awsNets.map((d,i)=>awsNetCardHTML(d,i)).join('');
+  _safeRender('aws-net-list', awsNets.map((d,i)=>awsNetCardHTML(d,i)).join(''));
   const cl=document.getElementById('aws-net-count'); if(cl) cl.textContent=`${awsNets.length} network${awsNets.length!==1?'s':''}`;
   updateTree(); injectTooltips();
   _renderClusterAndPeeringDropdowns();
 }
 function renderAwsInfras() {
-  const el=document.getElementById('aws-infra-list'); if(!el)return;
-  el.innerHTML=awsInfras.map((d,i)=>awsInfraCardHTML(d,i)).join('');
+  _safeRender('aws-infra-list', awsInfras.map((d,i)=>awsInfraCardHTML(d,i)).join(''));
   const cl=document.getElementById('aws-infra-count'); if(cl) cl.textContent=`${awsInfras.length} infra${awsInfras.length!==1?'s':''}`;
   updateTree(); injectTooltips();
   _renderClusterAndPeeringDropdowns();
 }
 function renderAwsClusters() {
-  const el=document.getElementById('aws-cluster-list'); if(!el)return;
-  el.innerHTML=awsClusters.map((d,i)=>awsClusterCardHTML(d,i)).join('');
+  _safeRender('aws-cluster-list', awsClusters.map((d,i)=>awsClusterCardHTML(d,i)).join(''));
   const cl=document.getElementById('aws-cluster-count'); if(cl) cl.textContent=`${awsClusters.length} cluster${awsClusters.length!==1?'s':''}`;
   updateTree(); injectTooltips();
 }
 function renderAwsAvmcs() {
-  const el = document.getElementById('aws-avmc-list');
-  if (!el) return;
-  el.innerHTML = awsAvmcs.map((d,i) => awsAvmcCardHTML(d,i)).join('');
+  _safeRender('aws-avmc-list', awsAvmcs.map((d,i) => awsAvmcCardHTML(d,i)).join(''));
   const ct = document.getElementById('aws-avmc-count');
   if (ct) ct.textContent = awsAvmcs.length > 1 ? `${awsAvmcs.length} instances` : '';
   _renderAvmcDropdowns();
@@ -710,9 +756,7 @@ function _renderAvmcDropdowns() {
   });
 }
 function renderAwsOciDbs() {
-  const el = document.getElementById('aws-ocidb-list');
-  if (!el) return;
-  el.innerHTML = awsOciDbs.map((d,i) => awsOciDbCardHTML(d,i)).join('');
+  _safeRender('aws-ocidb-list', awsOciDbs.map((d,i) => awsOciDbCardHTML(d,i)).join(''));
   const ct = document.getElementById('aws-ocidb-count');
   if (ct) ct.textContent = awsOciDbs.length > 1 ? `${awsOciDbs.length} instances` : '';
 }
@@ -781,13 +825,15 @@ function buildPayload() {
 }
 
 function applyConfig(doc) {
-  if (doc.aws_networks && doc.aws_networks.length) {
-    awsNets     = doc.aws_networks.map((d,i) => ({...defAwsNet(i), ...d}));
-    awsInfras   = doc.aws_infras   && doc.aws_infras.length   ? doc.aws_infras.map((d,i)   => ({...defAwsInfra(i),   ...d})) : [defAwsInfra(0)];
-    awsPeerings = doc.aws_peerings && doc.aws_peerings.length ? doc.aws_peerings.map((d,i) => ({...defAwsPeering(i), ...d})) : [defAwsPeering(0)];
-    awsClusters = doc.aws_clusters && doc.aws_clusters.length ? doc.aws_clusters.map((d,i) => ({...defAwsCluster(i), ...d})) : [defAwsCluster(0)];
-    awsAvmcs    = doc.aws_avmclusters && doc.aws_avmclusters.length ? doc.aws_avmclusters.map((d,i) => ({...defAwsAvmc(i), ...d})) : [];
-    awsOciDbs   = doc.aws_oci_databases && doc.aws_oci_databases.length ? doc.aws_oci_databases.map((d,i) => ({...defAwsOciDb(i), ...d})) : [];
+  const AWS_ARRAY_KEYS = ['aws_networks','aws_infras','aws_peerings','aws_clusters','aws_avmclusters','aws_oci_databases'];
+  const hasNewFormat = AWS_ARRAY_KEYS.some(k => doc[k] && doc[k].length);
+  if (hasNewFormat) {
+    if (doc.aws_networks     && doc.aws_networks.length)      awsNets     = doc.aws_networks.map((d,i)      => ({...defAwsNet(i),     ...d}));
+    if (doc.aws_infras       && doc.aws_infras.length)        awsInfras   = doc.aws_infras.map((d,i)        => ({...defAwsInfra(i),   ...d}));
+    if (doc.aws_peerings     && doc.aws_peerings.length)      awsPeerings = doc.aws_peerings.map((d,i)      => ({...defAwsPeering(i), ...d}));
+    if (doc.aws_clusters     && doc.aws_clusters.length)      awsClusters = doc.aws_clusters.map((d,i)      => ({...defAwsCluster(i), ...d}));
+    if (doc.aws_avmclusters  && doc.aws_avmclusters.length)   awsAvmcs    = doc.aws_avmclusters.map((d,i)   => ({...defAwsAvmc(i),   ...d}));
+    if (doc.aws_oci_databases && doc.aws_oci_databases.length) awsOciDbs  = doc.aws_oci_databases.map((d,i) => ({...defAwsOciDb(i),  ...d}));
   } else {
     const d0 = doc.module_0 || {}, d1 = doc.module_1 || {}, d2 = doc.module_2 || {}, d3 = doc.module_3 || {};
     const mn = doc.module_names || {};

@@ -158,7 +158,7 @@ let gcpNets = [], gcpInfras = [], gcpClusters = [], gcpOciDbs = [];
 function defGcpOciDb(i)   { return {module_name: i===0?'gcp_oci_database':`gcp_oci_database_${i+1}`, vmcluster_ref:'', db_home_display_name:'dbhome', db_version:'19.0.0.0', db_name:'MYDB', character_set:'AL32UTF8', ncharacter_set:'AL16UTF16', pdb_name:'MYPDB', db_unique_name:'', sid_prefix:'', create_pdb:true, auto_backup_enabled:false, auto_backup_window:'SLOT_TWO', recovery_window_in_days:7}; }
 function defGcpNet(i)     { return {module_name: i===0?'gcp_network':`gcp_network_${i+1}`, odb_network_id:'',location:'',network:'',project:'',gcp_oracle_zone:'',deletion_protection:true,client_subnet_module:i===0?'gcp_client_subnet':`gcp_client_subnet_${i+1}`,backup_subnet_module:i===0?'gcp_backup_subnet':`gcp_backup_subnet_${i+1}`,client_subnet_id:i===0?'gcp-client-subnet':`gcp-client-subnet-${i+1}`,client_cidr:'',backup_subnet_id:i===0?'gcp-backup-subnet':`gcp-backup-subnet-${i+1}`,backup_cidr:'',labels:{}}; }
 function defGcpInfra(i)   { return {module_name: i===0?'gcp_infra':`gcp_infra_${i+1}`,     cloud_exadata_infrastructure_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',shape:'Exadata.X9M',compute_count:2,storage_count:3,total_storage_size_gb:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',deletion_protection:true,labels:{}}; }
-function defGcpCluster(i) { return {module_name: i===0?'gcp_cluster':`gcp_cluster_${i+1}`, exadb_vm_cluster_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',gi_version:'',hostname_prefix:'',license_type:'LICENSE_INCLUDED',node_count:2,enabled_ecpu_count_per_node:8,additional_ecpu_count_per_node:0,vm_file_system_storage_size_gbs:60,ssh_public_keys:[],db_servers:[],dco_diagnostics:true,dco_health:true,dco_incident_logs:true,cluster_name:'',time_zone:'',system_version:'',memory_per_node_in_gbs:'',db_node_storage_size_per_vm_in_gbs:'',data_storage_size_in_tbs:'',spare_snapshot_space_in_gbs:'',disk_redundancy:'',network_ref:'',client_subnet_ref:'',backup_subnet_ref:'',infra_ref:'',deletion_protection:true,labels:{}}; }
+function defGcpCluster(i) { return {module_name: i===0?'gcp_cluster':`gcp_cluster_${i+1}`, exadb_vm_cluster_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',grid_image_id:'',exascale_db_storage_vault:'',shape_attribute:'SMART_STORAGE',hostname_prefix:'',license_type:'LICENSE_INCLUDED',node_count:2,enabled_ecpu_count_per_node:8,additional_ecpu_count_per_node:0,vm_file_system_storage_size_gbs:60,ssh_public_keys:[],db_servers:[],dco_diagnostics:true,dco_health:true,dco_incident_logs:true,cluster_name:'',time_zone:'',memory_per_node_in_gbs:'',db_node_storage_size_per_vm_in_gbs:'',data_storage_size_in_tbs:'',spare_snapshot_space_in_gbs:'',disk_redundancy:'',network_ref:'',client_subnet_ref:'',backup_subnet_ref:'',infra_ref:'',deletion_protection:true,labels:{}}; }
 
 // ── Card add helpers ──────────────────────────────────────────────────────────
 function addGcpNet()     { gcpNets.push(defGcpNet(gcpNets.length));           renderGcpNets();     refresh(); }
@@ -221,7 +221,9 @@ function readGcpCluster(i) {
     location:      fv(`${p}loc`),
     gcp_oracle_zone: fv(`${p}zone`),
     project:       fv(`${p}proj`),
-    gi_version:    fv(`${p}gi`),
+    grid_image_id: fv(`${p}gi`),
+    exascale_db_storage_vault: fv(`${p}esv`),
+    shape_attribute: fv(`${p}sha`) || 'SMART_STORAGE',
     hostname_prefix: fv(`${p}hp`),
     license_type:  fv(`${p}lt`) || 'LICENSE_INCLUDED',
     node_count:    parseInt(fv(`${p}nc`)) || 2,
@@ -237,7 +239,6 @@ function readGcpCluster(i) {
     dco_incident_logs: fcb(`${p}dcoL`),
     cluster_name:  fv(`${p}cn`),
     time_zone:     fv(`${p}tz`),
-    system_version: fv(`${p}sv`),
     memory_per_node_in_gbs: fv(`${p}mem`),
     db_node_storage_size_per_vm_in_gbs: fv(`${p}dng`),
     data_storage_size_in_tbs: fv(`${p}dstb`),
@@ -277,9 +278,10 @@ function readGcpOciDb(i) {
 
 // ── Card HTML builders ────────────────────────────────────────────────────────
 function gcpNetCardHTML(d, i) {
-  const p=`gn${i}_`, open=i===0?'open':'';
-  return `<div class="inst-card ${open}" id="gn-card-${i}">
+  const p=`gn${i}_`, open=(_cardOpen[`gn-card-${i}`]??i===0)?'open':'';
+  return `<div class="inst-card ${open}" id="gn-card-${i}" draggable="true" ondragstart="onCardDragStart(event,gcpNets,${i},renderGcpNets,'gn-card-')" ondragover="onCardDragOver(event,gcpNets,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,gcpNets,${i},renderGcpNets,'gn-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('gn-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -318,10 +320,11 @@ function gcpNetCardHTML(d, i) {
 }
 
 function gcpInfraCardHTML(d, i) {
-  const p=`gi${i}_`, open=i===0?'open':'';
+  const p=`gi${i}_`, open=(_cardOpen[`gi-card-${i}`]??i===0)?'open':'';
   const isCust = d.mw_preference==='CUSTOM_PREFERENCE';
-  return `<div class="inst-card ${open}" id="gi-card-${i}">
+  return `<div class="inst-card ${open}" id="gi-card-${i}" draggable="true" ondragstart="onCardDragStart(event,gcpInfras,${i},renderGcpInfras,'gi-card-')" ondragover="onCardDragOver(event,gcpInfras,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,gcpInfras,${i},renderGcpInfras,'gi-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('gi-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -340,7 +343,7 @@ function gcpInfraCardHTML(d, i) {
         <div class="field"><div class="field-lbl">storage_count <span class="req-star">*</span></div><div class="field-hint">Min 3</div><input type="number" id="${p}sc" value="${d.storage_count||3}" min="3" oninput="readGcpInfra(${i});refresh()"></div>
       </div>
     </div>
-    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
       <div class="field"><div class="field-lbl">display_name</div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="My Exadata Infra" oninput="readGcpInfra(${i});refresh()"></div>
       <div class="g2">
         <div class="field"><div class="field-lbl">gcp_oracle_zone</div>${gcpZoneOptionsHTML(`${p}zone`, d.location||'', d.gcp_oracle_zone||'', `readGcpInfra(${i});refresh()`)}</div>
@@ -352,7 +355,7 @@ function gcpInfraCardHTML(d, i) {
       <div class="inner-card">
         <div class="g2">
           <div class="field"><div class="field-lbl">preference</div><select id="${p}mwp" onchange="readGcpInfra(${i});toggleMWCard('${p}');refresh()"><option value="NO_PREFERENCE"${!isCust?' selected':''}>NO_PREFERENCE</option><option value="CUSTOM_PREFERENCE"${isCust?' selected':''}>CUSTOM_PREFERENCE</option></select></div>
-          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readGcpInfra(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NONROLLING'?' selected':''}>ROLLING</option><option value="NONROLLING"${d.mw_patching_mode==='NONROLLING'?' selected':''}>NONROLLING</option></select></div>
+          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readGcpInfra(${i});refresh()"><option value="ROLLING"${d.mw_patching_mode!=='NON_ROLLING'?' selected':''}>ROLLING</option><option value="NON_ROLLING"${d.mw_patching_mode==='NON_ROLLING'?' selected':''}>NON_ROLLING</option></select></div>
         </div>
         <div id="${p}mwcustom" style="${isCust?'':'display:none'}; margin-top:12px; padding-top:12px; border-top:1px solid var(--line)">
           <div class="g3">
@@ -372,12 +375,13 @@ function gcpInfraCardHTML(d, i) {
 }
 
 function gcpClusterCardHTML(d, i) {
-  const p=`gc${i}_`, open=i===0?'open':'';
+  const p=`gc${i}_`, open=(_cardOpen[`gc-card-${i}`]??i===0)?'open':'';
   const infOpts = gcpInfraOptions(d.infra_ref);
   const netOpts = gcpNetOptions(d.network_ref);
   const sshChips = (d.ssh_public_keys||[]).map((k,ki)=>`<span class="chip"><span>${k.substring(0,40)}…</span><button class="chip-rm" onclick="gcpClusters[${i}].ssh_public_keys.splice(${ki},1);renderGcpClusters();refresh()">×</button></span>`).join('');
-  return `<div class="inst-card ${open}" id="gc-card-${i}">
+  return `<div class="inst-card ${open}" id="gc-card-${i}" draggable="true" ondragstart="onCardDragStart(event,gcpClusters,${i},renderGcpClusters,'gc-card-')" ondragover="onCardDragOver(event,gcpClusters,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,gcpClusters,${i},renderGcpClusters,'gc-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('gc-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -398,8 +402,10 @@ function gcpClusterCardHTML(d, i) {
         <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="My VM Cluster" oninput="readGcpCluster(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${gcpRegionSelectHTML(`${p}loc`, d.location||'', `onGcpRegionChange('${p}loc','${p}zone',()=>readGcpCluster(${i}))`)}<div id="${p}loc-oci-hint">${gcpOciHintHTML(d.location||'')}</div></div>
       </div>
+      <div class="field"><div class="field-lbl">grid_image_id <span class="req-star">*</span></div><div class="field-hint">projects/P/locations/L/giVersions/V/dbServerVersions/D</div><input type="text" id="${p}gi" value="${d.grid_image_id||''}" placeholder="projects/my-proj/locations/us-east4/giVersions/23.0.0.0/dbServerVersions/23.0.0.0.0" oninput="readGcpCluster(${i});refresh()"></div>
+      <div class="field"><div class="field-lbl">exascale_db_storage_vault <span class="req-star">*</span></div><div class="field-hint">projects/P/locations/L/exascaleDbStorageVaults/V</div><input type="text" id="${p}esv" value="${d.exascale_db_storage_vault||''}" placeholder="projects/my-proj/locations/us-east4/exascaleDbStorageVaults/my-vault" oninput="readGcpCluster(${i});refresh()"></div>
       <div class="g2">
-        <div class="field"><div class="field-lbl">gi_version <span class="req-star">*</span></div><input type="text" id="${p}gi" value="${d.gi_version||''}" placeholder="23.0.0.0" oninput="readGcpCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">shape_attribute <span class="req-star">*</span></div><select id="${p}sha" onchange="readGcpCluster(${i});refresh()"><option value="SMART_STORAGE"${(d.shape_attribute||'SMART_STORAGE')==='SMART_STORAGE'?' selected':''}>SMART_STORAGE</option><option value="BLOCK_STORAGE"${d.shape_attribute==='BLOCK_STORAGE'?' selected':''}>BLOCK_STORAGE</option></select></div>
         <div class="field"><div class="field-lbl">hostname_prefix <span class="req-star">*</span></div><div class="field-hint">Max 12 chars</div><input type="text" id="${p}hp" value="${d.hostname_prefix||''}" placeholder="vm" oninput="readGcpCluster(${i});refresh()"></div>
       </div>
       <div class="g3">
@@ -422,7 +428,7 @@ function gcpClusterCardHTML(d, i) {
         </div>
       </div>
     </div>
-    <div class="section"><div class="section-head"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
       <div class="g3">
         <div class="field"><div class="field-lbl">additional_ecpu_count_per_node</div><input type="number" id="${p}aecpu" value="${d.additional_ecpu_count_per_node||0}" min="0" step="4" oninput="readGcpCluster(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">vm_file_system_storage_size_gbs</div><input type="number" id="${p}fsgbs" value="${d.vm_file_system_storage_size_gbs||60}" min="60" max="900" oninput="readGcpCluster(${i});refresh()"></div>
@@ -453,10 +459,11 @@ function gcpClusterCardHTML(d, i) {
 }
 
 function gcpOciDbCardHTML(d, i) {
-  const p = `go${i}_`, open = i===0 ? 'open' : '';
+  const p = `go${i}_`, open = (_cardOpen[`go-card-${i}`]??i===0) ? 'open' : '';
   const vcOpts = gcpClusters.map(c=>`<option value="${c.module_name}"${c.module_name===d.vmcluster_ref?' selected':''}>${c.module_name}</option>`).join('') || '<option value="">— add VM Cluster first —</option>';
-  return `<div class="inst-card ${open}" id="go-card-${i}">
+  return `<div class="inst-card ${open}" id="go-card-${i}" draggable="true" ondragstart="onCardDragStart(event,gcpOciDbs,${i},renderGcpOciDbs,'go-card-')" ondragover="onCardDragOver(event,gcpOciDbs,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,gcpOciDbs,${i},renderGcpOciDbs,'go-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('go-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
     <span class="inst-num">${i+1}</span>
     <span class="inst-modname">${d.module_name}</span>
     <span class="inst-chevron">▼</span>
@@ -505,29 +512,25 @@ function gcpOciDbCardHTML(d, i) {
 
 // ── Render functions ──────────────────────────────────────────────────────────
 function renderGcpNets() {
-  const el=document.getElementById('gcp-net-list'); if(!el)return;
-  el.innerHTML=gcpNets.map((d,i)=>gcpNetCardHTML(d,i)).join('');
+  _safeRender('gcp-net-list', gcpNets.map((d,i)=>gcpNetCardHTML(d,i)).join(''));
   const cl=document.getElementById('gcp-net-count'); if(cl) cl.textContent=`${gcpNets.length} network${gcpNets.length!==1?'s':''}`;
   updateTree(); injectTooltips();
   _renderGcpClusterDropdowns();
 }
 function renderGcpInfras() {
-  const el=document.getElementById('gcp-infra-list'); if(!el)return;
-  el.innerHTML=gcpInfras.map((d,i)=>gcpInfraCardHTML(d,i)).join('');
+  _safeRender('gcp-infra-list', gcpInfras.map((d,i)=>gcpInfraCardHTML(d,i)).join(''));
   const cl=document.getElementById('gcp-infra-count'); if(cl) cl.textContent=`${gcpInfras.length} infra${gcpInfras.length!==1?'s':''}`;
   updateTree(); injectTooltips();
   _renderGcpClusterDropdowns();
 }
 function renderGcpClusters() {
-  const el=document.getElementById('gcp-cluster-list'); if(!el)return;
-  el.innerHTML=gcpClusters.map((d,i)=>gcpClusterCardHTML(d,i)).join('');
+  _safeRender('gcp-cluster-list', gcpClusters.map((d,i)=>gcpClusterCardHTML(d,i)).join(''));
   const cl=document.getElementById('gcp-cluster-count'); if(cl) cl.textContent=`${gcpClusters.length} cluster${gcpClusters.length!==1?'s':''}`;
   updateTree(); injectTooltips();
   _renderGcpOciDbClusterDropdowns();
 }
 function renderGcpOciDbs() {
-  const el = document.getElementById('gcp-ocidb-list'); if (!el) return;
-  el.innerHTML = gcpOciDbs.map((d,i) => gcpOciDbCardHTML(d,i)).join('');
+  _safeRender('gcp-ocidb-list', gcpOciDbs.map((d,i) => gcpOciDbCardHTML(d,i)).join(''));
   const ct = document.getElementById('gcp-ocidb-count');
   if (ct) ct.textContent = gcpOciDbs.length > 1 ? `${gcpOciDbs.length} instances` : '';
   updateTree(); injectTooltips();
@@ -595,11 +598,13 @@ function buildPayload() {
 }
 
 function applyConfig(doc) {
-  if (doc.gcp_networks && doc.gcp_networks.length) {
-    gcpNets     = doc.gcp_networks.map((d,i) => ({...defGcpNet(i),     ...d}));
-    gcpInfras   = doc.gcp_infras   && doc.gcp_infras.length   ? doc.gcp_infras.map((d,i)   => ({...defGcpInfra(i),   ...d})) : [defGcpInfra(0)];
-    gcpClusters = doc.gcp_clusters && doc.gcp_clusters.length ? doc.gcp_clusters.map((d,i) => ({...defGcpCluster(i), ...d})) : [defGcpCluster(0)];
-    gcpOciDbs   = doc.gcp_oci_databases && doc.gcp_oci_databases.length ? doc.gcp_oci_databases.map((d,i) => ({...defGcpOciDb(i), ...d})) : [];
+  const GCP_ARRAY_KEYS = ['gcp_networks','gcp_infras','gcp_clusters','gcp_oci_databases'];
+  const hasNewFormat = GCP_ARRAY_KEYS.some(k => doc[k] && doc[k].length);
+  if (hasNewFormat) {
+    if (doc.gcp_networks     && doc.gcp_networks.length)      gcpNets     = doc.gcp_networks.map((d,i)     => ({...defGcpNet(i),     ...d}));
+    if (doc.gcp_infras       && doc.gcp_infras.length)        gcpInfras   = doc.gcp_infras.map((d,i)       => ({...defGcpInfra(i),   ...d}));
+    if (doc.gcp_clusters     && doc.gcp_clusters.length)      gcpClusters = doc.gcp_clusters.map((d,i)     => ({...defGcpCluster(i), ...d}));
+    if (doc.gcp_oci_databases && doc.gcp_oci_databases.length) gcpOciDbs  = doc.gcp_oci_databases.map((d,i) => ({...defGcpOciDb(i), ...d}));
   } else {
     const d0 = doc.gcp_module_0 || {}, d1 = doc.gcp_module_1 || {}, d2 = doc.gcp_module_2 || {};
     const d3 = doc.gcp_module_3 || {}, d4 = doc.gcp_module_4 || {};

@@ -139,7 +139,9 @@ def gcp_cluster(module_name='gcp_cluster', net_module='gcp_network', infra_modul
         'location': 'us-east4',
         'gcp_oracle_zone': 'us-east4-b-r1',
         'project': 'my-proj',
-        'gi_version': '23.0.0.0',
+        'grid_image_id': 'projects/my-proj/locations/us-east4/giVersions/23.0.0.0/dbServerVersions/23.0.0.0.0',
+        'exascale_db_storage_vault': 'projects/my-proj/locations/us-east4/exascaleDbStorageVaults/my-vault',
+        'shape_attribute': 'SMART_STORAGE',
         'hostname_prefix': 'vm',
         'license_type': 'LICENSE_INCLUDED',
         'node_count': 2,
@@ -613,9 +615,9 @@ class TestGcpVmCluster(unittest.TestCase):
         out = gcp1_main(self.mn)
         self.assertIn('google_oracle_database_exadb_vm_cluster', out)
 
-    def test_vars_contains_gi_version(self):
+    def test_vars_contains_grid_image_id(self):
         out = gcp1_vars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
-        self.assertIn('gi_version', out)
+        self.assertIn('grid_image_id', out)
 
     def test_vars_contains_node_count(self):
         out = gcp1_vars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
@@ -633,9 +635,9 @@ class TestGcpVmCluster(unittest.TestCase):
         out = gcp1_tfvars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
         self.assertIn('my-cluster', out)
 
-    def test_tfvars_contains_gi_version(self):
+    def test_tfvars_contains_grid_image_id(self):
         out = gcp1_tfvars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
-        self.assertIn('23.0.0.0', out)
+        self.assertIn('grid_image_id', out)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1992,3 +1994,256 @@ class TestTerraformValidate(unittest.TestCase):
             'gcp_infras':    [gcp_infra('ginf1')],
             'gcp_clusters':  [gcp_cluster('gcl1', 'gnet1', 'ginf1')],
         }))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  RAG — BM25 retrieval engine
+# ══════════════════════════════════════════════════════════════════════════════
+
+import rag as rag_module
+
+
+class TestRagEngine(unittest.TestCase):
+    """Unit tests for rag.py — BM25 index building and retrieval."""
+
+    def setUp(self):
+        # Point RAG at a fresh temp directory so tests don't pollute data/
+        self._tmpdir = tempfile.TemporaryDirectory()
+        tmp = Path(self._tmpdir.name)
+        self._orig_docs     = rag_module.DOCS_DIR
+        self._orig_index    = rag_module.INDEX_PATH
+        self._orig_chroma   = rag_module.CHROMA_PATH
+        self._orig_provider = os.environ.pop('EMBEDDING_PROVIDER', '')
+        rag_module.DOCS_DIR    = tmp / 'rag_docs'
+        rag_module.INDEX_PATH  = tmp / 'rag_index.json'
+        rag_module.CHROMA_PATH = tmp / 'chroma'
+        rag_module.DOCS_DIR.mkdir()
+        rag_module.invalidate_cache()
+
+        # Write two tiny knowledge docs
+        (rag_module.DOCS_DIR / 'aws_network.md').write_text(
+            'ODB Network resource aws_odb_network. '
+            'Required fields: display_name client_subnet_cidr backup_subnet_cidr. '
+            'Outputs: network_id network_name.',
+            encoding='utf-8',
+        )
+        (rag_module.DOCS_DIR / 'vm_cluster.md').write_text(
+            'VM Cluster resource aws_odb_cloud_vm_cluster. '
+            'Required: cpu_core_count gi_version hostname_prefix license_model. '
+            'gi_version valid values: 23.0.0.0.0 21.0.0.0.0 19.0.0.0.0.',
+            encoding='utf-8',
+        )
+
+    def tearDown(self):
+        rag_module.DOCS_DIR    = self._orig_docs
+        rag_module.INDEX_PATH  = self._orig_index
+        rag_module.CHROMA_PATH = self._orig_chroma
+        if self._orig_provider:
+            os.environ['EMBEDDING_PROVIDER'] = self._orig_provider
+        rag_module.invalidate_cache()
+        self._tmpdir.cleanup()
+
+    # ── rebuild ───────────────────────────────────────────────────────────────
+
+    def test_rebuild_returns_positive_chunk_count(self):
+        n = rag_module.rebuild()
+        self.assertGreater(n, 0)
+
+    def test_rebuild_creates_index_file(self):
+        rag_module.rebuild()
+        self.assertTrue(rag_module.INDEX_PATH.exists())
+
+    def test_rebuild_index_has_expected_keys(self):
+        rag_module.rebuild()
+        idx = json.loads(rag_module.INDEX_PATH.read_text(encoding='utf-8'))
+        for key in ('chunks', 'idf', 'avg_len', 'n_docs'):
+            self.assertIn(key, idx)
+
+    def test_rebuild_indexes_both_docs(self):
+        rag_module.rebuild()
+        idx = json.loads(rag_module.INDEX_PATH.read_text(encoding='utf-8'))
+        sources = {c['source'] for c in idx['chunks']}
+        self.assertIn('aws_network.md', sources)
+        self.assertIn('vm_cluster.md', sources)
+
+    def test_rebuild_empty_docs_returns_zero(self):
+        for f in rag_module.DOCS_DIR.iterdir():
+            f.unlink()
+        n = rag_module.rebuild()
+        self.assertEqual(n, 0)
+
+    # ── retrieve ──────────────────────────────────────────────────────────────
+
+    def test_retrieve_returns_list(self):
+        rag_module.rebuild()
+        results = rag_module.retrieve('cpu_core_count', k=5)
+        self.assertIsInstance(results, list)
+
+    def test_retrieve_relevant_chunk_for_network_query(self):
+        rag_module.rebuild()
+        results = rag_module.retrieve('odb network display name subnet cidr', k=5)
+        self.assertTrue(len(results) > 0)
+        sources = [c['source'] for c in results]
+        self.assertIn('aws_network.md', sources)
+
+    def test_retrieve_relevant_chunk_for_vmcluster_query(self):
+        rag_module.rebuild()
+        results = rag_module.retrieve('vm cluster gi_version cpu_core_count', k=5)
+        self.assertTrue(len(results) > 0)
+        sources = [c['source'] for c in results]
+        self.assertIn('vm_cluster.md', sources)
+
+    def test_retrieve_nonsense_query_returns_empty(self):
+        rag_module.rebuild()
+        results = rag_module.retrieve('xyzzy foobar qux quux', k=5)
+        self.assertEqual(results, [])
+
+    def test_retrieve_respects_k(self):
+        rag_module.rebuild()
+        results = rag_module.retrieve('network cluster', k=1)
+        self.assertLessEqual(len(results), 1)
+
+    def test_retrieve_chunk_has_required_keys(self):
+        rag_module.rebuild()
+        results = rag_module.retrieve('network', k=3)
+        for chunk in results:
+            for key in ('id', 'source', 'text'):
+                self.assertIn(key, chunk)
+
+    # ── build_context ─────────────────────────────────────────────────────────
+
+    def test_build_context_returns_string(self):
+        rag_module.rebuild()
+        ctx = rag_module.build_context('odb network subnet')
+        self.assertIsInstance(ctx, str)
+
+    def test_build_context_nonempty_for_known_query(self):
+        rag_module.rebuild()
+        ctx = rag_module.build_context('odb network subnet')
+        self.assertTrue(len(ctx) > 0)
+
+    def test_build_context_contains_source_header(self):
+        rag_module.rebuild()
+        ctx = rag_module.build_context('odb network subnet')
+        self.assertIn('[aws_network.md]', ctx)
+
+    def test_build_context_empty_for_nonsense(self):
+        rag_module.rebuild()
+        ctx = rag_module.build_context('xyzzy foobar qux')
+        self.assertEqual(ctx, '')
+
+    # ── index_stats ───────────────────────────────────────────────────────────
+
+    def test_index_stats_returns_dict(self):
+        rag_module.rebuild()
+        stats = rag_module.index_stats()
+        self.assertIsInstance(stats, dict)
+
+    def test_index_stats_has_required_keys(self):
+        rag_module.rebuild()
+        stats = rag_module.index_stats()
+        for key in ('n_chunks', 'n_docs', 'n_terms', 'index_path', 'docs_dir'):
+            self.assertIn(key, stats)
+
+    def test_index_stats_n_chunks_positive(self):
+        rag_module.rebuild()
+        stats = rag_module.index_stats()
+        self.assertGreater(stats['n_chunks'], 0)
+
+    def test_index_stats_n_terms_positive(self):
+        rag_module.rebuild()
+        stats = rag_module.index_stats()
+        self.assertGreater(stats['n_terms'], 0)
+
+
+class TestRagApiRoutes(unittest.TestCase):
+    """Integration tests for /api/rag/* Flask routes."""
+
+    def setUp(self):
+        app.config['TESTING'] = True
+        self.client = app.test_client()
+        # Force BM25 so tests don't require Ollama to be running
+        self._orig_provider = os.environ.pop('EMBEDDING_PROVIDER', '')
+        rag_module.invalidate_cache()
+        rag_module.rebuild()
+
+    def tearDown(self):
+        if self._orig_provider:
+            os.environ['EMBEDDING_PROVIDER'] = self._orig_provider
+        rag_module.invalidate_cache()
+
+    # ── /api/rag/stats ────────────────────────────────────────────────────────
+
+    def test_rag_stats_returns_200(self):
+        r = self.client.get('/api/rag/stats')
+        self.assertEqual(r.status_code, 200)
+
+    def test_rag_stats_has_n_chunks(self):
+        r = self.client.get('/api/rag/stats')
+        data = r.get_json()
+        self.assertIn('n_chunks', data)
+        self.assertGreater(data['n_chunks'], 0)
+
+    def test_rag_stats_has_n_docs(self):
+        r = self.client.get('/api/rag/stats')
+        data = r.get_json()
+        self.assertIn('n_docs', data)
+
+    # ── /api/rag/rebuild ──────────────────────────────────────────────────────
+
+    def test_rag_rebuild_returns_200(self):
+        r = self.client.post('/api/rag/rebuild')
+        self.assertEqual(r.status_code, 200)
+
+    def test_rag_rebuild_ok_true(self):
+        r = self.client.post('/api/rag/rebuild')
+        data = r.get_json()
+        self.assertTrue(data.get('ok'))
+
+    def test_rag_rebuild_has_chunks_indexed(self):
+        r = self.client.post('/api/rag/rebuild')
+        data = r.get_json()
+        self.assertIn('chunks_indexed', data)
+        self.assertGreater(data['chunks_indexed'], 0)
+
+    # ── /api/rag/search ───────────────────────────────────────────────────────
+
+    def test_rag_search_returns_200(self):
+        r = self.client.post('/api/rag/search',
+                             json={'query': 'vm cluster cpu_core_count'})
+        self.assertEqual(r.status_code, 200)
+
+    def test_rag_search_has_results_key(self):
+        r = self.client.post('/api/rag/search',
+                             json={'query': 'vm cluster cpu_core_count'})
+        data = r.get_json()
+        self.assertIn('results', data)
+
+    def test_rag_search_results_are_list(self):
+        r = self.client.post('/api/rag/search',
+                             json={'query': 'vm cluster cpu_core_count'})
+        data = r.get_json()
+        self.assertIsInstance(data['results'], list)
+
+    def test_rag_search_result_has_fields(self):
+        r = self.client.post('/api/rag/search',
+                             json={'query': 'odb network display_name'})
+        data = r.get_json()
+        if data['results']:
+            hit = data['results'][0]
+            for key in ('id', 'source', 'text'):
+                self.assertIn(key, hit)
+
+    def test_rag_search_missing_query_returns_400(self):
+        r = self.client.post('/api/rag/search', json={})
+        self.assertEqual(r.status_code, 400)
+
+    def test_rag_search_empty_query_returns_400(self):
+        r = self.client.post('/api/rag/search', json={'query': '   '})
+        self.assertEqual(r.status_code, 400)
+
+    def test_rag_search_respects_k_param(self):
+        r = self.client.post('/api/rag/search',
+                             json={'query': 'network cluster infra', 'k': 2})
+        data = r.get_json()
+        self.assertLessEqual(len(data['results']), 2)

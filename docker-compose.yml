@@ -64,6 +64,11 @@ services:
     environment:
       COUCHDB_URL: http://${COUCHDB_USER:-admin}:${COUCHDB_PASSWORD:-changeme}@couchdb:5984
       COUCHDB_DB: ${COUCHDB_DB:-terraflow_studio_configs}
+      # When running with --profile ollama, override localhost with the container name.
+      # Ignored when EMBEDDING_PROVIDER is not set to ollama.
+      EMBEDDING_BASE_URL: http://ollama:11434
+      # Uncomment to also use Ollama as the LLM provider inside Docker:
+      # LLM_BASE_URL: http://ollama:11434/api/chat
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:5000/"]
       interval: 30s
@@ -72,5 +77,59 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  # ── Ollama ────────────────────────────────────────────────────────────────────
+  # Optional — only starts when you add --profile ollama:
+  #   docker compose --profile ollama up -d --build
+  #
+  # Set in .env to activate:
+  #   EMBEDDING_PROVIDER=ollama
+  #   LLM_PROVIDER=ollama   (optional — only if you also want Ollama as the LLM)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: terraflow-ollama
+    profiles: [ollama]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    # ── GPU acceleration (NVIDIA) — uncomment to enable ───────────────────────
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── Ollama model pull (runs once, then exits) ─────────────────────────────────
+  # Pulls the embedding model and the configured LLM model on first start.
+  # Re-running is safe — already-present models are skipped instantly.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: terraflow-ollama-init
+    profiles: [ollama]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "==> Pulling embedding model: ${EMBEDDING_MODEL:-nomic-embed-text}" &&
+        ollama pull ${EMBEDDING_MODEL:-nomic-embed-text} &&
+        echo "==> Pulling LLM model: ${LLM_MODEL:-llama3.2}" &&
+        ollama pull ${LLM_MODEL:-llama3.2} &&
+        echo "==> Models ready."
+    restart: "no"
+
 volumes:
   couchdb-data:
+  ollama-data:

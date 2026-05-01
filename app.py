@@ -34,6 +34,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from store import storage
 import llm as llm_module
 import github as github_module
+import rag as rag_module
 
 app = Flask(__name__)
 
@@ -595,7 +596,9 @@ def _gcp1_ctx(d, mn0='', mn1='', mn2='', mn3='', defaults=False):
         exainfra_is_literal=bool(exa_infra) and not is_ref(exa_infra),
         project=d.get('project', ''),
         deletion_protection=tf_bool(d.get('deletion_protection', True)),
-        gi_version=d.get('gi_version', ''),
+        grid_image_id=d.get('grid_image_id', ''),
+        exascale_db_storage_vault=d.get('exascale_db_storage_vault', ''),
+        shape_attribute=d.get('shape_attribute', 'SMART_STORAGE'),
         hostname_prefix=d.get('hostname_prefix', ''),
         license_type=d.get('license_type', 'LICENSE_INCLUDED'),
         cluster_name=d.get('cluster_name', ''),
@@ -608,7 +611,6 @@ def _gcp1_ctx(d, mn0='', mn1='', mn2='', mn3='', defaults=False):
         dco_health=tf_bool(d.get('dco_health', True)),
         dco_incident_logs=tf_bool(d.get('dco_incident_logs', True)),
         time_zone=d.get('time_zone', ''),
-        system_version=d.get('system_version', ''),
         memory_per_node_in_gbs=int(d.get('memory_per_node_in_gbs', 0) or 0),
         db_node_storage_size_per_vm_in_gbs=int(d.get('db_node_storage_size_per_vm_in_gbs', 0) or 0),
         data_storage_size_in_tbs=int(d.get('data_storage_size_in_tbs', 0) or 0),
@@ -774,7 +776,9 @@ def _gcp_cluster_defaults(d, first_net=None, first_infra=None):
         'exadb_vm_cluster_id': d.get('exadb_vm_cluster_id') or 'my-exadb-cluster',
         'display_name': d.get('display_name') or 'my-exadb-vm-cluster',
         'gcp_oracle_zone': d.get('gcp_oracle_zone') or '',
-        'gi_version': d.get('gi_version') or '23.0.0.0',
+        'grid_image_id': d.get('grid_image_id') or '',
+        'exascale_db_storage_vault': d.get('exascale_db_storage_vault') or '',
+        'shape_attribute': d.get('shape_attribute') or 'SMART_STORAGE',
         'hostname_prefix': d.get('hostname_prefix') or 'vm',
         'license_type': d.get('license_type') or 'LICENSE_INCLUDED',
         'node_count': int(d.get('node_count') or 2),
@@ -1034,24 +1038,113 @@ def api_llm_fill():
     if not prompt:
         return jsonify({'error': 'prompt is required'}), 400
     system_msg = """You are a Terraform infrastructure assistant for Oracle Database@AWS and DB@GCP.
-Interpret a natural-language infrastructure request and return a valid Terraflow Studio payload JSON.
-The payload schema includes: cloud, aws_networks, aws_infras, aws_peerings, aws_clusters, aws_avmclusters, aws_oci_databases, gcp_networks, gcp_infras, gcp_clusters.
-Key rules: module_name is a unique slug, db_name max 8 chars, aws shapes: Exadata.X9M/X10M/X11M, license_model: LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE.
-Return ONLY a valid JSON object with exactly two keys: {"payload": {...}, "explanation": "..."}
-No markdown, no preamble."""
+Return ONLY a raw JSON object — no markdown, no code fences, no explanation outside the JSON.
+
+Output format (two keys, no others):
+{"payload": { ... }, "explanation": "one sentence"}
+
+Payload keys (use EXACTLY these names, omit unused ones):
+  cloud            "aws" or "gcp"
+  aws_networks     list of ODB Network objects
+  aws_infras       list of Exadata Infrastructure objects
+  aws_peerings     list of Network Peering objects
+  aws_clusters     list of VM Cluster objects
+  aws_avmclusters  list of Autonomous VM Cluster objects
+  aws_oci_databases list of OCI Database objects
+  gcp_networks     list of GCP ODB Network objects
+  gcp_infras       list of GCP Exadata Infrastructure objects
+  gcp_clusters     list of GCP VM Cluster objects
+
+Rules: module_name is a unique snake_case slug. shape: Exadata.X11M (default), X10M, X9M.
+license_model: LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE. db_name: max 8 alphanumeric chars.
+availability_zone_id examples: use1-az4, use1-az6, use2-az1, usw2-az3.
+
+Example output for "Exadata infra in us-east-1 az4":
+{"payload":{"cloud":"aws","aws_networks":[{"module_name":"odb_network","display_name":"ODB Network","client_subnet_cidr":"10.2.0.0/24","backup_subnet_cidr":"10.2.1.0/24"}],"aws_infras":[{"module_name":"odb_infra","display_name":"Exadata Infra","shape":"Exadata.X11M","compute_count":2,"storage_count":3,"availability_zone_id":"use1-az4","network_ref":"odb_network"}]},"explanation":"Created ODB network and Exadata X11M infra in us-east-1 az4."}"""
+    # Augment with retrieved knowledge
+    rag_context = rag_module.build_context(prompt, k=5)
+    if rag_context:
+        system_msg += f'\n\nRelevant reference documentation:\n{rag_context}'
     user_msg = f"Cloud: {cloud}\nCurrent: {json.dumps(current)[:3000]}\nRequest: {prompt}\nReturn JSON object."
     try:
         reply = llm_module.chat([{'role':'system','content':system_msg},{'role':'user','content':user_msg}])
         clean = reply.strip()
-        if clean.startswith('```'): clean = '\n'.join(clean.split('\n')[1:])
-        if clean.endswith('```'):   clean = '\n'.join(clean.split('\n')[:-1])
-        result = json.loads(clean.strip())
-        return jsonify({'payload': result.get('payload',{}), 'explanation': result.get('explanation','')})
+        # Strip markdown fences anywhere in the response
+        clean = re.sub(r'```[a-z]*\n?', '', clean).strip()
+        # Skip any preamble text before the opening brace
+        start = clean.find('{')
+        if start > 0:
+            clean = clean[start:]
+        # raw_decode parses the first valid JSON object and tolerates trailing text
+        result, _ = json.JSONDecoder().raw_decode(clean)
+        payload = result.get('payload', {})
+        # LLM sometimes puts explanation inside payload — hoist it out
+        explanation = result.get('explanation', '') or payload.pop('explanation', '')
+        return jsonify({'payload': payload, 'explanation': explanation,
+                        'rag_sources': [c['source'] for c in rag_module.retrieve(prompt, k=5)]})
     except json.JSONDecodeError as e:
         return jsonify({'error': f'LLM returned invalid JSON: {e}', 'raw': reply[:500]}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/llm/explain', methods=['POST'])
+def api_llm_explain():
+    body     = request.get_json(force=True)
+    content  = body.get('content', '').strip()
+    filename = body.get('filename', 'terraform file').strip()
+    if not content:
+        return jsonify({'error': 'content is required'}), 400
+    system_msg = (
+        "You are a senior Terraform and Oracle Database infrastructure engineer.\n"
+        "Explain the following Terraform HCL file in clear, concise language.\n\n"
+        "Structure your explanation as:\n"
+        "1. What this file does (1-2 sentences)\n"
+        "2. Key resources or variables defined, with their purpose\n"
+        "3. Notable configuration choices, cross-module dependencies, or gotchas\n\n"
+        "Be concrete and technical. Use the resource/variable names from the code. "
+        "Keep the total response under 320 words. Plain text, no markdown."
+    )
+    rag_query   = (filename + ' ' + content[:400]).strip()
+    rag_context = rag_module.build_context(rag_query, k=3)
+    if rag_context:
+        system_msg += f'\n\nRelevant reference documentation:\n{rag_context}'
+    user_msg = f'File: {filename}\n\n```hcl\n{content[:8000]}\n```'
+    try:
+        reply = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        return jsonify({'explanation': reply.strip()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────
+#  RAG ROUTES
+# ─────────────────────────────────────────────
+
+@app.route('/api/rag/stats', methods=['GET'])
+def api_rag_stats():
+    return jsonify(rag_module.index_stats())
+
+@app.route('/api/rag/rebuild', methods=['POST'])
+def api_rag_rebuild():
+    n = rag_module.rebuild()
+    return jsonify({'ok': True, 'chunks_indexed': n, **rag_module.index_stats()})
+
+@app.route('/api/rag/search', methods=['POST'])
+def api_rag_search():
+    body  = request.get_json(force=True)
+    query = body.get('query', '').strip()
+    k     = int(body.get('k', 5))
+    if not query:
+        return jsonify({'error': 'query is required'}), 400
+    chunks = rag_module.retrieve(query, k)
+    return jsonify({'results': [
+        {'id': c['id'], 'source': c['source'], 'text': c['text'][:300]}
+        for c in chunks
+    ]})
 
 # ─────────────────────────────────────────────
 #  GITHUB ROUTES
@@ -1235,7 +1328,8 @@ def api_validate():
             if not cl.get('exadb_vm_cluster_id'): _err(mn, 'exadb_vm_cluster_id', 'Required')
             if not cl.get('display_name'):         _err(mn, 'display_name',        'Required')
             if not cl.get('location'):             _err(mn, 'location',            'Required')
-            if not cl.get('gi_version'):           _err(mn, 'gi_version',          'Required')
+            if not cl.get('grid_image_id'):        _err(mn, 'grid_image_id',       'Required')
+            if not cl.get('exascale_db_storage_vault'): _err(mn, 'exascale_db_storage_vault', 'Required')
             if not cl.get('hostname_prefix'):      _err(mn, 'hostname_prefix',     'Required')
             if int(cl.get('node_count', 0) or 0) < 2:
                 _err(mn, 'node_count', 'Minimum 2')
@@ -1432,9 +1526,9 @@ def api_test():
             run_test(grp, f'Cluster "{mn}": ssh_public_keys not empty',
                      lambda c=cl: (_ for _ in ()).throw(AssertionError('No SSH keys'))
                      if not c.get('ssh_public_keys') else None)
-            run_test(grp, f'Cluster "{mn}": gi_version present',
-                     lambda c=cl: (_ for _ in ()).throw(AssertionError('gi_version missing'))
-                     if not c.get('gi_version') else None)
+            run_test(grp, f'Cluster "{mn}": grid_image_id present',
+                     lambda c=cl: (_ for _ in ()).throw(AssertionError('grid_image_id missing'))
+                     if not c.get('grid_image_id') else None)
 
     # ── TEST GROUP 2: Module file generation ───────────────────────────────
     grp = 'Module Generation'

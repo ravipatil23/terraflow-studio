@@ -23,7 +23,9 @@ resource "google_oracle_database_exadb_vm_cluster" "this" {
   labels              = var.labels
 
   properties {
-    gi_version                     = var.gi_version
+    grid_image_id                  = var.grid_image_id
+    exascale_db_storage_vault      = var.exascale_db_storage_vault
+    shape_attribute                = var.shape_attribute
     hostname_prefix                = var.hostname_prefix
     license_type                   = var.license_type
     node_count                     = var.node_count
@@ -32,8 +34,10 @@ resource "google_oracle_database_exadb_vm_cluster" "this" {
     ssh_public_keys                = var.ssh_public_keys
 
     cluster_name           = var.cluster_name != "" ? var.cluster_name : null
-    time_zone              = var.time_zone != "" ? var.time_zone : null
-    system_version         = var.system_version != "" ? var.system_version : null
+    dynamic "time_zone" {
+      for_each = var.time_zone != "" ? [1] : []
+      content { id = var.time_zone }
+    }
     memory_per_node_in_gbs = var.memory_per_node_in_gbs != 0 ? var.memory_per_node_in_gbs : null
 
     db_node_storage_size_per_vm_in_gbs = var.db_node_storage_size_per_vm_in_gbs != 0 ? var.db_node_storage_size_per_vm_in_gbs : null
