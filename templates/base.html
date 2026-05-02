@@ -242,6 +242,23 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
 .explain-body{flex:1;overflow-y:auto;padding:14px 18px;font-family:var(--font-b);font-size:12.5px;line-height:1.75;color:var(--ink2);white-space:pre-wrap;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;}
 .explain-body::-webkit-scrollbar{width:4px;}
 .explain-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
+/* ── Deploy Guide ── */
+.dg-init-note{padding:9px 18px;background:var(--a-dim);border-bottom:1px solid var(--a-dim2);font-size:11px;font-family:var(--font-b);color:var(--accent);line-height:1.55;flex-shrink:0;}
+.dg-init-note code{font-family:var(--font-m);font-size:10px;background:rgba(232,80,10,.12);padding:1px 5px;border-radius:3px;}
+.dg-step{padding:12px 18px;border-bottom:1px solid var(--line2);}
+.dg-step:last-child{border-bottom:none;}
+.dg-step-head{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.dg-step-num{font-family:var(--font-d);font-weight:800;font-size:10px;color:var(--white);background:var(--accent);border-radius:50%;width:18px;height:18px;min-width:18px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px var(--a-dim2);}
+.dg-step-title{font-family:var(--font-m);font-size:11.5px;font-weight:600;color:var(--ink);flex:1;}
+.dg-step-time{font-family:var(--font-m);font-size:10px;color:var(--ink3);white-space:nowrap;background:var(--off2);border:1px solid var(--line2);border-radius:10px;padding:1px 7px;flex-shrink:0;}
+.dg-step-desc{font-family:var(--font-b);font-size:11.5px;color:var(--ink3);line-height:1.55;margin-bottom:7px;}
+.dg-warn{background:#fffbf5;border:1px solid #f0d090;border-radius:var(--radius);padding:5px 10px;font-size:11px;color:#7a5a10;margin-bottom:7px;line-height:1.5;}
+.dg-tip{background:var(--gcp-dim,#e8f0fe);border:1px solid rgba(66,133,244,.3);border-radius:var(--radius);padding:5px 10px;font-size:11px;color:#1a56a0;margin-bottom:7px;line-height:1.5;}
+.dg-cmds{display:flex;flex-direction:column;gap:3px;}
+.dg-cmd{font-family:var(--font-m);font-size:11px;background:#1e1e1e;color:#d4d4d4;border-radius:var(--radius);padding:5px 11px;display:flex;align-items:center;gap:8px;user-select:all;cursor:text;}
+.dg-prompt{color:#4ec9b0;font-weight:700;flex-shrink:0;}
+.dg-mod{font-family:var(--font-m);font-size:10.5px;color:var(--accent);background:var(--a-dim);border:1px solid var(--a-dim2);border-radius:3px;padding:1px 5px;}
+.dg-empty{padding:24px 18px;font-family:var(--font-b);font-size:12px;color:var(--ink4);font-style:italic;text-align:center;}
 /* ── Tooltips ── */
 .tip-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--off2);border:1px solid var(--line2);color:var(--ink3);font-size:9px;font-family:var(--font-d);font-weight:700;cursor:default;flex-shrink:0;transition:all .15s;line-height:1;position:relative;}
 .tip-icon:hover{background:var(--accent);border-color:var(--accent);color:var(--white);}
@@ -391,6 +408,7 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
           <span id="gh-status-badge" style="font-family:var(--font-m);font-size:9px;color:#444;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis"></span>
           <button class="icon-btn" id="copybtn" onclick="copyFile()">⎘ Copy</button>
           <button class="icon-btn" id="explain-btn" onclick="explainCurrentFile()" title="Ask AI to explain the currently viewed file">✦ Explain</button>
+          <button class="icon-btn" id="guide-btn" onclick="showDeployGuide()" title="Step-by-step Terraform deployment guide for your current modules">⚙ Guide</button>
         </div>
       </div>
       <pre class="code-editor" id="code-out"><span style="color:var(--ink4);font-style:italic"># Fill in the form — output appears here in real time.</span></pre>
@@ -401,6 +419,14 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
           <button class="icon-btn" onclick="closeExplain()" style="padding:2px 8px;flex-shrink:0">✕ Close</button>
         </div>
         <div id="explain-body" class="explain-body"></div>
+      </div>
+      <div id="guide-panel" class="explain-panel" style="display:none">
+        <div class="explain-ph">
+          <span class="explain-ph-title" style="color:var(--ink)">⚙ Deploy Guide</span>
+          <span id="guide-sub" class="explain-ph-file"></span>
+          <button class="icon-btn" onclick="closeDeployGuide()" style="padding:2px 8px;flex-shrink:0">✕ Close</button>
+        </div>
+        <div id="guide-body" class="explain-body" style="padding:0;white-space:normal"></div>
       </div>
     </div>
   </div>
@@ -715,6 +741,7 @@ async function explainCurrentFile(){
     closeExplain(); return;
   }
 
+  closeDeployGuide();
   btn.textContent = '⟳ …';
   btn.disabled = true;
   lbl.textContent = path;
@@ -734,6 +761,162 @@ async function explainCurrentFile(){
   }
 }
 function closeExplain(){document.getElementById('explain-panel').style.display='none';}
+
+// ── Deployment Guide ──────────────────────────────────────────────────────────
+function _dgMod(name){return `<span class="dg-mod">module.${name}</span>`;}
+
+function buildDeployGuide(){
+  let p; try{p=buildPayload();}catch(e){return [];}
+  const cloud=p.cloud||'aws';
+  const steps=[];
+
+  if(cloud==='aws'){
+    const nets    =p.aws_networks||[];
+    const infras  =p.aws_infras||[];
+    const peerings=p.aws_peerings||[];
+    const clusters=p.aws_clusters||[];
+    const avmcs   =p.aws_avmclusters||[];
+    const ociDbs  =p.aws_oci_databases||[];
+    if(!nets.length&&!infras.length&&!clusters.length&&!avmcs.length&&!ociDbs.length) return [];
+
+    if(nets.length) steps.push({
+      title: nets.length===1?`Deploy ODB Network — ${_dgMod(nets[0].module_name)}`:`Deploy ODB Networks (${nets.length}${nets.length>1?' — parallel':''})`  ,
+      cmds: nets.map(n=>`terraform apply -target=module.${n.module_name}`),
+      desc: 'Foundation resource. Must exist before Exadata Infrastructure or Network Peering.',
+      time: '2–5 min'+(nets.length>1?' each':''),
+    });
+
+    const iCmds=infras.map(i=>`terraform apply -target=module.${i.module_name}`);
+    const pCmds=peerings.map(p=>`terraform apply -target=module.${p.module_name}`);
+    if(iCmds.length&&pCmds.length) steps.push({
+      title:'Deploy Exadata Infrastructure + Network Peering (run in parallel)',
+      cmds:[...iCmds,...pCmds],
+      desc:'Peering does not depend on Infra — start both at the same time.',
+      tip:'Open two terminals and run the Infra and Peering targets simultaneously to save time.',
+      time:'15–30 min (infra) + 1–2 min (peering)',
+    });
+    else if(iCmds.length) steps.push({
+      title: infras.length===1?`Deploy Exadata Infrastructure — ${_dgMod(infras[0].module_name)}`:`Deploy Exadata Infrastructures (${infras.length}${infras.length>1?' — parallel':''})`,
+      cmds: iCmds,
+      desc: 'Provisions physical Exadata hardware. Wait for ACTIVE state before creating VM clusters.',
+      time: '15–30 min each',
+    });
+    else if(pCmds.length) steps.push({
+      title:'Deploy Network Peering',
+      cmds: pCmds,
+      desc:'Connects ODB network(s) to application VPCs.',
+      time:'1–2 min each',
+    });
+
+    if(clusters.length) steps.push({
+      title: clusters.length===1?`Deploy VM Cluster — ${_dgMod(clusters[0].module_name)}`:`Deploy VM Clusters (${clusters.length}${clusters.length>1?' — parallel':''})`,
+      cmds: clusters.map(c=>`terraform apply -target=module.${c.module_name}`),
+      desc: 'Each VM cluster provisions on the Exadata Infrastructure it references.',
+      warn: 'Exadata Infrastructure must be ACTIVE before this step.',
+      time: '3–4 hours each',
+    });
+
+    if(avmcs.length) steps.push({
+      title: avmcs.length===1?`Deploy Autonomous VM Cluster — ${_dgMod(avmcs[0].module_name)}`:`Deploy Autonomous VM Clusters (${avmcs.length})`,
+      cmds: avmcs.map(a=>`terraform apply -target=module.${a.module_name}`),
+      desc: 'Requires the referenced Exadata Infrastructure to be ACTIVE.',
+      time: '45–60 min each',
+    });
+
+    if(ociDbs.length){
+      const dbCmds=[];
+      ociDbs.forEach(db=>{
+        dbCmds.push(`terraform apply -target=module.${db.module_name}_dbhome`);
+        dbCmds.push(`terraform apply -target=module.${db.module_name}_cdb`);
+        if(db.create_pdb&&db.pdb_name) dbCmds.push(`terraform apply -target=module.${db.module_name}_pdb`);
+      });
+      if(dbCmds.length) steps.push({
+        title:'Deploy OCI Database — DB Home → CDB → PDB (sequential)',
+        cmds: dbCmds,
+        desc: 'Deploy in order: DB Home first, then Container Database, then Pluggable Database.',
+        time: '15–30 min total',
+      });
+    }
+
+  } else { // GCP
+    const nets    =p.gcp_networks||[];
+    const infras  =p.gcp_infras||[];
+    const clusters=p.gcp_clusters||[];
+    if(!nets.length&&!infras.length&&!clusters.length) return [];
+
+    if(nets.length) steps.push({
+      title: nets.length===1?`Deploy ODB Network — ${_dgMod(nets[0].module_name)}`:`Deploy ODB Networks (${nets.length})`,
+      cmds: nets.map(n=>`terraform apply -target=module.${n.module_name}`),
+      desc: 'Foundation resource — all GCP Oracle DB resources depend on it. Must complete before subnets.',
+      time: '5–10 min each',
+    });
+
+    if(nets.length){
+      const sub=[];
+      nets.forEach(n=>{sub.push(`terraform apply -target=module.${n.module_name}_client_subnet`);sub.push(`terraform apply -target=module.${n.module_name}_backup_subnet`);});
+      steps.push({
+        title:'Deploy ODB Subnets — client + backup (parallel per network)',
+        cmds: sub,
+        desc: 'Two subnets required per ODB network. Both can deploy simultaneously.',
+        tip: infras.length?'Start Exadata Infrastructure in a second terminal while subnets deploy — it can run in parallel.':'',
+        time: '2–3 min each',
+      });
+    }
+
+    if(infras.length) steps.push({
+      title: infras.length===1?`Deploy Exadata Infrastructure — ${_dgMod(infras[0].module_name)}`:`Deploy Exadata Infrastructures (${infras.length}${infras.length>1?' — parallel':''})`,
+      cmds: infras.map(i=>`terraform apply -target=module.${i.module_name}`),
+      desc: 'Can start in parallel with subnet creation once the ODB network exists.',
+      warn: 'Infrastructure must reach lifecycle_state = ACTIVE (60–90 min) before VM cluster creation.',
+      time: '60–90 min each',
+    });
+
+    if(clusters.length) steps.push({
+      title: clusters.length===1?`Deploy ExaDB VM Cluster — ${_dgMod(clusters[0].module_name)}`:`Deploy ExaDB VM Clusters (${clusters.length}${clusters.length>1?' — parallel':''})`,
+      cmds: clusters.map(c=>`terraform apply -target=module.${c.module_name}`),
+      desc: 'Requires ODB network, both subnets, and Exadata Infrastructure to all be healthy.',
+      time: '45–60 min each',
+    });
+  }
+
+  if(steps.length) steps.push({
+    title:'Verify — confirm no remaining changes',
+    cmds:['terraform plan'],
+    desc:'Should report: No changes. Your infrastructure matches the configuration.',
+    time:'< 1 min',
+  });
+
+  return steps;
+}
+
+function renderDeploySteps(steps){
+  if(!steps.length) return '<div class="dg-empty">Add resources in the form to see deployment steps.</div>';
+  let h='<div class="dg-init-note">Run from the directory containing your downloaded Terraform files, after <code>terraform init</code>.</div>';
+  steps.forEach((s,i)=>{
+    h+=`<div class="dg-step">
+      <div class="dg-step-head"><span class="dg-step-num">${i+1}</span><span class="dg-step-title">${s.title}</span>${s.time?`<span class="dg-step-time">⏱ ${s.time}</span>`:''}</div>
+      <div class="dg-step-desc">${s.desc||''}</div>
+      ${s.warn?`<div class="dg-warn">⚠ ${s.warn}</div>`:''}
+      ${s.tip?`<div class="dg-tip">💡 ${s.tip}</div>`:''}
+      <div class="dg-cmds">${s.cmds.map(c=>`<div class="dg-cmd"><span class="dg-prompt">$</span>${c}</div>`).join('')}</div>
+    </div>`;
+  });
+  return h;
+}
+
+function showDeployGuide(){
+  closeExplain();
+  const panel=document.getElementById('guide-panel');
+  if(panel.style.display!=='none'){closeDeployGuide();return;}
+  const steps=buildDeployGuide();
+  let p;try{p=buildPayload();}catch(e){p={};}
+  const cloud=(p.cloud||'aws').toUpperCase();
+  const total=(p.aws_networks||p.gcp_networks||[]).length+(p.aws_infras||p.gcp_infras||[]).length+(p.aws_clusters||p.gcp_clusters||[]).length+(p.aws_peerings||[]).length+(p.aws_avmclusters||[]).length+(p.aws_oci_databases||[]).length;
+  document.getElementById('guide-sub').textContent=`${cloud} · ${total} module${total!==1?'s':''} · ${Math.max(0,steps.length-1)} deploy step${steps.length-1!==1?'s':''}`;
+  document.getElementById('guide-body').innerHTML=renderDeploySteps(steps);
+  panel.style.display='flex';
+}
+function closeDeployGuide(){document.getElementById('guide-panel').style.display='none';}
 
 // ── LLM Prompt Templates ──────────────────────────────────────────────────────
 const LLM_TEMPLATES = [
