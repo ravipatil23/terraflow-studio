@@ -43,7 +43,9 @@ header{background:linear-gradient(180deg,#252320 0%,#1a1916 100%);padding:0 28px
 .tsw-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 14px;cursor:pointer;color:#555;border:none;background:transparent;transition:all .15s;white-space:nowrap;}
 .tsw-btn.sel-tf{color:#7b42bc;background:rgba(123,66,188,.15);}
 .tsw-btn.sel-tofu{color:#f5a623;background:rgba(245,166,35,.15);}
-.tsw-btn:hover:not(.sel-tf):not(.sel-tofu){color:#999;}
+.tsw-btn.sel-cfn{color:#FF9900;background:rgba(255,153,0,.15);}
+.tsw-btn:hover:not(.sel-tf):not(.sel-tofu):not(.sel-cfn){color:#999;}
+body.gcp .cfn-btn{display:none;}
 /* ── Customer bar ── */
 .cust-bar{background:#0e0e0c;border-bottom:1px solid #1e1e1a;padding:0 28px;height:44px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
 .llm-bar{background:#0a0a09;border-bottom:2px solid #1e1e1a;padding:0 28px;height:40px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
@@ -259,6 +261,19 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
 .dg-prompt{color:#4ec9b0;font-weight:700;flex-shrink:0;}
 .dg-mod{font-family:var(--font-m);font-size:10.5px;color:var(--accent);background:var(--a-dim);border:1px solid var(--a-dim2);border-radius:3px;padding:1px 5px;}
 .dg-empty{padding:24px 18px;font-family:var(--font-b);font-size:12px;color:var(--ink4);font-style:italic;text-align:center;}
+/* ── guide resource detail cards ── */
+.dg-resource{background:#0d0d0b;border:1px solid #222;border-radius:5px;padding:9px 12px;margin:8px 0 0;}
+.dg-res-name{font-family:var(--font-m);font-size:11.5px;font-weight:700;color:var(--accent);margin-bottom:6px;}
+.dg-res-cfg{display:flex;flex-wrap:wrap;gap:3px 16px;margin-bottom:5px;}
+.dg-res-cfg-item{font-family:var(--font-m);font-size:10.5px;color:#666;}
+.dg-res-cfg-item b{color:#aaa;font-weight:500;}
+.dg-refs-label{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#444;margin:6px 0 3px;}
+.dg-ref-row{font-family:var(--font-m);font-size:10.5px;padding:1px 0;display:flex;align-items:center;gap:0;flex-wrap:wrap;}
+.dg-ref-var{color:#f5a623;}
+.dg-ref-arrow{color:#3a3a3a;margin:0 6px;}
+.dg-ref-src{color:#4ec9b0;}
+.dg-ref-out{color:#7ec850;}
+.dg-ref-note{color:#555;font-size:10px;margin-left:6px;}
 /* ── Tooltips ── */
 .tip-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--off2);border:1px solid var(--line2);color:var(--ink3);font-size:9px;font-family:var(--font-d);font-weight:700;cursor:default;flex-shrink:0;transition:all .15s;line-height:1;position:relative;}
 .tip-icon:hover{background:var(--accent);border-color:var(--accent);color:var(--white);}
@@ -298,13 +313,14 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
 <body class="{% block body_class %}{% endblock %}">
 <header>
   <div class="logo">
-    <div class="logo-name">Terraflow<span class="ac"> Studio</span><span style="font-size:10px;font-weight:400;color:#C9A227;margin-left:8px;font-family:var(--font-m);letter-spacing:.04em">v5.1</span></div>
+    <div class="logo-name">Terraflow<span class="ac"> Studio</span><span style="font-size:10px;font-weight:400;color:#C9A227;margin-left:8px;font-family:var(--font-m);letter-spacing:.04em">v5.2</span></div>
     <div class="logo-sub" style="color:#C9A227">Oracle DB@Cloud · Terraform Generator</div>
   </div>
   <div class="header-right">
     <div class="tool-sw">
-      <button class="tsw-btn sel-tf" id="btn-tf"   onclick="switchTool('terraform')" title="Generate for Terraform">⬡ Terraform</button>
-      <button class="tsw-btn"         id="btn-tofu" onclick="switchTool('opentofu')"  title="Generate for OpenTofu">⬡ OpenTofu</button>
+      <button class="tsw-btn sel-tf" id="btn-tf"   onclick="switchTool('terraform')"       title="Generate for Terraform">⬡ Terraform</button>
+      <button class="tsw-btn"         id="btn-tofu" onclick="switchTool('opentofu')"        title="Generate for OpenTofu">⬡ OpenTofu</button>
+      <button class="tsw-btn cfn-btn" id="btn-cfn"  onclick="switchTool('cloudformation')"  title="Generate CloudFormation YAML">☁ CloudFormation</button>
     </div>
     {% block cloud_nav %}{% endblock %}
     <span class="provider-badge" id="prov-badge">{% block provider_badge %}{% endblock %}</span>
@@ -401,7 +417,7 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
       <div class="editor-header">
         <div class="editor-filepath"><span class="live-dot"></span><span id="ep-path">main.tf</span></div>
         <div class="editor-actions">
-          <button class="icon-btn green" onclick="dlZip()">⬇ Download ZIP</button>
+          <button class="icon-btn green" id="btn-dl" onclick="dlZip()">⬇ Download ZIP</button>
           <button class="icon-btn" onclick="loadZip()" title="Load a previously downloaded Terraflow ZIP to restore its configuration">⬆ Load ZIP</button>
           <input type="file" id="load-zip-input" accept=".zip" style="display:none" onchange="onLoadZipFile(this)">
           <button class="icon-btn muted" id="gh-push-btn" onclick="pushToGithub()" title="Set GITHUB_TOKEN and GITHUB_REPO in .env to enable Git push">⬆ Push to Git</button>
@@ -657,8 +673,13 @@ function copyFile(){const text=document.getElementById('code-out').innerText;nav
 // ── Tool switcher ─────────────────────────────────────────────────────────────
 function switchTool(t) {
   iacTool = t;
-  document.getElementById('btn-tf').className   = 'tsw-btn' + (t==='terraform' ? ' sel-tf'   : '');
-  document.getElementById('btn-tofu').className = 'tsw-btn' + (t==='opentofu'  ? ' sel-tofu' : '');
+  document.getElementById('btn-tf').className   = 'tsw-btn' + (t==='terraform'       ? ' sel-tf'   : '');
+  document.getElementById('btn-tofu').className = 'tsw-btn' + (t==='opentofu'        ? ' sel-tofu' : '');
+  const cfnBtn = document.getElementById('btn-cfn');
+  if(cfnBtn) cfnBtn.className = 'tsw-btn cfn-btn' + (t==='cloudformation' ? ' sel-cfn' : '');
+  const dlBtn = document.getElementById('btn-dl');
+  if(dlBtn) dlBtn.textContent = (t==='cloudformation') ? '⬇ Download YAML' : '⬇ Download ZIP';
+  if(t==='cloudformation') { activeFile='cfn-main'; }
   refresh();
 }
 
@@ -666,6 +687,7 @@ function switchTool(t) {
 function fkToPath(k){
   if(k==='root-main')return'<span class="ep-file">main.tf</span>';
   if(k==='root-tfvars')return'<span class="ep-file">terraform.tfvars</span>';
+  if(k==='cfn-main')return'<span class="ep-file">odb-stack.yaml</span>';
   const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
   if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'<span class="ep-dir">modules/'+m2[1]+'/</span><span class="ep-file">'+f+'</span>';}
   return k;
@@ -673,6 +695,7 @@ function fkToPath(k){
 function fkToApiPath(k){
   if(k==='root-main')return'main.tf';
   if(k==='root-tfvars')return'terraform.tfvars';
+  if(k==='cfn-main')return'cfn';
   const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
   if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'modules/'+m2[1]+'/'+f;}
   return k;
@@ -681,6 +704,12 @@ function fkToApiPath(k){
 function updateTree(){
   const sec=document.getElementById('ft-modules-section');
   if(!sec) return;
+  if(iacTool==='cloudformation'){
+    sec.innerHTML='<div class="ft-section" style="margin-top:8px">CloudFormation</div>'
+      +'<div class="ft-file'+(activeFile==='cfn-main'?' active':'')+'" onclick="selFile(\'cfn-main\')"><span>📄</span>odb-stack.yaml</div>';
+    ['root-main','root-tfvars'].forEach(k=>{const el=document.getElementById('ft-'+k);if(el)el.className='ft-root-file';});
+    return;
+  }
   const names=getAllModuleNames();
   let h='<div class="ft-section" style="margin-top:8px">Modules</div>';
   names.forEach(n=>{
@@ -715,7 +744,19 @@ function refresh(){
 }
 
 function hl(code){
-  return code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  let s=code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if(iacTool==='cloudformation'){
+    return s
+      .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
+      .replace(/^(\s*)(AWSTemplateFormatVersion|Description|Resources|Outputs|Parameters|Conditions|Mappings|Transform):/gm,'$1<span class="hkw">$2</span>:')
+      .replace(/^(\s*)(Type|Properties|DependsOn|Value|Export|Name):/gm,'$1<span class="hkw">$2</span>:')
+      .replace(/(AWS::ODB::[A-Za-z]+)/g,'<span class="hres">$1</span>')
+      .replace(/(!GetAtt|!Sub|!Ref|!Join|!Select|!If)\b/g,'<span class="href">$1</span>')
+      .replace(/:\s*'([^'<>]*)'/g,': <span class="hstr">\'$1\'</span>')
+      .replace(/:\s*(true|false)\b/g,': <span class="hbol">$1</span>')
+      .replace(/:\s*(-?\d+\.?\d*)(\s|$)/gm,': <span class="hnum">$1</span>$2');
+  }
+  return s
     .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
     .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|validation|condition|error_message|description|type|default|value|properties)\b(?=[^(])/g,'<span class="hkw">$1</span>')
     .replace(/"(aws_odb_[a-z_]+)"/g,'"<span class="hres">$1</span>"')
@@ -765,6 +806,11 @@ function closeExplain(){document.getElementById('explain-panel').style.display='
 // ── Deployment Guide ──────────────────────────────────────────────────────────
 function _dgMod(name){return `<span class="dg-mod">module.${name}</span>`;}
 
+// Build a resource detail object for rendering
+function _dgRes(module_name, type, cfg, deps, exports_){
+  return {module_name, type, cfg:cfg.filter(Boolean), deps:deps.filter(Boolean), exports:exports_.filter(Boolean)};
+}
+
 function buildDeployGuide(){
   let p; try{p=buildPayload();}catch(e){return [];}
   const cloud=p.cloud||'aws';
@@ -779,62 +825,148 @@ function buildDeployGuide(){
     const ociDbs  =p.aws_oci_databases||[];
     if(!nets.length&&!infras.length&&!clusters.length&&!avmcs.length&&!ociDbs.length) return [];
 
+    const firstNet  = nets[0]?.module_name  || 'odb_network';
+    const firstInfra= infras[0]?.module_name|| 'odb_exadata_infra';
+
     if(nets.length) steps.push({
-      title: nets.length===1?`Deploy ODB Network — ${_dgMod(nets[0].module_name)}`:`Deploy ODB Networks (${nets.length}${nets.length>1?' — parallel':''})`  ,
+      title: `Deploy ODB Network${nets.length>1?' ('+nets.length+', parallel)':''}`,
       cmds: nets.map(n=>`terraform apply -target=module.${n.module_name}`),
-      desc: 'Foundation resource. Must exist before Exadata Infrastructure or Network Peering.',
+      desc: 'Foundation resource. Creates the isolated ODB network with client and backup subnets. Must complete before infrastructure or peering.',
       time: '2–5 min'+(nets.length>1?' each':''),
+      resources: nets.map(n=>_dgRes(n.module_name,'ODB Network',[
+        `Display name: <b>${n.display_name||'odb-network'}</b>`,
+        `AZ: <b>${n.availability_zone_id||'—'}</b>`,
+        `Client CIDR: <b>${n.client_subnet_cidr||'—'}</b>`,
+        `Backup CIDR: <b>${n.backup_subnet_cidr||'—'}</b>`,
+        n.s3_access?`S3 access: <b>ENABLED</b>`:'',
+        n.zero_etl_access?`Zero-ETL: <b>ENABLED</b>`:'',
+        n.default_dns_prefix?`DNS prefix: <b>${n.default_dns_prefix}</b>`:'',
+      ],[],[
+        `module.${n.module_name}.odb_network_id  →  used by peerings &amp; VM clusters as var.odb_network_id`,
+      ])),
     });
 
     const iCmds=infras.map(i=>`terraform apply -target=module.${i.module_name}`);
-    const pCmds=peerings.map(p=>`terraform apply -target=module.${p.module_name}`);
+    const pCmds=peerings.map(pp=>`terraform apply -target=module.${pp.module_name}`);
+
+    const iRes=infras.map(i=>_dgRes(i.module_name,'Exadata Infrastructure',[
+      `Display name: <b>${i.display_name||'—'}</b>`,
+      `AZ: <b>${i.availability_zone_id||'—'}</b>`,
+      `Shape: <b>${i.shape||'—'}</b>`,
+      `Compute nodes: <b>${i.compute_count||2}</b>`,
+      `Storage nodes: <b>${i.storage_count||3}</b>`,
+    ],[],[
+      `module.${i.module_name}.cloud_exadata_infrastructure_id  →  used by VM clusters as var.cloud_exadata_infrastructure_id`,
+    ]));
+
+    const pRes=peerings.map(pp=>_dgRes(pp.module_name,'ODB Peering',[
+      `Display name: <b>${pp.display_name||'—'}</b>`,
+      `Peer VPC: <b>${pp.peer_network_id||'—'}</b>`,
+    ],[
+      `var.odb_network_id  ←  module.${pp.network_ref||firstNet}.odb_network_id`,
+    ],[
+      `module.${pp.module_name}.peering_connection_id`,
+    ]));
+
     if(iCmds.length&&pCmds.length) steps.push({
-      title:'Deploy Exadata Infrastructure + Network Peering (run in parallel)',
+      title:'Deploy Exadata Infrastructure + Network Peering (parallel)',
       cmds:[...iCmds,...pCmds],
-      desc:'Peering does not depend on Infra — start both at the same time.',
-      tip:'Open two terminals and run the Infra and Peering targets simultaneously to save time.',
-      time:'15–30 min (infra) + 1–2 min (peering)',
+      desc:'These two resources are independent of each other — start them simultaneously in separate terminals to save time.',
+      tip:'Open two terminals: run the Infra target in one, the Peering target in the other at the same time.',
+      time:'15–30 min (infra) · 1–2 min (peering)',
+      resources:[...iRes,...pRes],
     });
     else if(iCmds.length) steps.push({
-      title: infras.length===1?`Deploy Exadata Infrastructure — ${_dgMod(infras[0].module_name)}`:`Deploy Exadata Infrastructures (${infras.length}${infras.length>1?' — parallel':''})`,
+      title: `Deploy Exadata Infrastructure${infras.length>1?' ('+infras.length+', parallel)':''}`,
       cmds: iCmds,
-      desc: 'Provisions physical Exadata hardware. Wait for ACTIVE state before creating VM clusters.',
+      desc: 'Provisions physical Exadata hardware in the ODB AZ. Wait for ACTIVE state before creating VM clusters.',
       time: '15–30 min each',
+      resources: iRes,
     });
     else if(pCmds.length) steps.push({
       title:'Deploy Network Peering',
       cmds: pCmds,
-      desc:'Connects ODB network(s) to application VPCs.',
+      desc:'Connects the ODB network to your application VPC. After creation you must manually add VPC route table entries for both ODB subnet CIDRs.',
       time:'1–2 min each',
+      resources: pRes,
     });
 
     if(clusters.length) steps.push({
-      title: clusters.length===1?`Deploy VM Cluster — ${_dgMod(clusters[0].module_name)}`:`Deploy VM Clusters (${clusters.length}${clusters.length>1?' — parallel':''})`,
+      title: `Deploy VM Cluster${clusters.length>1?' ('+clusters.length+', parallel)':''}`,
       cmds: clusters.map(c=>`terraform apply -target=module.${c.module_name}`),
-      desc: 'Each VM cluster provisions on the Exadata Infrastructure it references.',
-      warn: 'Exadata Infrastructure must be ACTIVE before this step.',
+      desc: 'Provisions Oracle Grid Infrastructure and database software on the Exadata hardware.',
+      warn: 'Exadata Infrastructure must reach ACTIVE state before this step.',
       time: '3–4 hours each',
+      resources: clusters.map(c=>_dgRes(c.module_name,'VM Cluster',[
+        `Display name: <b>${c.display_name||'—'}</b>`,
+        `CPU cores: <b>${c.cpu_core_count||16}</b>`,
+        `GI version: <b>${c.gi_version||'23.0.0.0'}</b>`,
+        `Hostname: <b>${c.hostname_prefix||'vm'}</b>`,
+        `License: <b>${c.license_model||'LICENSE_INCLUDED'}</b>`,
+      ],[
+        `var.odb_network_id  ←  module.${c.network_ref||firstNet}.odb_network_id`,
+        `var.cloud_exadata_infrastructure_id  ←  module.${c.infra_ref||firstInfra}.cloud_exadata_infrastructure_id`,
+      ],[
+        `module.${c.module_name}.cloud_vm_cluster_id  →  used by OCI DB Home as var.vm_cluster_id`,
+      ])),
     });
 
     if(avmcs.length) steps.push({
-      title: avmcs.length===1?`Deploy Autonomous VM Cluster — ${_dgMod(avmcs[0].module_name)}`:`Deploy Autonomous VM Clusters (${avmcs.length})`,
+      title: `Deploy Autonomous VM Cluster${avmcs.length>1?' ('+avmcs.length+')':''}`,
       cmds: avmcs.map(a=>`terraform apply -target=module.${a.module_name}`),
-      desc: 'Requires the referenced Exadata Infrastructure to be ACTIVE.',
+      desc: 'Provisions an Autonomous Database cluster on the Exadata Infrastructure.',
+      warn: 'Exadata Infrastructure must be ACTIVE.',
       time: '45–60 min each',
+      resources: avmcs.map(a=>_dgRes(a.module_name,'Autonomous VM Cluster',[
+        `Display name: <b>${a.display_name||'—'}</b>`,
+        `CPU per node: <b>${a.cpu_core_count_per_node||40}</b>`,
+        `Storage: <b>${a.autonomous_data_storage_size_in_tbs||5} TB</b>`,
+        `Container DBs: <b>${a.total_container_databases||2}</b>`,
+        `License: <b>${a.license_model||'LICENSE_INCLUDED'}</b>`,
+      ],[
+        `var.odb_network_id  ←  module.${a.network_ref||firstNet}.odb_network_id`,
+        `var.cloud_exadata_infrastructure_id  ←  module.${a.infra_ref||firstInfra}.cloud_exadata_infrastructure_id`,
+      ],[])),
     });
 
     if(ociDbs.length){
+      const dbRes=[];
       const dbCmds=[];
       ociDbs.forEach(db=>{
+        const vcr=db.vmcluster_ref||clusters[0]?.module_name||'odb_vm_cluster';
         dbCmds.push(`terraform apply -target=module.${db.module_name}_dbhome`);
+        dbRes.push(_dgRes(db.module_name+'_dbhome','DB Home',[
+          `DB Home name: <b>${db.db_home_display_name||db.module_name}</b>`,
+          `DB version: <b>${db.db_version||'—'}</b>`,
+        ],[
+          `var.vm_cluster_id  ←  module.${vcr}.cloud_vm_cluster_id`,
+        ],[
+          `module.${db.module_name}_dbhome.db_home_id  →  used by CDB as var.db_home_id`,
+        ]));
         dbCmds.push(`terraform apply -target=module.${db.module_name}_cdb`);
-        if(db.create_pdb&&db.pdb_name) dbCmds.push(`terraform apply -target=module.${db.module_name}_pdb`);
+        dbRes.push(_dgRes(db.module_name+'_cdb','Container DB',[
+          `DB name: <b>${db.db_name||db.module_name}</b>`,
+          `Admin password: <b>var.admin_password</b>`,
+        ],[
+          `var.db_home_id  ←  module.${db.module_name}_dbhome.db_home_id`,
+        ],[
+          db.create_pdb&&db.pdb_name?`module.${db.module_name}_cdb.database_id  →  used by PDB as var.cdb_id`:'',
+        ]));
+        if(db.create_pdb&&db.pdb_name){
+          dbCmds.push(`terraform apply -target=module.${db.module_name}_pdb`);
+          dbRes.push(_dgRes(db.module_name+'_pdb','Pluggable DB',[
+            `PDB name: <b>${db.pdb_name}</b>`,
+          ],[
+            `var.cdb_id  ←  module.${db.module_name}_cdb.database_id`,
+          ],[]));
+        }
       });
       if(dbCmds.length) steps.push({
         title:'Deploy OCI Database — DB Home → CDB → PDB (sequential)',
         cmds: dbCmds,
-        desc: 'Deploy in order: DB Home first, then Container Database, then Pluggable Database.',
-        time: '15–30 min total',
+        desc:'Each layer depends on the one above. Deploy strictly in order: DB Home first, then CDB, then PDB.',
+        time:'15–30 min total',
+        resources: dbRes,
       });
     }
 
@@ -844,61 +976,142 @@ function buildDeployGuide(){
     const clusters=p.gcp_clusters||[];
     if(!nets.length&&!infras.length&&!clusters.length) return [];
 
+    const firstNet  = nets[0]?.module_name   ||'gcp_odb_network';
+    const firstInfra= infras[0]?.module_name ||'gcp_exadb_infra';
+
     if(nets.length) steps.push({
-      title: nets.length===1?`Deploy ODB Network — ${_dgMod(nets[0].module_name)}`:`Deploy ODB Networks (${nets.length})`,
+      title: `Deploy ODB Network${nets.length>1?' ('+nets.length+')':''}`,
       cmds: nets.map(n=>`terraform apply -target=module.${n.module_name}`),
-      desc: 'Foundation resource — all GCP Oracle DB resources depend on it. Must complete before subnets.',
+      desc: 'Creates the ODB network and registers it with your GCP VPC. All other Oracle DB resources depend on this.',
       time: '5–10 min each',
+      resources: nets.map(n=>_dgRes(n.module_name,'ODB Network',[
+        `Display name: <b>${n.display_name||n.odb_network_id||'—'}</b>`,
+        `GCP project: <b>${n.project||'—'}</b>`,
+        `Location: <b>${n.location||'—'}</b>`,
+        `VPC network: <b>${n.network||'—'}</b>`,
+      ],[],[
+        `module.${n.module_name}.odb_network_id  →  used by subnets &amp; VM clusters as var.odb_network_id`,
+      ])),
     });
 
     if(nets.length){
-      const sub=[];
-      nets.forEach(n=>{sub.push(`terraform apply -target=module.${n.module_name}_client_subnet`);sub.push(`terraform apply -target=module.${n.module_name}_backup_subnet`);});
+      const subRes=[];
+      const subCmds=[];
+      nets.forEach(n=>{
+        subCmds.push(`terraform apply -target=module.${n.module_name}_client_subnet`);
+        subRes.push(_dgRes(n.module_name+'_client_subnet','Client Subnet',[
+          `CIDR: <b>${n.client_cidr||'—'}</b>`,
+          `Purpose: <b>CLIENT_SUBNET</b>`,
+        ],[
+          `var.odb_network_id  ←  module.${n.module_name}.odb_network_id`,
+        ],[
+          `module.${n.module_name}_client_subnet.odb_subnet_id  →  used by VM cluster as var.client_subnet_id`,
+        ]));
+        subCmds.push(`terraform apply -target=module.${n.module_name}_backup_subnet`);
+        subRes.push(_dgRes(n.module_name+'_backup_subnet','Backup Subnet',[
+          `CIDR: <b>${n.backup_cidr||'—'}</b>`,
+          `Purpose: <b>BACKUP_SUBNET</b>`,
+        ],[
+          `var.odb_network_id  ←  module.${n.module_name}.odb_network_id`,
+        ],[
+          `module.${n.module_name}_backup_subnet.odb_subnet_id  →  used by VM cluster as var.backup_subnet_id`,
+        ]));
+      });
       steps.push({
         title:'Deploy ODB Subnets — client + backup (parallel per network)',
-        cmds: sub,
-        desc: 'Two subnets required per ODB network. Both can deploy simultaneously.',
-        tip: infras.length?'Start Exadata Infrastructure in a second terminal while subnets deploy — it can run in parallel.':'',
-        time: '2–3 min each',
+        cmds: subCmds,
+        desc:'Two subnets required per ODB network. Client subnet hosts database SCAN IPs and DNS listener. Backup subnet is used for Exadata VM Cluster backups only.',
+        tip: infras.length?'Start Exadata Infrastructure in a second terminal while subnets deploy — Infra has no subnet dependency.':'',
+        time:'2–3 min each',
+        resources: subRes,
       });
     }
 
     if(infras.length) steps.push({
-      title: infras.length===1?`Deploy Exadata Infrastructure — ${_dgMod(infras[0].module_name)}`:`Deploy Exadata Infrastructures (${infras.length}${infras.length>1?' — parallel':''})`,
+      title: `Deploy Exadata Infrastructure${infras.length>1?' ('+infras.length+', parallel)':''}`,
       cmds: infras.map(i=>`terraform apply -target=module.${i.module_name}`),
-      desc: 'Can start in parallel with subnet creation once the ODB network exists.',
-      warn: 'Infrastructure must reach lifecycle_state = ACTIVE (60–90 min) before VM cluster creation.',
+      desc: 'Provisions physical Exadata hardware. Can run in parallel with subnet creation.',
+      warn: 'Infrastructure must reach lifecycle_state = ACTIVE before VM cluster creation.',
       time: '60–90 min each',
+      resources: infras.map(i=>_dgRes(i.module_name,'Exadata Infrastructure',[
+        `Display name: <b>${i.display_name||'—'}</b>`,
+        `Zone: <b>${i.gcp_oracle_zone||'—'}</b>`,
+        `Shape: <b>${i.shape||'—'}</b>`,
+        `Compute nodes: <b>${i.compute_count||2}</b>`,
+        `Storage nodes: <b>${i.storage_count||3}</b>`,
+      ],[],[
+        `module.${i.module_name}.cloud_exadata_infrastructure_id  →  used by VM cluster as var.cloud_exadata_infrastructure_id`,
+      ])),
     });
 
     if(clusters.length) steps.push({
-      title: clusters.length===1?`Deploy ExaDB VM Cluster — ${_dgMod(clusters[0].module_name)}`:`Deploy ExaDB VM Clusters (${clusters.length}${clusters.length>1?' — parallel':''})`,
+      title: `Deploy ExaDB VM Cluster${clusters.length>1?' ('+clusters.length+', parallel)':''}`,
       cmds: clusters.map(c=>`terraform apply -target=module.${c.module_name}`),
-      desc: 'Requires ODB network, both subnets, and Exadata Infrastructure to all be healthy.',
+      desc: 'Provisions Oracle software on the Exadata hardware. All four dependencies (network, subnets ×2, infra) must be healthy before this step.',
       time: '45–60 min each',
+      resources: clusters.map(c=>_dgRes(c.module_name,'ExaDB VM Cluster',[
+        `Display name: <b>${c.display_name||'—'}</b>`,
+        `GI version: <b>${c.gi_version||'—'}</b>`,
+        `Hostname: <b>${c.hostname||'—'}</b>`,
+        `CPU cores/node: <b>${c.cpu_core_count_per_node||'—'}</b>`,
+        `License: <b>${c.license_model||'LICENSE_INCLUDED'}</b>`,
+      ],[
+        `var.odb_network_id  ←  module.${c.network_ref||firstNet}.odb_network_id`,
+        `var.client_subnet_id  ←  module.${c.client_subnet_ref||(c.network_ref||firstNet)+'_client_subnet'}.odb_subnet_id`,
+        `var.backup_subnet_id  ←  module.${c.backup_subnet_ref||(c.network_ref||firstNet)+'_backup_subnet'}.odb_subnet_id`,
+        `var.cloud_exadata_infrastructure_id  ←  module.${c.infra_ref||firstInfra}.cloud_exadata_infrastructure_id`,
+      ],[])),
     });
   }
 
   if(steps.length) steps.push({
     title:'Verify — confirm no remaining changes',
     cmds:['terraform plan'],
-    desc:'Should report: No changes. Your infrastructure matches the configuration.',
+    desc:'A clean plan confirms Terraform state matches your deployed infrastructure.',
     time:'< 1 min',
+    resources:[],
   });
 
   return steps;
+}
+
+function _dgResHTML(r){
+  if(!r.cfg.length&&!r.deps.length&&!r.exports.length) return '';
+  let h=`<div class="dg-resource">`;
+  h+=`<div class="dg-res-name">module.${r.module_name} <span style="color:#444;font-weight:400;font-size:10px">(${r.type})</span></div>`;
+  if(r.cfg.length){
+    h+=`<div class="dg-res-cfg">${r.cfg.map(c=>`<div class="dg-res-cfg-item">${c}</div>`).join('')}</div>`;
+  }
+  if(r.deps.length){
+    h+=`<div class="dg-refs-label">Variable references (inputs)</div>`;
+    r.deps.forEach(d=>{
+      const parts=d.split('←').map(s=>s.trim());
+      h+=`<div class="dg-ref-row"><span class="dg-ref-var">${parts[0]}</span><span class="dg-ref-arrow">←</span><span class="dg-ref-src">${parts[1]||''}</span></div>`;
+    });
+  }
+  if(r.exports.length){
+    h+=`<div class="dg-refs-label">Outputs (used by later modules)</div>`;
+    r.exports.forEach(e=>{
+      const parts=e.split('→').map(s=>s.trim());
+      h+=`<div class="dg-ref-row"><span class="dg-ref-out">${parts[0]}</span>${parts[1]?`<span class="dg-ref-arrow">→</span><span class="dg-ref-note">${parts[1]}</span>`:''}</div>`;
+    });
+  }
+  h+=`</div>`;
+  return h;
 }
 
 function renderDeploySteps(steps){
   if(!steps.length) return '<div class="dg-empty">Add resources in the form to see deployment steps.</div>';
   let h='<div class="dg-init-note">Run from the directory containing your downloaded Terraform files, after <code>terraform init</code>.</div>';
   steps.forEach((s,i)=>{
+    const resHTML=(s.resources||[]).map(_dgResHTML).join('');
     h+=`<div class="dg-step">
       <div class="dg-step-head"><span class="dg-step-num">${i+1}</span><span class="dg-step-title">${s.title}</span>${s.time?`<span class="dg-step-time">⏱ ${s.time}</span>`:''}</div>
       <div class="dg-step-desc">${s.desc||''}</div>
       ${s.warn?`<div class="dg-warn">⚠ ${s.warn}</div>`:''}
       ${s.tip?`<div class="dg-tip">💡 ${s.tip}</div>`:''}
       <div class="dg-cmds">${s.cmds.map(c=>`<div class="dg-cmd"><span class="dg-prompt">$</span>${c}</div>`).join('')}</div>
+      ${resHTML}
     </div>`;
   });
   return h;
@@ -908,6 +1121,12 @@ function showDeployGuide(){
   closeExplain();
   const panel=document.getElementById('guide-panel');
   if(panel.style.display!=='none'){closeDeployGuide();return;}
+  if(iacTool==='cloudformation'){
+    document.getElementById('guide-sub').textContent='CloudFormation · single-stack deploy';
+    document.getElementById('guide-body').innerHTML=`<div class="dg-step"><div class="dg-step-num">1</div><div><div class="dg-step-title">Deploy the CloudFormation stack</div><div class="dg-step-desc">Download <code>odb-stack.yaml</code> then deploy via AWS CLI or Console:</div><div class="dg-cmd">aws cloudformation deploy --template-file odb-stack.yaml --stack-name odb-stack --capabilities CAPABILITY_IAM</div><div class="dg-tip">CloudFormation handles resource ordering automatically via DependsOn. All ODB resources are deployed in a single stack operation.</div></div></div><div class="dg-step"><div class="dg-step-num">2</div><div><div class="dg-step-title">Monitor stack events</div><div class="dg-step-desc">ODB resources can take 30–90 min. Monitor progress:</div><div class="dg-cmd">aws cloudformation describe-stack-events --stack-name odb-stack --query 'StackEvents[*].[ResourceType,ResourceStatus,Timestamp]' --output table</div></div></div><div class="dg-step"><div class="dg-step-num">3</div><div><div class="dg-step-title">Post-deployment: configure VPC routes</div><div class="dg-step-desc">After the stack completes, manually add routes in your VPC route table for the ODB client and backup subnet CIDRs pointing to the peering connection. CloudFormation does not automate this step.</div></div></div>`;
+    panel.style.display='flex';
+    return;
+  }
   const steps=buildDeployGuide();
   let p;try{p=buildPayload();}catch(e){p={};}
   const cloud=(p.cloud||'aws').toUpperCase();
@@ -1138,7 +1357,16 @@ async function pushToGithub() {
   }
 }
 
-async function dlZip(){const p=buildPayload();const r=await fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});const b=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);const tool=iacTool==='opentofu'?'-tofu':'';const cust=getCustName().replace(/[^a-z0-9_-]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');const suffix=(cust?'-'+cust:'')+tool+'.zip';const names={'aws':'terraflow-studio-aws'+suffix,'gcp':'terraflow-studio-gcp'+suffix};a.download=names[cloud]||'terraform.zip';a.click();}
+async function dlZip(){
+  const p=buildPayload();
+  const r=await fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  const b=await r.blob();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  if(iacTool==='cloudformation'){a.download='odb-stack.yaml';}
+  else{const tool=iacTool==='opentofu'?'-tofu':'';const cust=getCustName().replace(/[^a-z0-9_-]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');const suffix=(cust?'-'+cust:'')+tool+'.zip';const names={'aws':'terraflow-studio-aws'+suffix,'gcp':'terraflow-studio-gcp'+suffix};a.download=names[cloud]||'terraform.zip';}
+  a.click();
+}
 
 function loadZip() { document.getElementById('load-zip-input').click(); }
 async function onLoadZipFile(inp) {

@@ -56,12 +56,22 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .card-cta.gcp{background:#4285F4;color:var(--white);}
 .card-cta.gcp:hover{background:#2a6ed4;}
 .footer{padding:20px 28px;text-align:center;font-family:var(--font-m);font-size:10px;color:var(--ink4);}
+.config-strip{max-width:720px;width:100%;margin-top:16px;}
+.config-card{display:flex;align-items:center;justify-content:space-between;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius-lg);padding:18px 28px;box-shadow:var(--shadow-sm);text-decoration:none;transition:all .2s;gap:20px;}
+.config-card:hover{box-shadow:var(--shadow);border-color:#aaa;transform:translateY(-1px);}
+.config-card-left{display:flex;align-items:center;gap:14px;}
+.config-icon{font-size:22px;line-height:1;}
+.config-text{}
+.config-title{font-family:var(--font-d);font-weight:800;font-size:17px;color:var(--ink);letter-spacing:.01em;}
+.config-desc{font-family:var(--font-b);font-size:12px;color:var(--ink3);margin-top:1px;}
+.config-cta{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.07em;text-transform:uppercase;padding:8px 20px;border-radius:var(--radius);background:#1a1916;border:1.5px solid #1a1916;color:#fff;white-space:nowrap;transition:all .15s;}
+.config-card:hover .config-cta{background:#333;border-color:#333;}
 </style>
 </head>
 <body>
 <header>
   <div class="logo">
-    <div class="logo-name">Terraflow<span class="ac"> Studio</span><span style="font-size:10px;font-weight:400;color:#C9A227;margin-left:8px;font-family:var(--font-m);letter-spacing:.04em">v5.1</span></div>
+    <div class="logo-name">Terraflow<span class="ac"> Studio</span><span style="font-size:10px;font-weight:400;color:#C9A227;margin-left:8px;font-family:var(--font-m);letter-spacing:.04em">v5.2</span></div>
     <div class="logo-sub" style="color:#C9A227">Oracle DB@Cloud · Terraform Generator</div>
   </div>
   <span class="pill">Choose your cloud platform below</span>
@@ -102,6 +112,19 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
         <span class="card-res-tag">google_oracle_database_exadb_vm_cluster</span>
       </div>
       <span class="card-cta gcp">Open DB@GCP &rarr;</span>
+    </a>
+  </div>
+
+  <div class="config-strip">
+    <a class="config-card" href="/config">
+      <div class="config-card-left">
+        <span class="config-icon">⚙</span>
+        <div class="config-text">
+          <div class="config-title">Application Configuration</div>
+          <div class="config-desc">LLM provider, API keys, GitHub integration, CouchDB, RAG embeddings, Terraform CLI paths</div>
+        </div>
+      </div>
+      <span class="config-cta">Configure →</span>
     </a>
   </div>
 </main>

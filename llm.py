@@ -9,7 +9,7 @@ from typing import Optional
 _DEFAULTS = {
     'anthropic': 'claude-3-5-haiku-20241022',
     'openai':    'gpt-4o-mini',
-    'gemini':    'gemini-1.5-flash',
+    'gemini':    'gemini-2.0-flash',
     'ollama':    'llama3.2',
     'oci_genai': 'cohere.command-r-plus-08-2024',
 }
@@ -17,7 +17,8 @@ _DEFAULTS = {
 def _post(url, payload, headers, timeout=60):
     data = json.dumps(payload).encode()
     req  = urllib.request.Request(url, data=data,
-           headers={'Content-Type':'application/json', **headers}, method='POST')
+           headers={'Content-Type':'application/json',
+                    'User-Agent':'TerraflowStudio/1.0', **headers}, method='POST')
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read())
