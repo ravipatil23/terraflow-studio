@@ -222,6 +222,7 @@ def _mod3_ctx(d, mn0='', mn1='', defaults=False):
     dng     = d.get('db_node_storage_size_in_gbs', '') or 'null'
     mem     = d.get('memory_size_in_gbs', '')          or 'null'
     sc      = d.get('scan_listener_port_tcp', '')      or 'null'
+    sc_ssl  = d.get('scan_listener_port_tcp_ssl', '') or 'null'
     # Auto-resolve to module refs when user left fields empty
     infraid = infraid or (f'module.{mn1}.infra_id' if mn1 else '')
     netid   = netid   or (f'module.{mn0}.network_id' if mn0 else '')
@@ -250,6 +251,7 @@ def _mod3_ctx(d, mn0='', mn1='', defaults=False):
         db_node_storage_size_in_gbs=dng,
         memory_size_in_gbs=mem,
         scan_listener_port_tcp=sc,
+        scan_listener_port_tcp_ssl=sc_ssl,
         is_local_backup_enabled=tf_bool(d.get('is_local_backup_enabled', False)),
         is_sparse_diskgroup_enabled=tf_bool(d.get('is_sparse_diskgroup_enabled', False)),
         tags=d.get('tags', {}),
@@ -1312,6 +1314,263 @@ def api_llm_explain():
 
 
 # ─────────────────────────────────────────────
+#  AI TOOLS — PLAN EXPLAINER & ERROR TROUBLESHOOTER
+# ─────────────────────────────────────────────
+
+def _collect_cidrs(data: dict) -> list[tuple[str, str]]:
+    """Return list of (label, cidr_string) from every CIDR field in the payload."""
+    entries = []
+    cloud = data.get('cloud', 'aws')
+
+    if cloud == 'aws':
+        for i, net in enumerate(data.get('aws_networks', [])):
+            name = net.get('module_name') or net.get('display_name') or f'aws_net[{i}]'
+            for field in ('client_subnet_cidr', 'backup_subnet_cidr'):
+                v = net.get(field, '').strip()
+                if v:
+                    entries.append((f'{name}.{field}', v))
+        for i, peer in enumerate(data.get('aws_peerings', [])):
+            pname = peer.get('module_name') or peer.get('display_name') or f'peering[{i}]'
+            for j, cidr in enumerate(peer.get('peer_network_cidrs', [])):
+                if cidr and cidr.strip():
+                    entries.append((f'{pname}.peer_cidrs[{j}]', cidr.strip()))
+    else:
+        for i, net in enumerate(data.get('gcp_networks', [])):
+            nname = net.get('module_name') or net.get('odb_network_id') or f'gcp_net[{i}]'
+            for j, sub in enumerate(net.get('subnets', [])):
+                v = sub.get('cidr_range', '').strip()
+                if v:
+                    label = f'{nname}.subnet[{j}]({sub.get("purpose","")}).cidr_range'
+                    entries.append((label, v))
+    return entries
+
+
+def _check_cidr_overlaps(data: dict) -> list[dict]:
+    """Deterministically check for overlapping CIDRs across all networks. Returns findings list."""
+    import ipaddress
+    findings = []
+    cidrs = _collect_cidrs(data)
+    parsed = []
+    for label, raw in cidrs:
+        try:
+            parsed.append((label, raw, ipaddress.ip_network(raw, strict=False)))
+        except ValueError:
+            findings.append({
+                'severity': 'medium',
+                'category': 'Network Security',
+                'resource': label,
+                'issue': f'Invalid CIDR format: {raw!r}',
+                'recommendation': 'Correct the CIDR notation (e.g. 10.0.0.0/24).',
+                'file': '',
+            })
+
+    # Check every pair for overlap
+    seen = set()
+    for i in range(len(parsed)):
+        for j in range(i + 1, len(parsed)):
+            la, ra, na = parsed[i]
+            lb, rb, nb = parsed[j]
+            key = tuple(sorted([la, lb]))
+            if key in seen:
+                continue
+            if na.overlaps(nb):
+                seen.add(key)
+                findings.append({
+                    'severity': 'high',
+                    'category': 'Network Security',
+                    'resource': f'{la}  ↔  {lb}',
+                    'issue': f'Overlapping CIDRs: {ra} and {rb} share address space.',
+                    'recommendation': (
+                        'Assign non-overlapping CIDR ranges to each subnet. '
+                        'Overlapping ranges will cause routing conflicts and peering failures.'
+                    ),
+                    'file': '',
+                })
+    return findings
+
+
+@app.route('/api/ai/security-review', methods=['POST'])
+def api_ai_security_review():
+    data  = request.get_json(force=True)
+    cloud = data.get('cloud', 'aws')
+
+    # Generate all HCL files from the current payload
+    try:
+        files = generate_all(data)
+    except Exception as e:
+        return jsonify({'error': f'Generation failed: {e}'}), 500
+
+    if not files:
+        return jsonify({'error': 'No files generated — configure at least one resource first.'}), 400
+
+    # Concatenate file contents for review (cap at 12 000 chars)
+    hcl_chunks = []
+    total = 0
+    for path, content in files.items():
+        if path.endswith('.tfvars'):
+            continue  # tfvars hold actual values — skip
+        snippet = f'### {path}\n{content}\n'
+        if total + len(snippet) > 12000:
+            break
+        hcl_chunks.append(snippet)
+        total += len(snippet)
+    hcl_body = '\n'.join(hcl_chunks)
+
+    rag_context = rag_module.build_context(
+        f'security best practices oracle database {cloud} terraform network access encryption backup', k=5)
+
+    _delp_check = (
+        "- deletion_protection disabled on prod-like resources"
+        " (GCP: google_oracle_database_* resources support this field)\n"
+        if cloud == 'gcp' else
+        "- delete_associated_resources enabled on ODB networks"
+        " (AWS: setting this true deletes VPCs/subnets on network destroy — risky for prod)\n"
+    )
+    system_msg = (
+        "You are a cloud security engineer specialising in Oracle Database@AWS and Oracle DB@GCP Terraform configurations.\n"
+        "Review the HCL files provided and respond ONLY with a valid JSON object (no markdown, no code fences) matching exactly:\n"
+        '{"score":<int 0-100>,"grade":"A|B|C|D|F","summary":"<1 sentence>",'
+        '"findings":[{"severity":"critical|high|medium|low|info",'
+        '"category":"Network Security|Access Control|Data Protection|Backup & Recovery|Compliance|Best Practice",'
+        '"resource":"<resource type or module name>",'
+        '"issue":"<concise description of the problem>",'
+        '"recommendation":"<specific actionable fix>",'
+        '"file":"<file path or empty string>"}]}\n\n'
+        "Security checks to perform (check ALL that apply):\n"
+        "- Open or overly broad CIDR ranges (0.0.0.0/0 or /8 or /16 on client/backup subnets)\n"
+        "- Variables containing passwords, keys, or tokens missing sensitive = true\n"
+        "- SSH public keys left as empty list or placeholder\n"
+        "- Auto-backup disabled or recovery window < 7 days\n"
+        "- Customer contacts not configured (maintenance notifications)\n"
+        + _delp_check +
+        "- S3 or Zero-ETL access enabled without clear need (check display names for 'prod'/'prd')\n"
+        "- Maintenance window set to NO_PREFERENCE (recommend CUSTOM_PREFERENCE for prod)\n"
+        "- Missing or empty tags / labels\n"
+        "- License model check (BRING_YOUR_OWN_LICENSE without OCI confirmation)\n"
+        "- Hardcoded non-reference values for cross-module IDs (should use module.x.output)\n"
+        "- score: 100 = no issues. Deduct: critical=-20, high=-10, medium=-5, low=-2, info=-0. Min 0.\n"
+        "- findings: only real issues found in the code. Empty array [] if config is clean.\n"
+        "Return ONLY the JSON object."
+    )
+    if rag_context:
+        system_msg += f'\n\nRelevant ODB security documentation:\n{rag_context}'
+
+    user_msg = f'Cloud: {cloud.upper()}\nFiles reviewed: {len(files)}\n\n{hcl_body}'
+    try:
+        raw = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        raw = re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=re.MULTILINE)
+        raw = re.sub(r'\s*```$', '', raw.strip(), flags=re.MULTILINE)
+        result = json.loads(raw)
+        # Merge deterministic CIDR overlap findings (always run, never hallucinated)
+        cidr_findings = _check_cidr_overlaps(data)
+        if cidr_findings:
+            result.setdefault('findings', [])
+            result['findings'] = cidr_findings + result['findings']
+            # Recompute score: each high finding costs 10 points
+            penalty = sum(10 for f in cidr_findings if f['severity'] == 'high') + \
+                      sum(5  for f in cidr_findings if f['severity'] == 'medium')
+            result['score'] = max(0, result.get('score', 100) - penalty)
+            # Recompute grade
+            s = result['score']
+            result['grade'] = 'A' if s >= 90 else 'B' if s >= 80 else 'C' if s >= 65 else 'D' if s >= 50 else 'F'
+        result['files_reviewed'] = len(files)
+        return jsonify(result)
+    except json.JSONDecodeError:
+        return jsonify({'error': 'LLM returned unexpected format', 'raw': raw[:500]}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/explain-plan', methods=['POST'])
+def api_ai_explain_plan():
+    body      = request.get_json(force=True)
+    plan_text = body.get('plan_text', '').strip()
+    cloud     = body.get('cloud', 'aws')
+    if not plan_text:
+        return jsonify({'error': 'plan_text is required'}), 400
+
+    rag_context = rag_module.build_context(
+        f'terraform plan {cloud} oracle database changes risks', k=4)
+
+    system_msg = (
+        "You are a senior Terraform engineer specialising in Oracle Database@AWS and Oracle DB@GCP.\n"
+        "Analyse the terraform plan output provided by the user and respond ONLY with a valid JSON object "
+        "(no markdown, no code fences) matching exactly this schema:\n"
+        '{"summary":"<1-2 sentence plain-English summary>","stats":{"add":<int>,"change":<int>,"destroy":<int>},'
+        '"changes":[{"action":"add|modify|destroy|replace","resource":"<resource type.name>","note":"<why this matters>"}],'
+        '"risks":[{"severity":"high|medium|low","message":"<concise risk description>"}],'
+        '"recommendations":["<actionable recommendation>"]}\n\n'
+        "Rules:\n"
+        "- risks array must only contain REAL risks (destructive ops, replacements, open CIDRs, force-new). Empty array if none.\n"
+        "- changes array: include every resource action from the plan. Max 20 entries.\n"
+        "- recommendations: practical next steps. 2-4 items.\n"
+        "- Return ONLY the JSON object. No other text."
+    )
+    if rag_context:
+        system_msg += f'\n\nRelevant ODB reference documentation:\n{rag_context}'
+
+    user_msg = f'Cloud: {cloud.upper()}\n\nTerraform plan output:\n```\n{plan_text[:10000]}\n```'
+    try:
+        raw = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        # Strip accidental markdown fences
+        raw = re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=re.MULTILINE)
+        raw = re.sub(r'\s*```$', '', raw.strip(), flags=re.MULTILINE)
+        return jsonify(json.loads(raw))
+    except json.JSONDecodeError:
+        return jsonify({'summary': raw.strip(), 'stats': {}, 'changes': [], 'risks': [], 'recommendations': []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/troubleshoot', methods=['POST'])
+def api_ai_troubleshoot():
+    body       = request.get_json(force=True)
+    error_text = body.get('error_text', '').strip()
+    cloud      = body.get('cloud', 'aws')
+    if not error_text:
+        return jsonify({'error': 'error_text is required'}), 400
+
+    rag_context = rag_module.build_context(
+        f'terraform apply error {cloud} oracle database troubleshoot fix {error_text[:300]}', k=5)
+
+    system_msg = (
+        "You are a senior Terraform engineer specialising in Oracle Database@AWS and Oracle DB@GCP.\n"
+        "Diagnose the terraform error provided by the user and respond ONLY with a valid JSON object "
+        "(no markdown, no code fences) matching exactly this schema:\n"
+        '{"root_cause":"<concise 1-sentence root cause>","explanation":"<2-4 sentence detailed explanation>",'
+        '"fix_steps":["<step 1>","<step 2>"],"prevention":"<how to prevent this in future>",'
+        '"docs_hint":"<relevant doc section or resource type to check, or empty string>"}\n\n'
+        "Rules:\n"
+        "- fix_steps: ordered, concrete, copy-paste-ready where possible. 2-6 steps.\n"
+        "- root_cause: identify the specific Terraform or ODB provider issue, not generic advice.\n"
+        "- Return ONLY the JSON object. No other text."
+    )
+    if rag_context:
+        system_msg += f'\n\nRelevant ODB reference documentation:\n{rag_context}'
+
+    user_msg = f'Cloud: {cloud.upper()}\n\nTerraform error:\n```\n{error_text[:8000]}\n```'
+    try:
+        raw = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        raw = re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=re.MULTILINE)
+        raw = re.sub(r'\s*```$', '', raw.strip(), flags=re.MULTILINE)
+        return jsonify(json.loads(raw))
+    except json.JSONDecodeError:
+        return jsonify({'root_cause': 'Could not parse response', 'explanation': raw.strip(),
+                        'fix_steps': [], 'prevention': '', 'docs_hint': ''})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────
 #  RAG ROUTES
 # ─────────────────────────────────────────────
 
@@ -2251,4 +2510,4 @@ def api_config_post():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", debug=True, port=8000)

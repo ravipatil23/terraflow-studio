@@ -308,6 +308,117 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
 .inst-count-lbl{font-family:var(--font-m);font-size:10px;color:var(--ink3);}
 .ref-select{font-family:var(--font-m);font-size:11px;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius);color:var(--ink);padding:7px 26px 7px 10px;outline:none;cursor:pointer;width:100%;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%23888480' d='M5 7L1 3h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;}
 .ref-select:focus{border-color:var(--accent);}
+
+/* ── AI Tools modal ── */
+.ai-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:800;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);padding:24px;}
+.ai-modal-overlay.open{display:flex;}
+.ai-modal{background:#1e1d1a;border:1px solid #383530;border-radius:12px;width:100%;max-width:900px;height:70vh;min-height:420px;min-width:520px;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.85);overflow:hidden;resize:both;}
+.ai-modal-head{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid #2e2c28;flex-shrink:0;background:#252320;}
+.ai-modal-title{font-family:var(--font-d);font-weight:800;font-size:16px;color:#f0ede8;flex:1;letter-spacing:.01em;}
+.ai-modal-maximize{background:none;border:1px solid #383530;border-radius:4px;color:#888;font-size:13px;cursor:pointer;padding:2px 7px;transition:all .15s;line-height:1.4;}
+.ai-modal-maximize:hover{color:#ccc;border-color:#555;}
+.ai-modal-close{background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1;padding:0 4px;transition:color .15s;}
+.ai-modal-close:hover{color:#fff;}
+.ai-tool-switch{display:flex;gap:5px;margin-left:4px;}
+.ai-tool-sw-btn{font-size:13px;padding:3px 9px;background:none;border:1px solid #333;border-radius:4px;cursor:pointer;color:#555;transition:all .15s;line-height:1.6;}
+.ai-tool-sw-btn.active{border-color:#7b42bc;background:rgba(123,66,188,.18);color:#c090f0;}
+.ai-tool-sw-btn:hover:not(.active){border-color:#555;color:#ccc;}
+.ai-modal-body{flex:1;overflow-y:auto;padding:18px 20px 22px;display:flex;flex-direction:column;gap:13px;min-height:0;}
+.ai-paste-label{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#aaa;margin-bottom:6px;}
+.ai-textarea{width:100%;background:#141310;border:1.5px solid #383530;border-radius:var(--radius);color:#ddd;font-family:var(--font-m);font-size:11.5px;padding:10px 14px;outline:none;resize:vertical;min-height:110px;line-height:1.7;transition:border-color .15s;}
+.ai-textarea:focus{border-color:#7b42bc;}
+.ai-textarea::placeholder{color:#555;}
+.ai-run-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:0 24px;height:34px;border-radius:var(--radius);cursor:pointer;border:1.5px solid #7b42bc;background:rgba(123,66,188,.2);color:#c090f0;transition:all .15s;align-self:flex-start;}
+.ai-run-btn:hover{background:#7b42bc;color:#fff;}
+.ai-run-btn:disabled{opacity:.35;cursor:not-allowed;}
+/* results */
+.ai-result{display:none;flex-direction:column;gap:11px;}
+.ai-result.visible{display:flex;}
+.ai-summary-box{background:#171614;border:1px solid #383530;border-radius:var(--radius-lg);padding:14px 17px;}
+.ai-summary-text{font-family:var(--font-b);font-size:13.5px;color:#e0ddd8;line-height:1.65;}
+.ai-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:11px;}
+.ai-stat{display:flex;align-items:center;gap:6px;padding:5px 16px;border-radius:20px;font-family:var(--font-d);font-weight:700;font-size:12px;}
+.ai-stat.add{background:rgba(26,122,74,.2);border:1px solid rgba(74,175,121,.35);color:#6dd4a0;}
+.ai-stat.change{background:rgba(200,150,20,.16);border:1px solid rgba(201,162,39,.35);color:#e0b840;}
+.ai-stat.destroy{background:rgba(192,57,43,.16);border:1px solid rgba(224,112,96,.35);color:#f08070;}
+.ai-section-label{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#aaa;margin-bottom:7px;}
+.ai-changes-list{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto;}
+.ai-change-row{display:flex;align-items:flex-start;gap:10px;padding:7px 12px;background:#141310;border:1px solid #2a2826;border-radius:5px;font-size:12px;}
+.ai-change-badge{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:3px;flex-shrink:0;margin-top:1px;}
+.ai-change-badge.add{background:rgba(26,122,74,.25);color:#6dd4a0;}
+.ai-change-badge.modify,.ai-change-badge.change{background:rgba(200,150,20,.22);color:#e0b840;}
+.ai-change-badge.destroy{background:rgba(192,57,43,.22);color:#f08070;}
+.ai-change-badge.replace{background:rgba(180,60,220,.22);color:#d090f0;}
+.ai-change-resource{font-family:var(--font-m);color:#ccc;flex:1;}
+.ai-change-note{font-family:var(--font-b);color:#999;font-size:11px;flex:1;}
+.ai-risks-list{display:flex;flex-direction:column;gap:7px;}
+.ai-risk-row{display:flex;align-items:flex-start;gap:11px;padding:10px 14px;border-radius:var(--radius);border:1px solid;}
+.ai-risk-row.high{background:rgba(192,57,43,.1);border-color:rgba(240,128,112,.3);}
+.ai-risk-row.medium{background:rgba(200,150,20,.09);border-color:rgba(224,184,64,.3);}
+.ai-risk-row.low{background:rgba(26,122,74,.09);border-color:rgba(109,212,160,.25);}
+.ai-risk-sev{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;flex-shrink:0;margin-top:2px;width:48px;}
+.ai-risk-sev.high{color:#f08070;}.ai-risk-sev.medium{color:#e0b840;}.ai-risk-sev.low{color:#6dd4a0;}
+.ai-risk-msg{font-family:var(--font-b);font-size:12.5px;color:#ccc;line-height:1.55;}
+.ai-recs-list{display:flex;flex-direction:column;gap:6px;}
+.ai-rec-row{display:flex;align-items:flex-start;gap:8px;font-family:var(--font-b);font-size:12.5px;color:#ccc;padding:5px 0;line-height:1.55;}
+.ai-rec-num{font-family:var(--font-d);font-weight:700;font-size:13px;color:#888;flex-shrink:0;width:20px;}
+/* troubleshooter result */
+.ai-root-cause{background:rgba(192,57,43,.1);border:1px solid rgba(240,128,112,.28);border-radius:var(--radius);padding:13px 17px;}
+.ai-root-cause-label{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#f08070;margin-bottom:6px;}
+.ai-root-cause-text{font-family:var(--font-b);font-size:14px;color:#f0ede8;line-height:1.6;}
+.ai-explanation{font-family:var(--font-b);font-size:13px;color:#bbb;line-height:1.7;padding:2px 0;}
+.ai-steps-list{display:flex;flex-direction:column;gap:8px;}
+.ai-step-row{display:flex;align-items:flex-start;gap:12px;background:#141310;border:1px solid #2a2826;border-radius:5px;padding:10px 14px;}
+.ai-step-num{font-family:var(--font-d);font-weight:800;font-size:14px;color:#a060e0;flex-shrink:0;width:20px;}
+.ai-step-text{font-family:var(--font-m);font-size:12px;color:#ddd;line-height:1.6;flex:1;}
+.ai-prevention{background:rgba(26,122,74,.09);border:1px solid rgba(109,212,160,.25);border-radius:var(--radius);padding:11px 15px;font-family:var(--font-b);font-size:12.5px;color:#bbb;line-height:1.6;}
+.ai-prevention strong{color:#6dd4a0;font-weight:600;}
+.ai-docs-hint{font-family:var(--font-m);font-size:11px;color:#888;padding:4px 0;}
+.ai-err-box{background:rgba(192,57,43,.12);border:1px solid rgba(240,128,112,.3);border-radius:var(--radius);padding:11px 15px;font-family:var(--font-m);font-size:11.5px;color:#f08070;}
+.ai-spinner{display:inline-block;width:13px;height:13px;border:2px solid #383530;border-top-color:#9060d0;border-radius:50%;animation:ai-spin .7s linear infinite;vertical-align:middle;margin-right:7px;}
+@keyframes ai-spin{to{transform:rotate(360deg);}}
+.ai-modal.maximized{width:calc(100vw - 48px) !important;height:calc(100vh - 48px) !important;max-width:none !important;}
+/* security review */
+.ai-sec-scan-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.ai-sec-info{font-family:var(--font-b);font-size:12px;color:#666;line-height:1.5;}
+.ai-score-row{display:flex;align-items:center;gap:18px;padding:16px 20px;background:#171614;border:1px solid #383530;border-radius:var(--radius-lg);}
+.ai-score-gauge{position:relative;width:72px;height:72px;flex-shrink:0;}
+.ai-score-gauge svg{transform:rotate(-90deg);}
+.ai-score-gauge-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-d);font-weight:800;font-size:22px;color:#f0ede8;}
+.ai-score-grade{font-family:var(--font-d);font-weight:900;font-size:48px;color:#f0ede8;line-height:1;}
+.ai-score-detail{flex:1;}
+.ai-score-summary{font-family:var(--font-b);font-size:13px;color:#ccc;line-height:1.55;margin-bottom:6px;}
+.ai-score-files{font-family:var(--font-m);font-size:10.5px;color:#666;}
+.ai-sev-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.ai-sev-pill{font-family:var(--font-d);font-weight:700;font-size:11px;padding:3px 12px;border-radius:20px;border:1px solid;}
+.ai-sev-pill.critical{background:rgba(192,57,43,.18);border-color:rgba(240,128,112,.35);color:#f08070;}
+.ai-sev-pill.high{background:rgba(200,120,20,.16);border-color:rgba(230,160,60,.3);color:#e0a040;}
+.ai-sev-pill.medium{background:rgba(200,180,20,.14);border-color:rgba(224,210,64,.3);color:#d4c040;}
+.ai-sev-pill.low{background:rgba(26,122,74,.14);border-color:rgba(109,212,160,.28);color:#6dd4a0;}
+.ai-sev-pill.info{background:rgba(80,140,220,.14);border-color:rgba(120,180,255,.28);color:#90c0f0;}
+.ai-findings-list{display:flex;flex-direction:column;gap:8px;}
+.ai-finding-card{background:#171614;border:1px solid #2e2c28;border-radius:var(--radius);padding:12px 15px;border-left:3px solid #383530;}
+.ai-finding-card.critical{border-left-color:#f08070;}
+.ai-finding-card.high{border-left-color:#e0a040;}
+.ai-finding-card.medium{border-left-color:#d4c040;}
+.ai-finding-card.low{border-left-color:#6dd4a0;}
+.ai-finding-card.info{border-left-color:#90c0f0;}
+.ai-finding-top{display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap;}
+.ai-finding-sev{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 9px;border-radius:3px;}
+.ai-finding-sev.critical{background:rgba(192,57,43,.22);color:#f08070;}
+.ai-finding-sev.high{background:rgba(200,120,20,.2);color:#e0a040;}
+.ai-finding-sev.medium{background:rgba(200,180,20,.18);color:#d4c040;}
+.ai-finding-sev.low{background:rgba(26,122,74,.18);color:#6dd4a0;}
+.ai-finding-sev.info{background:rgba(80,140,220,.18);color:#90c0f0;}
+.ai-finding-cat{font-family:var(--font-d);font-weight:600;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#666;padding:2px 8px;border:1px solid #2e2c28;border-radius:3px;}
+.ai-finding-resource{font-family:var(--font-m);font-size:10.5px;color:#888;margin-left:auto;}
+.ai-finding-issue{font-family:var(--font-b);font-size:13px;color:#e8e5e0;line-height:1.5;margin-bottom:5px;}
+.ai-finding-rec{font-family:var(--font-b);font-size:12px;color:#999;line-height:1.5;}
+.ai-finding-rec::before{content:"Fix: ";font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#6dd4a0;}
+.ai-finding-file{font-family:var(--font-m);font-size:10px;color:#555;margin-top:5px;}
+.ai-clean-box{display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(26,122,74,.09);border:1px solid rgba(109,212,160,.25);border-radius:var(--radius-lg);}
+.ai-clean-icon{font-size:28px;}
+.ai-clean-text{font-family:var(--font-b);font-size:14px;color:#6dd4a0;line-height:1.5;}
 </style>
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -353,6 +464,10 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
   <button class="llm-bar-btn send" id="llm-send-btn" onclick="sendLlmPrompt()">Ask</button>
   <span class="llm-reply" id="llm-reply"></span>
   <span class="llm-prov" id="llm-prov-badge">checking…</span>
+  <div style="width:1px;height:20px;background:#2a2a2a;margin:0 4px;flex-shrink:0;"></div>
+  <button class="llm-bar-btn" onclick="openAiTool('plan')" title="Paste terraform plan output and get an AI analysis" style="background:rgba(201,162,39,.1);border-color:#5a4a10;color:#C9A227;">📋 Plan</button>
+  <button class="llm-bar-btn" onclick="openAiTool('troubleshoot')" title="Paste a terraform error and get a fix" style="background:rgba(192,57,43,.1);border-color:#5a2020;color:#e07060;">🔧 Fix Error</button>
+  <button class="llm-bar-btn" onclick="openAiTool('security')" title="AI security review of current config" style="background:rgba(26,122,74,.1);border-color:#1a4a2a;color:#6dd4a0;">🔒 Security</button>
 </div>
 <div id="llm-templates-panel" style="display:none;position:fixed;top:98px;left:28px;right:28px;z-index:600;background:#111;border:1.5px solid #2a2a2a;border-radius:10px;padding:16px 20px 12px;box-shadow:0 8px 32px rgba(0,0,0,.6)">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -1845,6 +1960,324 @@ initGithub();
     document.removeEventListener('mouseup', onUp);
   }
 })();
+</script>
+
+<!-- ── AI Tools Modal ── -->
+<div class="ai-modal-overlay" id="ai-modal-overlay" onclick="if(event.target===this)closeAiModal()">
+  <div class="ai-modal">
+    <div class="ai-modal-head">
+      <span style="font-size:18px">🤖</span>
+      <div class="ai-modal-title" id="ai-modal-title">📋 Plan Explainer</div>
+      <div class="ai-tool-switch">
+        <button class="ai-tool-sw-btn active" id="ai-sw-plan"         onclick="switchAiTab('plan')"         title="Plan Explainer">📋</button>
+        <button class="ai-tool-sw-btn"        id="ai-sw-troubleshoot" onclick="switchAiTab('troubleshoot')" title="Error Troubleshooter">🔧</button>
+        <button class="ai-tool-sw-btn"        id="ai-sw-security"     onclick="switchAiTab('security')"     title="Security Review">🔒</button>
+      </div>
+      <button class="ai-modal-maximize" id="ai-maximize-btn" onclick="toggleAiMaximize()" title="Maximize / Restore">⤢</button>
+      <button class="ai-modal-close" onclick="closeAiModal()">✕</button>
+    </div>
+
+    <!-- Plan Explainer -->
+    <div class="ai-modal-body" id="ai-body-plan">
+      <div>
+        <div class="ai-paste-label">Paste terraform plan output</div>
+        <textarea class="ai-textarea" id="ai-plan-input" placeholder="Paste the output of `terraform plan` here…&#10;&#10;Terraform will perform the following actions:&#10;  # aws_odb_network.this will be created&#10;  + resource &quot;aws_odb_network&quot; &quot;this&quot; {&#10;  …"></textarea>
+      </div>
+      <button class="ai-run-btn" id="ai-plan-btn" onclick="runPlanExplainer()">Analyse Plan</button>
+      <div class="ai-result" id="ai-plan-result">
+        <div class="ai-summary-box">
+          <div class="ai-section-label" style="margin-bottom:8px;">Summary</div>
+          <div class="ai-summary-text" id="ai-plan-summary"></div>
+          <div class="ai-stats" id="ai-plan-stats" style="margin-top:10px;"></div>
+        </div>
+        <div id="ai-plan-changes-wrap">
+          <div class="ai-section-label">Changes</div>
+          <div class="ai-changes-list" id="ai-plan-changes"></div>
+        </div>
+        <div id="ai-plan-risks-wrap">
+          <div class="ai-section-label">Risks</div>
+          <div class="ai-risks-list" id="ai-plan-risks"></div>
+        </div>
+        <div id="ai-plan-recs-wrap">
+          <div class="ai-section-label">Recommendations</div>
+          <div class="ai-recs-list" id="ai-plan-recs"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Security Review -->
+    <div class="ai-modal-body" id="ai-body-security" style="display:none">
+      <div class="ai-sec-scan-row">
+        <button class="ai-run-btn" id="ai-sec-btn" onclick="runSecurityReview()" style="border-color:#2a6a3a;background:rgba(26,122,74,.18);color:#6dd4a0;">🔒 Scan Current Config</button>
+        <div class="ai-sec-info">Scans all generated HCL for security misconfigurations — CIDRs, encryption, access controls, backup settings, and more.</div>
+      </div>
+      <div class="ai-result" id="ai-sec-result">
+        <div class="ai-score-row" id="ai-sec-score-row">
+          <div class="ai-score-gauge">
+            <svg width="72" height="72" viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#2e2c28" stroke-width="7"/>
+              <circle id="ai-score-arc" cx="36" cy="36" r="30" fill="none" stroke="#6dd4a0" stroke-width="7"
+                stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5"/>
+            </svg>
+            <div class="ai-score-gauge-num" id="ai-sec-score-num">—</div>
+          </div>
+          <div class="ai-score-grade" id="ai-sec-grade">—</div>
+          <div class="ai-score-detail">
+            <div class="ai-score-summary" id="ai-sec-summary"></div>
+            <div class="ai-score-files" id="ai-sec-files"></div>
+            <div class="ai-sev-pills" id="ai-sec-pills"></div>
+          </div>
+        </div>
+        <div id="ai-sec-findings-wrap">
+          <div class="ai-section-label">Findings</div>
+          <div class="ai-findings-list" id="ai-sec-findings"></div>
+        </div>
+        <div class="ai-clean-box" id="ai-sec-clean" style="display:none">
+          <span class="ai-clean-icon">✅</span>
+          <span class="ai-clean-text">No security issues found — configuration looks clean.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error Troubleshooter -->
+    <div class="ai-modal-body" id="ai-body-troubleshoot" style="display:none">
+      <div>
+        <div class="ai-paste-label">Paste terraform error output</div>
+        <textarea class="ai-textarea" id="ai-error-input" placeholder="Paste the error from `terraform apply` here…&#10;&#10;Error: creating ODB Network: ResourceConflictException&#10;  with module.odb_net.aws_odb_network.this,&#10;  on ../modules/odb_net/main.tf line 13…"></textarea>
+      </div>
+      <button class="ai-run-btn" id="ai-error-btn" onclick="runTroubleshooter()">Diagnose Error</button>
+      <div class="ai-result" id="ai-error-result">
+        <div class="ai-root-cause">
+          <div class="ai-root-cause-label">Root Cause</div>
+          <div class="ai-root-cause-text" id="ai-error-root"></div>
+        </div>
+        <div class="ai-explanation" id="ai-error-explanation"></div>
+        <div>
+          <div class="ai-section-label">Fix Steps</div>
+          <div class="ai-steps-list" id="ai-error-steps"></div>
+        </div>
+        <div class="ai-prevention" id="ai-error-prevention-wrap">
+          <strong>Prevention: </strong><span id="ai-error-prevention"></span>
+        </div>
+        <div class="ai-docs-hint" id="ai-error-docs"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AI Tools ─────────────────────────────────────────────────────────────────
+let _aiActiveTab = 'plan';
+
+function openAiTool(tab) {
+  _aiActiveTab = tab || 'plan';
+  switchAiTab(_aiActiveTab);
+  document.getElementById('ai-modal-overlay').classList.add('open');
+}
+function closeAiModal() {
+  document.getElementById('ai-modal-overlay').classList.remove('open');
+  document.querySelector('.ai-modal').classList.remove('maximized');
+  document.getElementById('ai-maximize-btn').textContent = '⤢';
+}
+function toggleAiMaximize() {
+  const m = document.querySelector('.ai-modal');
+  const btn = document.getElementById('ai-maximize-btn');
+  const isMax = m.classList.toggle('maximized');
+  btn.textContent = isMax ? '⤡' : '⤢';
+}
+const _AI_LABELS = {plan:'📋 Plan Explainer', troubleshoot:'🔧 Error Troubleshooter', security:'🔒 Security Review'};
+function switchAiTab(tab) {
+  _aiActiveTab = tab;
+  document.getElementById('ai-modal-title').textContent = _AI_LABELS[tab] || 'AI Tools';
+  ['plan','troubleshoot','security'].forEach(t => {
+    document.getElementById('ai-sw-' + t).classList.toggle('active', t === tab);
+    document.getElementById('ai-body-' + t).style.display = t === tab ? 'flex' : 'none';
+  });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAiModal(); });
+
+// ── Plan Explainer ────────────────────────────────────────────────────────────
+async function runPlanExplainer() {
+  const text = document.getElementById('ai-plan-input').value.trim();
+  if (!text) { alert('Please paste your terraform plan output first.'); return; }
+  const btn = document.getElementById('ai-plan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ai-spinner"></span>Analysing…';
+  document.getElementById('ai-plan-result').classList.remove('visible');
+  try {
+    const res = await fetch('/api/ai/explain-plan', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ plan_text: text, cloud: (typeof cloud !== 'undefined' ? cloud : 'aws') })
+    });
+    const d = await res.json();
+    if (d.error) { renderAiError('ai-plan-result', d.error); return; }
+    // Summary
+    document.getElementById('ai-plan-summary').textContent = d.summary || '';
+    // Stats
+    const stats = d.stats || {};
+    const sb = document.getElementById('ai-plan-stats');
+    sb.innerHTML = '';
+    if (stats.add)     sb.innerHTML += `<div class="ai-stat add">+${stats.add} add</div>`;
+    if (stats.change)  sb.innerHTML += `<div class="ai-stat change">~${stats.change} change</div>`;
+    if (stats.destroy) sb.innerHTML += `<div class="ai-stat destroy">−${stats.destroy} destroy</div>`;
+    // Changes
+    const cl = document.getElementById('ai-plan-changes');
+    cl.innerHTML = '';
+    (d.changes || []).forEach(c => {
+      const act = (c.action||'').toLowerCase();
+      cl.innerHTML += `<div class="ai-change-row">
+        <span class="ai-change-badge ${act}">${act}</span>
+        <span class="ai-change-resource">${esc(c.resource||'')}</span>
+        <span class="ai-change-note">${esc(c.note||'')}</span>
+      </div>`;
+    });
+    document.getElementById('ai-plan-changes-wrap').style.display = d.changes?.length ? '' : 'none';
+    // Risks
+    const rl = document.getElementById('ai-plan-risks');
+    rl.innerHTML = '';
+    (d.risks || []).forEach(r => {
+      const sev = (r.severity||'low').toLowerCase();
+      rl.innerHTML += `<div class="ai-risk-row ${sev}">
+        <span class="ai-risk-sev ${sev}">${sev}</span>
+        <span class="ai-risk-msg">${esc(r.message||'')}</span>
+      </div>`;
+    });
+    document.getElementById('ai-plan-risks-wrap').style.display = d.risks?.length ? '' : 'none';
+    // Recommendations
+    const recl = document.getElementById('ai-plan-recs');
+    recl.innerHTML = '';
+    (d.recommendations || []).forEach((r, i) => {
+      recl.innerHTML += `<div class="ai-rec-row"><span class="ai-rec-num">${i+1}.</span><span>${esc(r)}</span></div>`;
+    });
+    document.getElementById('ai-plan-recs-wrap').style.display = d.recommendations?.length ? '' : 'none';
+    document.getElementById('ai-plan-result').classList.add('visible');
+  } catch(e) {
+    renderAiError('ai-plan-result', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Analyse Plan';
+  }
+}
+
+// ── Error Troubleshooter ──────────────────────────────────────────────────────
+async function runTroubleshooter() {
+  const text = document.getElementById('ai-error-input').value.trim();
+  if (!text) { alert('Please paste your terraform error first.'); return; }
+  const btn = document.getElementById('ai-error-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ai-spinner"></span>Diagnosing…';
+  document.getElementById('ai-error-result').classList.remove('visible');
+  try {
+    const res = await fetch('/api/ai/troubleshoot', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ error_text: text, cloud: (typeof cloud !== 'undefined' ? cloud : 'aws') })
+    });
+    const d = await res.json();
+    if (d.error) { renderAiError('ai-error-result', d.error); return; }
+    document.getElementById('ai-error-root').textContent        = d.root_cause   || '';
+    document.getElementById('ai-error-explanation').textContent = d.explanation  || '';
+    const sl = document.getElementById('ai-error-steps');
+    sl.innerHTML = '';
+    (d.fix_steps || []).forEach((s, i) => {
+      sl.innerHTML += `<div class="ai-step-row">
+        <span class="ai-step-num">${i+1}</span>
+        <span class="ai-step-text">${esc(s)}</span>
+      </div>`;
+    });
+    document.getElementById('ai-error-prevention').textContent = d.prevention || '';
+    document.getElementById('ai-error-prevention-wrap').style.display = d.prevention ? '' : 'none';
+    const dh = document.getElementById('ai-error-docs');
+    dh.textContent = d.docs_hint ? '📖 ' + d.docs_hint : '';
+    dh.style.display = d.docs_hint ? '' : 'none';
+    document.getElementById('ai-error-result').classList.add('visible');
+  } catch(e) {
+    renderAiError('ai-error-result', e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Diagnose Error';
+  }
+}
+
+// ── Security Reviewer ─────────────────────────────────────────────────────────
+const _SEV_ORDER = ['critical','high','medium','low','info'];
+
+async function runSecurityReview() {
+  let payload;
+  try { payload = buildPayload(); } catch(e) { alert('Build config first: ' + e.message); return; }
+  const btn = document.getElementById('ai-sec-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ai-spinner"></span>Scanning…';
+  document.getElementById('ai-sec-result').classList.remove('visible');
+  try {
+    const res = await fetch('/api/ai/security-review', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await res.json();
+    if (d.error) { renderAiError('ai-sec-result', d.error); return; }
+
+    // Score gauge
+    const score = Math.max(0, Math.min(100, d.score || 0));
+    const circ = 2 * Math.PI * 30; // 188.5
+    const arc  = document.getElementById('ai-score-arc');
+    arc.setAttribute('stroke-dashoffset', circ * (1 - score / 100));
+    const gradeColor = score >= 80 ? '#6dd4a0' : score >= 60 ? '#e0b840' : score >= 40 ? '#e0a040' : '#f08070';
+    arc.setAttribute('stroke', gradeColor);
+    document.getElementById('ai-sec-score-num').textContent = score;
+    const gradeEl = document.getElementById('ai-sec-grade');
+    gradeEl.textContent  = d.grade || '—';
+    gradeEl.style.color  = gradeColor;
+    document.getElementById('ai-sec-summary').textContent = d.summary || '';
+    document.getElementById('ai-sec-files').textContent =
+      `${d.files_reviewed || 0} file${d.files_reviewed !== 1 ? 's' : ''} reviewed`;
+
+    // Severity pill counts
+    const findings = d.findings || [];
+    const counts = {};
+    findings.forEach(f => { const s=(f.severity||'info').toLowerCase(); counts[s]=(counts[s]||0)+1; });
+    const pills = document.getElementById('ai-sec-pills');
+    pills.innerHTML = '';
+    _SEV_ORDER.forEach(s => {
+      if (counts[s]) pills.innerHTML +=
+        `<span class="ai-sev-pill ${s}">${counts[s]} ${s}</span>`;
+    });
+
+    // Findings cards
+    const fl = document.getElementById('ai-sec-findings');
+    fl.innerHTML = '';
+    const sorted = [...findings].sort((a,b) =>
+      _SEV_ORDER.indexOf(a.severity) - _SEV_ORDER.indexOf(b.severity));
+    sorted.forEach(f => {
+      const sev = (f.severity||'info').toLowerCase();
+      fl.innerHTML += `<div class="ai-finding-card ${sev}">
+        <div class="ai-finding-top">
+          <span class="ai-finding-sev ${sev}">${sev}</span>
+          <span class="ai-finding-cat">${esc(f.category||'')}</span>
+          ${f.resource ? `<span class="ai-finding-resource">${esc(f.resource)}</span>` : ''}
+        </div>
+        <div class="ai-finding-issue">${esc(f.issue||'')}</div>
+        <div class="ai-finding-rec">${esc(f.recommendation||'')}</div>
+        ${f.file ? `<div class="ai-finding-file">📄 ${esc(f.file)}</div>` : ''}
+      </div>`;
+    });
+
+    document.getElementById('ai-sec-findings-wrap').style.display = findings.length ? '' : 'none';
+    document.getElementById('ai-sec-clean').style.display = findings.length ? 'none' : 'flex';
+    document.getElementById('ai-sec-result').classList.add('visible');
+  } catch(e) {
+    renderAiError('ai-sec-result', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔒 Scan Current Config';
+  }
+}
+
+function renderAiError(resultId, msg) {
+  const el = document.getElementById(resultId);
+  el.innerHTML = `<div class="ai-err-box">Error: ${esc(msg)}</div>`;
+  el.classList.add('visible');
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 </body>
 </html>

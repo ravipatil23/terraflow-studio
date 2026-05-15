@@ -1,4 +1,3 @@
-# modules/{{ module_name }}/terraform.tfvars
 #
 # NOTE: cloud_exadata_infrastructure_id and odb_network_id are auto-wired
 # from module outputs in root main.tf:
@@ -70,6 +69,11 @@ memory_size_in_gbs = {{ memory_size_in_gbs }}
 scan_listener_port_tcp = {{ scan_listener_port_tcp }}
 {% else %}
 # scan_listener_port_tcp = 1521
+{% endif %}
+{% if scan_listener_port_tcp_ssl %}
+scan_listener_port_tcp_ssl = {{ scan_listener_port_tcp_ssl }}
+{% else %}
+# scan_listener_port_tcp_ssl = 2484
 {% endif %}
 is_local_backup_enabled     = {{ is_local_backup_enabled }}
 is_sparse_diskgroup_enabled = {{ is_sparse_diskgroup_enabled }}

@@ -121,6 +121,7 @@ const ODB_REGIONS = [
 ];
 
 const ODB_AZ_MAP = Object.fromEntries(ODB_REGIONS.map(r => [r.region, r.azs]));
+const ODB_AZ_REGION_MAP = Object.fromEntries(ODB_REGIONS.flatMap(r => r.azs.map(az => [az, r.region])));
 
 function regionSelectHTML(id, value, onchange) {
   const liveOpts = ODB_REGIONS.filter(r => r.status === 'live').map(r =>
@@ -199,8 +200,8 @@ let awsOciDbs = [];
 
 // ── Defaults factories ────────────────────────────────────────────────────────
 function defAwsNet(i)     { return {module_name: i===0?'odb_network':`odb_network_${i+1}`,    display_name:'',availability_zone_id:'',client_subnet_cidr:'',backup_subnet_cidr:'',s3_access:false,zero_etl_access:false,availability_zone:'',region:'',default_dns_prefix:'',custom_domain_name:'',delete_associated_resources:false,tags:{}}; }
-function defAwsInfra(i)   { return {module_name: i===0?'odb_exaInfra':`odb_exaInfra_${i+1}`,      display_name:'',shape:'Exadata.X11M',availability_zone_id:'',compute_count:2,storage_count:3,database_server_type:'',storage_server_type:'',customer_contacts:[],mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',tags:{}}; }
-function defAwsCluster(i) { return {module_name: i===0?'odb_vmcluster':`odb_vmcluster_${i+1}`,    display_name:'',cpu_core_count:16,gi_version:'',hostname_prefix:'',license_model:'LICENSE_INCLUDED',vm_mode:'arn',cloud_exadata_infrastructure_id:'',odb_network_id:'',cloud_exadata_infrastructure_arn:'',odb_network_arn:'',infra_ref:'',network_ref:'',ssh_public_keys:[],db_servers:[],db_servers_mode:'auto',dco_is_diagnostics_events_enabled:true,dco_is_health_monitoring_enabled:true,dco_is_incident_logs_enabled:true,cluster_name:'',timezone:'',data_storage_size_in_tbs:'',db_node_storage_size_in_gbs:'',memory_size_in_gbs:'',scan_listener_port_tcp:'',is_local_backup_enabled:false,is_sparse_diskgroup_enabled:false,region:'',tags:{}}; }
+function defAwsInfra(i)   { return {module_name: i===0?'odb_exaInfra':`odb_exaInfra_${i+1}`,      display_name:'',shape:'Exadata.X11M',region:'',availability_zone_id:'',compute_count:2,storage_count:3,database_server_type:'',storage_server_type:'',customer_contacts:[],mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',tags:{}}; }
+function defAwsCluster(i) { return {module_name: i===0?'odb_vmcluster':`odb_vmcluster_${i+1}`,    display_name:'',cpu_core_count:16,gi_version:'',hostname_prefix:'',license_model:'LICENSE_INCLUDED',vm_mode:'arn',cloud_exadata_infrastructure_id:'',odb_network_id:'',cloud_exadata_infrastructure_arn:'',odb_network_arn:'',infra_ref:'',network_ref:'',ssh_public_keys:[],db_servers:[],db_servers_mode:'auto',dco_is_diagnostics_events_enabled:true,dco_is_health_monitoring_enabled:true,dco_is_incident_logs_enabled:true,cluster_name:'',timezone:'',data_storage_size_in_tbs:'',db_node_storage_size_in_gbs:'',memory_size_in_gbs:'',scan_listener_port_tcp:'',scan_listener_port_tcp_ssl:'',is_local_backup_enabled:false,is_sparse_diskgroup_enabled:false,region:'',tags:{}}; }
 function defAwsAvmc(i)    { return {module_name: i===0?'odb_avmcluster':`odb_avmcluster_${i+1}`, display_name:'',autonomous_data_storage_size_in_tbs:5,cpu_core_count_per_node:40,memory_per_oracle_compute_unit_in_gbs:2,total_container_databases:2,scan_listener_port_non_tls:1521,scan_listener_port_tls:2484,license_model:'LICENSE_INCLUDED',is_mtls_enabled_vm_cluster:false,infra_ref:'',network_ref:'',db_servers:[],db_servers_mode:'auto',description:'',time_zone:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,tags:{}}; }
 function defAwsOciDb(i)   { return {module_name: i===0?'oci_database':`oci_database_${i+1}`, vmcluster_ref:'', db_home_display_name:'dbhome', db_version:'19.0.0.0', db_name:'MYDB', character_set:'AL32UTF8', ncharacter_set:'AL16UTF16', pdb_name:'MYPDB', db_unique_name:'', sid_prefix:'', create_pdb:true, auto_backup_enabled:false, auto_backup_window:'SLOT_TWO', recovery_window_in_days:7}; }
 function defAwsPeering(i)   { return {module_name: i===0?'odb_peering':`odb_peering_${i+1}`,     display_name:'',peer_network_id:'',network_ref:'',region:'',peer_network_cidrs:[],tags:{}}; }
@@ -250,6 +251,7 @@ function readAwsInfra(i) {
     module_name:   fv(`${p}mn`)  || awsInfras[i].module_name,
     display_name:  fv(`${p}dn`),
     shape:         fv(`${p}shape`) || 'Exadata.X11M',
+    region:               fv(`${p}reg`),
     availability_zone_id: fv(`${p}az`),
     compute_count: parseInt(fv(`${p}cc`)) || 2,
     storage_count: parseInt(fv(`${p}sc`)) || 3,
@@ -271,7 +273,7 @@ function readAwsCluster(i) {
   awsClusters[i] = {...awsClusters[i],
     module_name:   fv(`${p}mn`)  || awsClusters[i].module_name,
     display_name:  fv(`${p}dn`),
-    cpu_core_count: parseInt(fv(`${p}cpu`)) || 16,
+    cpu_core_count: Math.min(48, Math.max(4, Math.round((parseInt(fv(`${p}cpu`)) || 16) / 4) * 4)),
     gi_version:    fv(`${p}gi`),
     hostname_prefix: fv(`${p}hp`),
     license_model: fv(`${p}lm`) || 'LICENSE_INCLUDED',
@@ -293,7 +295,8 @@ function readAwsCluster(i) {
     data_storage_size_in_tbs: fv(`${p}ds`),
     db_node_storage_size_in_gbs: fv(`${p}dng`),
     memory_size_in_gbs: fv(`${p}mem`),
-    scan_listener_port_tcp: fv(`${p}scan`),
+    scan_listener_port_tcp:     fv(`${p}scan`),
+    scan_listener_port_tcp_ssl: fv(`${p}scanssl`),
     is_local_backup_enabled: fcb(`${p}lb`),
     is_sparse_diskgroup_enabled: fcb(`${p}sp`),
     region: fv(`${p}reg`),
@@ -484,7 +487,7 @@ function awsClusterCardHTML(d, i) {
     <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
       <div class="field"><div class="field-lbl">display_name <span class="req-star">*</span></div><input type="text" id="${p}dn" value="${d.display_name}" placeholder="vm-cluster-prod" oninput="readAwsCluster(${i});refresh()"></div>
       <div class="g2">
-        <div class="field"><div class="field-lbl">cpu_core_count <span class="req-star">*</span></div><div class="field-hint">Min 2</div><input type="number" id="${p}cpu" value="${d.cpu_core_count||16}" min="2" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">cpu_core_count <span class="req-star">*</span></div><div class="field-hint">4–48, multiples of 4</div><input type="number" id="${p}cpu" value="${d.cpu_core_count||16}" min="4" max="48" step="4" oninput="readAwsCluster(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">gi_version <span class="req-star">*</span></div><input type="text" id="${p}gi" value="${d.gi_version||''}" placeholder="23.0.0.0" oninput="readAwsCluster(${i});refresh()"></div>
       </div>
       <div class="g2">
@@ -534,8 +537,12 @@ function awsClusterCardHTML(d, i) {
     <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
       <div class="g2"><div class="field"><div class="field-lbl">cluster_name</div><input type="text" id="${p}cn" value="${d.cluster_name||''}" placeholder="gic-prod" oninput="readAwsCluster(${i});refresh()"></div><div class="field"><div class="field-lbl">timezone</div>${tzSelectHTML(`${p}tz`, d.timezone||'', `readAwsCluster(${i});refresh()`)}</div></div>
       <div class="g2">
-        <div class="field"><div class="field-lbl">scan_listener_port_tcp</div><div class="field-hint">Default 1521, range 1024–8999</div><input type="number" id="${p}scan" value="${d.scan_listener_port_tcp||''}" placeholder="1521" min="1024" max="8999" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">scan_listener_port_tcp</div><div class="field-hint">Non-SSL. Default 1521, range 1024–8999</div><input type="number" id="${p}scan" value="${d.scan_listener_port_tcp||''}" placeholder="1521" min="1024" max="8999" oninput="readAwsCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">scan_listener_port_tcp_ssl</div><div class="field-hint">SSL/TLS. Default 2484, range 1024–8999</div><input type="number" id="${p}scanssl" value="${d.scan_listener_port_tcp_ssl||''}" placeholder="2484" min="1024" max="8999" oninput="readAwsCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
         <div class="field"><div class="field-lbl">region</div><div class="field-hint">ODB@AWS live regions</div>${regionSelectHTML(`${p}reg`, d.region||'', `readAwsCluster(${i});refresh()`)}</div>
+        <div class="field"></div>
       </div>
     </div>
   </div>
@@ -829,7 +836,7 @@ function applyConfig(doc) {
   const hasNewFormat = AWS_ARRAY_KEYS.some(k => doc[k] && doc[k].length);
   if (hasNewFormat) {
     if (doc.aws_networks     && doc.aws_networks.length)      awsNets     = doc.aws_networks.map((d,i)      => ({...defAwsNet(i),     ...d}));
-    if (doc.aws_infras       && doc.aws_infras.length)        awsInfras   = doc.aws_infras.map((d,i)        => ({...defAwsInfra(i),   ...d}));
+    if (doc.aws_infras       && doc.aws_infras.length)        awsInfras   = doc.aws_infras.map((d,i)        => { const obj={...defAwsInfra(i),...d}; if(!obj.region&&obj.availability_zone_id) obj.region=ODB_AZ_REGION_MAP[obj.availability_zone_id]||''; return obj; });
     if (doc.aws_peerings     && doc.aws_peerings.length)      awsPeerings = doc.aws_peerings.map((d,i)      => ({...defAwsPeering(i), ...d}));
     if (doc.aws_clusters     && doc.aws_clusters.length)      awsClusters = doc.aws_clusters.map((d,i)      => ({...defAwsCluster(i), ...d}));
     if (doc.aws_avmclusters  && doc.aws_avmclusters.length)   awsAvmcs    = doc.aws_avmclusters.map((d,i)   => ({...defAwsAvmc(i),   ...d}));
@@ -838,7 +845,9 @@ function applyConfig(doc) {
     const d0 = doc.module_0 || {}, d1 = doc.module_1 || {}, d2 = doc.module_2 || {}, d3 = doc.module_3 || {};
     const mn = doc.module_names || {};
     awsNets     = [{...defAwsNet(0),     ...d0, module_name: mn['0'] || 'odb_network'}];
-    awsInfras   = [{...defAwsInfra(0),   ...d1, module_name: mn['1'] || 'odb_exadata_infra'}];
+    const _inf0 = {...defAwsInfra(0), ...d1, module_name: mn['1'] || 'odb_exadata_infra'};
+    if (!_inf0.region && _inf0.availability_zone_id) _inf0.region = ODB_AZ_REGION_MAP[_inf0.availability_zone_id] || '';
+    awsInfras = [_inf0];
     awsPeerings = [{...defAwsPeering(0), ...d2, module_name: mn['2'] || 'odb_peering',
                     peer_network_id: d2.peer_network_id || '',
                     peer_network_cidrs: d2.peer_network_cidrs || []}];

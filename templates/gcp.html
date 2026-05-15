@@ -350,6 +350,7 @@ function gcpInfraCardHTML(d, i) {
         <div class="field"><div class="field-lbl">project</div><input type="text" id="${p}proj" value="${d.project||''}" placeholder="my-gcp-project" oninput="readGcpInfra(${i});refresh()"></div>
       </div>
       <div class="field"><div class="field-lbl">total_storage_size_gb</div><input type="number" id="${p}tsg" value="${d.total_storage_size_gb||''}" placeholder="196608" oninput="readGcpInfra(${i});refresh()"></div>
+      <div class="field"><div class="field-lbl">deletion_protection</div><div class="field-hint">Prevent accidental deletion of this infrastructure</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}delp" ${d.deletion_protection!==false?'checked':''} onchange="readGcpInfra(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.deletion_protection!==false?'true':'false'}</span></div></div>
     </div>
     <div class="section"><div class="section-head"><div class="section-title">Maintenance Window</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
       <div class="inner-card">
