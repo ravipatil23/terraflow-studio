@@ -1,0 +1,18 @@
+resource_group_name   = "{{ resource_group_name }}"
+location              = "{{ location }}"
+name                  = "{{ name }}"
+display_name          = "{{ display_name }}"
+shape                 = "{{ shape }}"
+compute_count         = {{ compute_count }}
+storage_count         = {{ storage_count }}
+zone                  = "{{ zone }}"
+mw_preference         = "{{ mw_preference }}"
+mw_patching_mode      = "{{ mw_patching_mode }}"
+mw_lead_time_in_weeks = {{ mw_lead_time_in_weeks }}
+{% if tags %}
+tags = {
+{% for k, v in tags.items() %}
+  "{{ k }}" = "{{ v }}"
+{% endfor %}
+}
+{% endif %}

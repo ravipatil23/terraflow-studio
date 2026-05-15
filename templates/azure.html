@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+
+{% block body_class %}azure{% endblock %}
+
+{% block cloud_nav %}{% endblock %}
+
+{% block provider_badge %}hashicorp/azurerm ≥ 4.9.0{% endblock %}
+
+{% block product_tabs %}
+<div class="tgroup show" id="azure-tabs">
+  <div class="tab active" onclick="switchTab(0,true)"><span class="tab-num">A</span><span class="tab-label">virtual_network + subnet</span></div>
+  <div class="tab" onclick="switchTab(1,true)"><span class="tab-num">B</span><span class="tab-label">cloud_exadata_infrastructure</span></div>
+  <div class="tab" onclick="switchTab(2,true)"><span class="tab-num">C</span><span class="tab-label">cloud_vm_cluster</span></div>
+</div>
+{% endblock %}
+
+{% block product_pages %}
+<!-- ─── AZURE PAGE A: virtual_network + delegated subnet ─── -->
+<div class="page active" id="azure-page-0">
+  <div class="page-hero">
+    <div class="page-resource-name" style="font-size:20px;line-height:1.2">azurerm_<em>virtual_network</em> + azurerm_<em>subnet</em></div>
+    <a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network" target="_blank">docs ↗</a>
+  </div>
+  <div class="notice azure" style="background:rgba(0,120,212,0.07);border-color:rgba(0,120,212,0.25)"><span style="font-size:14px;flex-shrink:0">ℹ</span> Each VNet entry also generates an Oracle-delegated subnet (<code>Oracle.Database/networkAttachments</code>) in the same module.</div>
+  <div id="azure-vnet-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAzureVnet()">＋ Add VNet</button>
+    <span class="inst-count-lbl" id="azure-vnet-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(0,true)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── AZURE PAGE B: exadata infrastructure ─── -->
+<div class="page" id="azure-page-1">
+  <div class="page-hero">
+    <div class="page-resource-name" style="font-size:18px;line-height:1.2">azurerm_oracle_cloud_<em>exadata_infrastructure</em></div>
+    <a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/oracle_cloud_exadata_infrastructure" target="_blank">docs ↗</a>
+  </div>
+  <div id="azure-infra-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAzureInfra()">＋ Add Exadata Infrastructure</button>
+    <span class="inst-count-lbl" id="azure-infra-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(1,true)">Validate &amp; Generate All</button>
+</div>
+
+<!-- ─── AZURE PAGE C: vm cluster ─── -->
+<div class="page" id="azure-page-2">
+  <div class="page-hero">
+    <div class="page-resource-name" style="font-size:18px;line-height:1.2">azurerm_oracle_cloud_<em>vm_cluster</em></div>
+    <a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/oracle_cloud_vm_cluster" target="_blank">docs ↗</a>
+  </div>
+  <div id="azure-cluster-list" class="inst-list"></div>
+  <div class="inst-add-row">
+    <button class="inst-add-btn" onclick="addAzureCluster()">＋ Add VM Cluster</button>
+    <span class="inst-count-lbl" id="azure-cluster-count"></span>
+  </div>
+  <button class="vbtn" style="margin-top:14px" onclick="vgen(2,true)">Validate &amp; Generate All</button>
+</div>
+{% endblock %}
+
+{% block product_data %}
+// ── DB@Azure Region data ──────────────────────────────────────────────────────
+const AZURE_REGIONS = [
+  { value:'eastus',             label:'East US (Virginia)'           },
+  { value:'eastus2',            label:'East US 2 (Virginia)'         },
+  { value:'westus',             label:'West US (California)'         },
+  { value:'westus2',            label:'West US 2 (Washington)'       },
+  { value:'uksouth',            label:'UK South (London)'            },
+  { value:'germanywestcentral', label:'Germany West Central (Frankfurt)' },
+  { value:'japaneast',          label:'Japan East (Tokyo)'           },
+  { value:'australiaeast',      label:'Australia East (New South Wales)' },
+  { value:'canadacentral',      label:'Canada Central (Toronto)'     },
+  { value:'southeastasia',      label:'Southeast Asia (Singapore)'   },
+  { value:'francecentral',      label:'France Central (Paris)'       },
+  { value:'qatarcentral',       label:'Qatar Central (Doha)'         },
+  { value:'southafricanorth',   label:'South Africa North (Johannesburg)' },
+  { value:'israelcentral',      label:'Israel Central (Tel Aviv)'    },
+];
+
+function azureRegionSelectHTML(id, value, onchange) {
+  const opts = AZURE_REGIONS.map(r =>
+    `<option value="${r.value}"${r.value === value ? ' selected' : ''}>${r.label}</option>`
+  ).join('');
+  return `<select id="${id}" class="ref-select" onchange="${onchange}">
+    <option value="">— select region —</option>
+    ${opts}
+  </select>`;
+}
+{% endblock %}
+
+{% block product_state %}
+let azureVnets = [], azureInfras = [], azureClusters = [];
+
+// ── Default factories ─────────────────────────────────────────────────────────
+function defAzureVnet(i) {
+  return {
+    module_name:           i === 0 ? 'azure_vnet' : `azure_vnet_${i+1}`,
+    resource_group_name:   '',
+    location:              'eastus',
+    vnet_name:             '',
+    address_space:         '10.0.0.0/16',
+    subnet_name:           '',
+    subnet_address_prefix: '10.0.1.0/24',
+    tags:                  {},
+  };
+}
+
+function defAzureInfra(i) {
+  return {
+    module_name:          i === 0 ? 'azure_exainfra' : `azure_exainfra_${i+1}`,
+    resource_group_name:  '',
+    location:             'eastus',
+    name:                 '',
+    display_name:         '',
+    shape:                'Exadata.X11M',
+    compute_count:        2,
+    storage_count:        3,
+    zone:                 '1',
+    mw_preference:        'NoPreference',
+    mw_patching_mode:     'Rolling',
+    mw_lead_time_in_weeks: 0,
+    tags:                 {},
+  };
+}
+
+function defAzureCluster(i) {
+  return {
+    module_name:                    i === 0 ? 'azure_vmcluster' : `azure_vmcluster_${i+1}`,
+    resource_group_name:            '',
+    location:                       'eastus',
+    name:                           '',
+    display_name:                   '',
+    infra_ref:                      '',
+    vnet_ref:                       '',
+    cloud_exadata_infrastructure_id: '',
+    subnet_id:                      '',
+    vnet_id:                        '',
+    hostname:                       '',
+    cpu_core_count:                 4,
+    data_storage_size_in_tbs:       2,
+    db_node_storage_size_in_gbs:    120,
+    memory_size_in_gbs:             60,
+    ssh_public_keys:                [],
+    gi_version:                     '19.0.0.0',
+    license_model:                  'LicenseIncluded',
+    cluster_name:                   '',
+    domain:                         '',
+    backup_subnet_cidr:             '',
+    data_storage_percentage:        100,
+    is_local_backup_enabled:        false,
+    is_sparse_diskgroup_enabled:    false,
+    time_zone:                      '',
+    scan_listener_port_tcp:         1521,
+    scan_listener_port_tcp_ssl:     2484,
+    dco_diagnostics_events_enabled: true,
+    dco_health_monitoring_enabled:  true,
+    dco_incident_logs_enabled:      true,
+    tags:                           {},
+  };
+}
+
+// ── Add helpers ───────────────────────────────────────────────────────────────
+function addAzureVnet()    { azureVnets.push(defAzureVnet(azureVnets.length));       renderAzureVnets();    refresh(); }
+function addAzureInfra()   { azureInfras.push(defAzureInfra(azureInfras.length));    renderAzureInfras();   refresh(); }
+function addAzureCluster() { azureClusters.push(defAzureCluster(azureClusters.length)); renderAzureClusters(); refresh(); }
+
+// ── Read card values back into state arrays ───────────────────────────────────
+function readAzureVnet(i) {
+  const p = `av${i}_`;
+  azureVnets[i] = {...azureVnets[i],
+    module_name:           fv(`${p}mn`) || azureVnets[i].module_name,
+    resource_group_name:   fv(`${p}rg`),
+    location:              fv(`${p}loc`) || 'eastus',
+    vnet_name:             fv(`${p}vn`),
+    address_space:         fv(`${p}as`),
+    subnet_name:           fv(`${p}sn`),
+    subnet_address_prefix: fv(`${p}sp`),
+  };
+}
+
+function readAzureInfra(i) {
+  const p = `ai${i}_`;
+  azureInfras[i] = {...azureInfras[i],
+    module_name:          fv(`${p}mn`) || azureInfras[i].module_name,
+    resource_group_name:  fv(`${p}rg`),
+    location:             fv(`${p}loc`) || 'eastus',
+    name:                 fv(`${p}name`),
+    display_name:         fv(`${p}dn`),
+    shape:                fv(`${p}shape`) || 'Exadata.X11M',
+    compute_count:        parseInt(fv(`${p}cc`)) || 2,
+    storage_count:        parseInt(fv(`${p}sc`)) || 3,
+    zone:                 fv(`${p}zone`) || '1',
+    mw_preference:        fv(`${p}mwp`) || 'NoPreference',
+    mw_patching_mode:     fv(`${p}mwpm`) || 'Rolling',
+    mw_lead_time_in_weeks: parseInt(fv(`${p}mwlead`)) || 0,
+  };
+}
+
+function readAzureCluster(i) {
+  const p = `ac${i}_`;
+  azureClusters[i] = {...azureClusters[i],
+    module_name:                    fv(`${p}mn`) || azureClusters[i].module_name,
+    resource_group_name:            fv(`${p}rg`),
+    location:                       fv(`${p}loc`) || 'eastus',
+    name:                           fv(`${p}name`),
+    display_name:                   fv(`${p}dn`),
+    infra_ref:                      fv(`${p}infra_ref`),
+    vnet_ref:                       fv(`${p}vnet_ref`),
+    cloud_exadata_infrastructure_id: fv(`${p}exaid`),
+    subnet_id:                      fv(`${p}subid`),
+    vnet_id:                        fv(`${p}vnetid`),
+    hostname:                       fv(`${p}host`),
+    cpu_core_count:                 parseInt(fv(`${p}cpu`)) || 4,
+    data_storage_size_in_tbs:       parseFloat(fv(`${p}dstb`)) || 2,
+    db_node_storage_size_in_gbs:    parseInt(fv(`${p}dng`)) || 120,
+    memory_size_in_gbs:             parseInt(fv(`${p}mem`)) || 60,
+    gi_version:                     fv(`${p}gi`) || '19.0.0.0',
+    license_model:                  fv(`${p}lm`) || 'LicenseIncluded',
+    cluster_name:                   fv(`${p}cn`),
+    domain:                         fv(`${p}dom`),
+    backup_subnet_cidr:             fv(`${p}bsc`),
+    data_storage_percentage:        parseInt(fv(`${p}dsp`)) || 100,
+    is_local_backup_enabled:        fcb(`${p}lbe`),
+    is_sparse_diskgroup_enabled:    fcb(`${p}sde`),
+    time_zone:                      fv(`${p}tz`),
+    scan_listener_port_tcp:         parseInt(fv(`${p}sltcp`)) || 1521,
+    scan_listener_port_tcp_ssl:     parseInt(fv(`${p}slssl`)) || 2484,
+    dco_diagnostics_events_enabled: fcb(`${p}dcoD`),
+    dco_health_monitoring_enabled:  fcb(`${p}dcoH`),
+    dco_incident_logs_enabled:      fcb(`${p}dcoL`),
+    ssh_public_keys:                azureClusters[i].ssh_public_keys || [],
+  };
+}
+
+// ── Dropdown option helpers ───────────────────────────────────────────────────
+function azureInfraOptions(selected) {
+  return azureInfras.map(inf =>
+    `<option value="${inf.module_name}"${inf.module_name === selected ? ' selected' : ''}>${inf.module_name}</option>`
+  ).join('');
+}
+function azureVnetOptions(selected) {
+  return azureVnets.map(vn =>
+    `<option value="${vn.module_name}"${vn.module_name === selected ? ' selected' : ''}>${vn.module_name}</option>`
+  ).join('');
+}
+
+// ── SSH key helper ────────────────────────────────────────────────────────────
+function addSshToAzureCluster(i) {
+  const inp = document.getElementById(`ac${i}_sshin`);
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) return;
+  azureClusters[i].ssh_public_keys = [...(azureClusters[i].ssh_public_keys || []), val];
+  inp.value = '';
+  renderAzureClusters();
+  refresh();
+}
+
+// ── Card HTML builders ────────────────────────────────────────────────────────
+function azureVnetCardHTML(d, i) {
+  const p = `av${i}_`, open = (_cardOpen[`av-card-${i}`] ?? i === 0) ? 'open' : '';
+  return `<div class="inst-card ${open}" id="av-card-${i}" draggable="true" ondragstart="onCardDragStart(event,azureVnets,${i},renderAzureVnets,'av-card-')" ondragover="onCardDragOver(event,azureVnets,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,azureVnets,${i},renderAzureVnets,'av-card-')" ondragend="onCardDragEnd(event)">
+  <div class="inst-card-head" onclick="toggleCard('av-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${azureVnets.length > 1 ? `<button class="inst-rm" onclick="event.stopPropagation();removeInst(azureVnets,${i},renderAzureVnets)">Remove</button>` : ''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAzureVnet(${i});renderRefDropdowns();refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">Virtual Network</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">resource_group_name <span class="req-star">*</span></div><input type="text" id="${p}rg" value="${d.resource_group_name||''}" placeholder="my-resource-group" oninput="readAzureVnet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${azureRegionSelectHTML(`${p}loc`, d.location||'eastus', `readAzureVnet(${i});refresh()`)}</div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">vnet_name <span class="req-star">*</span></div><input type="text" id="${p}vn" value="${d.vnet_name||''}" placeholder="oracle-vnet" oninput="readAzureVnet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">address_space <span class="req-star">*</span></div><div class="field-hint">CIDR block for the VNet</div><input type="text" id="${p}as" value="${d.address_space||'10.0.0.0/16'}" placeholder="10.0.0.0/16" oninput="readAzureVnet(${i});refresh()"></div>
+      </div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Oracle-Delegated Subnet</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice azure" style="background:rgba(0,120,212,0.06);border-color:rgba(0,120,212,0.2);margin-bottom:10px"><span style="font-size:12px;flex-shrink:0">ℹ</span> Subnet is delegated to <code>Oracle.Database/networkAttachments</code> automatically.</div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">subnet_name <span class="req-star">*</span></div><input type="text" id="${p}sn" value="${d.subnet_name||''}" placeholder="oracle-delegated-subnet" oninput="readAzureVnet(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">subnet_address_prefix <span class="req-star">*</span></div><div class="field-hint">Must be /24 or larger within VNet CIDR</div><input type="text" id="${p}sp" value="${d.subnet_address_prefix||'10.0.1.0/24'}" placeholder="10.0.1.0/24" oninput="readAzureVnet(${i});refresh()"></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function azureInfraCardHTML(d, i) {
+  const p = `ai${i}_`, open = (_cardOpen[`ai-card-${i}`] ?? i === 0) ? 'open' : '';
+  return `<div class="inst-card ${open}" id="ai-card-${i}" draggable="true" ondragstart="onCardDragStart(event,azureInfras,${i},renderAzureInfras,'ai-card-')" ondragover="onCardDragOver(event,azureInfras,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,azureInfras,${i},renderAzureInfras,'ai-card-')" ondragend="onCardDragEnd(event)">
+  <div class="inst-card-head" onclick="toggleCard('ai-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${azureInfras.length > 1 ? `<button class="inst-rm" onclick="event.stopPropagation();removeInst(azureInfras,${i},renderAzureInfras)">Remove</button>` : ''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAzureInfra(${i});renderRefDropdowns();refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">resource_group_name <span class="req-star">*</span></div><input type="text" id="${p}rg" value="${d.resource_group_name||''}" placeholder="my-resource-group" oninput="readAzureInfra(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${azureRegionSelectHTML(`${p}loc`, d.location||'eastus', `readAzureInfra(${i});refresh()`)}</div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">name <span class="req-star">*</span></div><div class="field-hint">ARM resource name (immutable)</div><input type="text" id="${p}name" value="${d.name||''}" placeholder="my-exainfra" oninput="readAzureInfra(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">display_name</div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="My Exadata Infrastructure" oninput="readAzureInfra(${i});refresh()"></div>
+      </div>
+      <div class="g3">
+        <div class="field"><div class="field-lbl">shape <span class="req-star">*</span></div><select id="${p}shape" onchange="readAzureInfra(${i});refresh()"><option value="Exadata.X9M"${d.shape==='Exadata.X9M'?' selected':''}>Exadata.X9M</option><option value="Exadata.X11M"${(d.shape||'Exadata.X11M')==='Exadata.X11M'?' selected':''}>Exadata.X11M</option></select></div>
+        <div class="field"><div class="field-lbl">compute_count <span class="req-star">*</span></div><div class="field-hint">Min 2</div><input type="number" id="${p}cc" value="${d.compute_count||2}" min="2" oninput="readAzureInfra(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">storage_count <span class="req-star">*</span></div><div class="field-hint">Min 3</div><input type="number" id="${p}sc" value="${d.storage_count||3}" min="3" oninput="readAzureInfra(${i});refresh()"></div>
+      </div>
+      <div class="field"><div class="field-lbl">zone <span class="req-star">*</span></div><div class="field-hint">Availability zone within the region</div><select id="${p}zone" onchange="readAzureInfra(${i});refresh()"><option value="1"${(d.zone||'1')==='1'?' selected':''}>1</option><option value="2"${d.zone==='2'?' selected':''}>2</option><option value="3"${d.zone==='3'?' selected':''}>3</option></select></div>
+    </div>
+    <div class="section"><div class="section-head"><div class="section-title">Maintenance Window</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+      <div class="inner-card">
+        <div class="g3">
+          <div class="field"><div class="field-lbl">preference</div><select id="${p}mwp" onchange="readAzureInfra(${i});refresh()"><option value="NoPreference"${(d.mw_preference||'NoPreference')==='NoPreference'?' selected':''}>NoPreference</option><option value="CustomPreference"${d.mw_preference==='CustomPreference'?' selected':''}>CustomPreference</option></select></div>
+          <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAzureInfra(${i});refresh()"><option value="Rolling"${(d.mw_patching_mode||'Rolling')==='Rolling'?' selected':''}>Rolling</option><option value="NonRolling"${d.mw_patching_mode==='NonRolling'?' selected':''}>NonRolling</option></select></div>
+          <div class="field"><div class="field-lbl">lead_time_in_weeks</div><input type="number" id="${p}mwlead" value="${d.mw_lead_time_in_weeks||0}" min="0" max="4" oninput="readAzureInfra(${i});refresh()"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function azureClusterCardHTML(d, i) {
+  const p = `ac${i}_`, open = (_cardOpen[`ac-card-${i}`] ?? i === 0) ? 'open' : '';
+  const infOpts = azureInfraOptions(d.infra_ref);
+  const vnetOpts = azureVnetOptions(d.vnet_ref);
+  const sshChips = (d.ssh_public_keys || []).map((k, ki) =>
+    `<span class="chip"><span>${k.substring(0,40)}…</span><button class="chip-rm" onclick="azureClusters[${i}].ssh_public_keys.splice(${ki},1);renderAzureClusters();refresh()">×</button></span>`
+  ).join('');
+  return `<div class="inst-card ${open}" id="ac-card-${i}" draggable="true" ondragstart="onCardDragStart(event,azureClusters,${i},renderAzureClusters,'ac-card-')" ondragover="onCardDragOver(event,azureClusters,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,azureClusters,${i},renderAzureClusters,'ac-card-')" ondragend="onCardDragEnd(event)">
+  <div class="inst-card-head" onclick="toggleCard('ac-card-${i}')">
+    <span class="drag-handle" title="Drag to reorder">⠿</span>
+    <span class="inst-num">${i+1}</span>
+    <span class="inst-modname">${d.module_name}</span>
+    <span class="inst-chevron">▼</span>
+    ${azureClusters.length > 1 ? `<button class="inst-rm" onclick="event.stopPropagation();removeInst(azureClusters,${i},renderAzureClusters)">Remove</button>` : ''}
+  </div>
+  <div class="inst-body">
+    <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAzureCluster(${i});refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
+
+    <div class="section"><div class="section-head"><div class="section-title">References</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="notice azure" style="background:rgba(0,120,212,0.06);border-color:rgba(0,120,212,0.2);margin-bottom:8px"><span style="font-size:13px;flex-shrink:0">✓</span> <strong>Auto-wired in root main.tf</strong> — select the Exadata Infra and VNet this cluster uses.</div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">Exadata Infrastructure</div><select class="ref-select" id="${p}infra_ref" onchange="readAzureCluster(${i});refresh()">${infOpts || '<option value="">— add infra first —</option>'}</select></div>
+        <div class="field"><div class="field-lbl">VNet / Subnet</div><select class="ref-select" id="${p}vnet_ref" onchange="readAzureCluster(${i});refresh()">${vnetOpts || '<option value="">— add VNet first —</option>'}</select></div>
+      </div>
+      <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Manual ID Override</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+        <div class="field-hint" style="margin-bottom:8px">Leave blank to use auto-wired references from the modules above.</div>
+        <div class="g2">
+          <div class="field"><div class="field-lbl">cloud_exadata_infrastructure_id</div><input type="text" id="${p}exaid" value="${d.cloud_exadata_infrastructure_id||''}" placeholder="/subscriptions/…/exadataInfrastructures/…" oninput="readAzureCluster(${i});refresh()"></div>
+          <div class="field"><div class="field-lbl">subnet_id</div><input type="text" id="${p}subid" value="${d.subnet_id||''}" placeholder="/subscriptions/…/subnets/…" oninput="readAzureCluster(${i});refresh()"></div>
+        </div>
+        <div class="field"><div class="field-lbl">vnet_id</div><input type="text" id="${p}vnetid" value="${d.vnet_id||''}" placeholder="/subscriptions/…/virtualNetworks/…" oninput="readAzureCluster(${i});refresh()"></div>
+      </div>
+    </div>
+
+    <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">resource_group_name <span class="req-star">*</span></div><input type="text" id="${p}rg" value="${d.resource_group_name||''}" placeholder="my-resource-group" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${azureRegionSelectHTML(`${p}loc`, d.location||'eastus', `readAzureCluster(${i});refresh()`)}</div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">name <span class="req-star">*</span></div><div class="field-hint">ARM resource name (immutable)</div><input type="text" id="${p}name" value="${d.name||''}" placeholder="my-vmcluster" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">display_name</div><input type="text" id="${p}dn" value="${d.display_name||''}" placeholder="My VM Cluster" oninput="readAzureCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">hostname <span class="req-star">*</span></div><div class="field-hint">Max 12 chars, alphanumeric</div><input type="text" id="${p}host" value="${d.hostname||''}" placeholder="vm" maxlength="12" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">gi_version <span class="req-star">*</span></div><div class="field-hint">Grid Infrastructure version</div><input type="text" id="${p}gi" value="${d.gi_version||'19.0.0.0'}" placeholder="19.0.0.0" oninput="readAzureCluster(${i});refresh()"></div>
+      </div>
+      <div class="g3">
+        <div class="field"><div class="field-lbl">cpu_core_count <span class="req-star">*</span></div><div class="field-hint">Min 4</div><input type="number" id="${p}cpu" value="${d.cpu_core_count||4}" min="4" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">data_storage_size_in_tbs <span class="req-star">*</span></div><div class="field-hint">Min 2 TB</div><input type="number" id="${p}dstb" value="${d.data_storage_size_in_tbs||2}" min="2" step="0.5" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">memory_size_in_gbs <span class="req-star">*</span></div><input type="number" id="${p}mem" value="${d.memory_size_in_gbs||60}" min="1" oninput="readAzureCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">db_node_storage_size_in_gbs <span class="req-star">*</span></div><input type="number" id="${p}dng" value="${d.db_node_storage_size_in_gbs||120}" min="1" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">license_model</div><select id="${p}lm" onchange="readAzureCluster(${i});refresh()"><option value="LicenseIncluded"${(d.license_model||'LicenseIncluded')==='LicenseIncluded'?' selected':''}>LicenseIncluded</option><option value="BringYourOwnLicense"${d.license_model==='BringYourOwnLicense'?' selected':''}>BringYourOwnLicense</option></select></div>
+      </div>
+      <div class="field"><div class="field-lbl">ssh_public_keys <span class="req-star">*</span></div>
+        <div class="chip-list">${sshChips}</div>
+        <textarea id="${p}sshin" placeholder="Paste ssh-rsa or ssh-ed25519 key…" style="min-height:54px"></textarea>
+        <button class="add-btn" style="margin-top:6px;height:32px" onclick="addSshToAzureCluster(${i})">+ Add SSH Key</button>
+      </div>
+    </div>
+
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">cluster_name</div><div class="field-hint">The cluster name for Exadata (max 11 chars)</div><input type="text" id="${p}cn" value="${d.cluster_name||''}" placeholder="" maxlength="11" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">domain</div><div class="field-hint">Fully-qualified domain name for the cluster</div><input type="text" id="${p}dom" value="${d.domain||''}" placeholder="example.com" oninput="readAzureCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">backup_subnet_cidr</div><div class="field-hint">CIDR for the backup client network</div><input type="text" id="${p}bsc" value="${d.backup_subnet_cidr||''}" placeholder="192.168.252.0/22" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">time_zone</div><div class="field-hint">IANA time zone e.g. UTC, America/New_York</div><input type="text" id="${p}tz" value="${d.time_zone||''}" placeholder="UTC" oninput="readAzureCluster(${i});refresh()"></div>
+      </div>
+      <div class="g3">
+        <div class="field"><div class="field-lbl">data_storage_percentage</div><input type="number" id="${p}dsp" value="${d.data_storage_percentage||100}" min="35" max="100" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">scan_listener_port_tcp</div><input type="number" id="${p}sltcp" value="${d.scan_listener_port_tcp||1521}" min="1" max="65535" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">scan_listener_port_tcp_ssl</div><input type="number" id="${p}slssl" value="${d.scan_listener_port_tcp_ssl||2484}" min="1" max="65535" oninput="readAzureCluster(${i});refresh()"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><div class="field-lbl">is_local_backup_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}lbe" ${d.is_local_backup_enabled?'checked':''} onchange="readAzureCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.is_local_backup_enabled?'true':'false'}</span></div></div>
+        <div class="field"><div class="field-lbl">is_sparse_diskgroup_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}sde" ${d.is_sparse_diskgroup_enabled?'checked':''} onchange="readAzureCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.is_sparse_diskgroup_enabled?'true':'false'}</span></div></div>
+      </div>
+      <div class="section"><div class="section-head"><div class="section-title">Data Collection Options</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
+        <div class="inner-card"><div class="g3">
+          <div class="field"><div class="field-lbl" style="font-size:10px">diagnostics_events_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcoD" ${d.dco_diagnostics_events_enabled!==false?'checked':''} onchange="readAzureCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_diagnostics_events_enabled!==false?'true':'false'}</span></div></div>
+          <div class="field"><div class="field-lbl" style="font-size:10px">health_monitoring_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcoH" ${d.dco_health_monitoring_enabled!==false?'checked':''} onchange="readAzureCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_health_monitoring_enabled!==false?'true':'false'}</span></div></div>
+          <div class="field"><div class="field-lbl" style="font-size:10px">incident_logs_enabled</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}dcoL" ${d.dco_incident_logs_enabled!==false?'checked':''} onchange="readAzureCluster(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.dco_incident_logs_enabled!==false?'true':'false'}</span></div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+// ── Render functions ──────────────────────────────────────────────────────────
+function renderAzureVnets() {
+  _safeRender('azure-vnet-list', azureVnets.map((d,i) => azureVnetCardHTML(d,i)).join(''));
+  const cl = document.getElementById('azure-vnet-count');
+  if (cl) cl.textContent = `${azureVnets.length} vnet${azureVnets.length !== 1 ? 's' : ''}`;
+  updateTree(); injectTooltips();
+  _renderAzureClusterDropdowns();
+}
+
+function renderAzureInfras() {
+  _safeRender('azure-infra-list', azureInfras.map((d,i) => azureInfraCardHTML(d,i)).join(''));
+  const cl = document.getElementById('azure-infra-count');
+  if (cl) cl.textContent = `${azureInfras.length} infra${azureInfras.length !== 1 ? 's' : ''}`;
+  updateTree(); injectTooltips();
+  _renderAzureClusterDropdowns();
+}
+
+function renderAzureClusters() {
+  _safeRender('azure-cluster-list', azureClusters.map((d,i) => azureClusterCardHTML(d,i)).join(''));
+  const cl = document.getElementById('azure-cluster-count');
+  if (cl) cl.textContent = `${azureClusters.length} cluster${azureClusters.length !== 1 ? 's' : ''}`;
+  updateTree(); injectTooltips();
+}
+
+function _renderAzureClusterDropdowns() {
+  azureClusters.forEach((d, i) => {
+    const infSel  = document.getElementById(`ac${i}_infra_ref`);
+    const vnetSel = document.getElementById(`ac${i}_vnet_ref`);
+    if (infSel)  { const cur = infSel.value;  infSel.innerHTML  = azureInfraOptions(cur)  || '<option value="">— add infra first —</option>'; }
+    if (vnetSel) { const cur = vnetSel.value; vnetSel.innerHTML = azureVnetOptions(cur)   || '<option value="">— add VNet first —</option>'; }
+  });
+}
+
+function renderRefDropdowns() {
+  _renderAzureClusterDropdowns();
+}
+{% endblock %}
+
+{% block product_orchestration %}
+const cloud = 'azure';
+let cur = 0;
+
+function getAllModuleNames() {
+  const names = [];
+  azureVnets.forEach(n    => names.push(n.module_name));
+  azureInfras.forEach(n   => names.push(n.module_name));
+  azureClusters.forEach(n => names.push(n.module_name));
+  return names;
+}
+const mn  = i => getAllModuleNames()[i] || ('module_' + i);
+const gmn = i => getAllModuleNames()[i] || ('module_' + i);
+
+function switchTab(i) {
+  cur = i;
+  document.querySelectorAll('#azure-tabs .tab').forEach(t => {
+    const onclick = t.getAttribute('onclick') || '';
+    t.classList.toggle('active', onclick.includes('(' + i + ','));
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const pg = document.getElementById('azure-page-' + i);
+  if (pg) pg.classList.add('active');
+  activeFile = 'root-main';
+  updateTree(); renderEditor();
+}
+
+function buildPayload() {
+  return {
+    cloud,
+    iac_tool:       iacTool,
+    customer:       getCustName(),
+    azure_vnets:    azureVnets,
+    azure_infras:   azureInfras,
+    azure_clusters: azureClusters,
+  };
+}
+
+function applyConfig(doc) {
+  const AZURE_KEYS = ['azure_vnets', 'azure_infras', 'azure_clusters'];
+  const hasNewFormat = AZURE_KEYS.some(k => doc[k] && doc[k].length);
+  if (hasNewFormat) {
+    if (doc.azure_vnets    && doc.azure_vnets.length)    azureVnets    = doc.azure_vnets.map((d,i)    => ({...defAzureVnet(i),    ...d}));
+    if (doc.azure_infras   && doc.azure_infras.length)   azureInfras   = doc.azure_infras.map((d,i)   => ({...defAzureInfra(i),   ...d}));
+    if (doc.azure_clusters && doc.azure_clusters.length) azureClusters = doc.azure_clusters.map((d,i) => ({...defAzureCluster(i), ...d}));
+  }
+  renderAll();
+  refresh();
+  updateTestBtn();
+}
+
+function renderAll() {
+  renderAzureVnets(); renderAzureInfras(); renderAzureClusters();
+  updateTree();
+}
+{% endblock %}
+
+{% block product_seed %}
+azureVnets.push(defAzureVnet(0));
+azureInfras.push(defAzureInfra(0));
+azureClusters.push(defAzureCluster(0));
+{% endblock %}

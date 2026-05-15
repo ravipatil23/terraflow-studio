@@ -1,0 +1,46 @@
+terraform {
+  required_providers {
+    azurerm = { source = "hashicorp/azurerm", version = ">= 4.9.0" }
+  }
+}
+
+resource "azurerm_oracle_cloud_vm_cluster" "this" {
+  name                            = var.name
+  display_name                    = var.display_name
+  resource_group_name             = var.resource_group_name
+  location                        = var.location
+  cloud_exadata_infrastructure_id = var.cloud_exadata_infrastructure_id
+  subnet_id                       = var.subnet_id
+  vnet_id                         = var.vnet_id
+  hostname                        = var.hostname
+  cpu_core_count                  = var.cpu_core_count
+  data_storage_size_in_tbs        = var.data_storage_size_in_tbs
+  db_node_storage_size_in_gbs     = var.db_node_storage_size_in_gbs
+  memory_size_in_gbs              = var.memory_size_in_gbs
+  ssh_public_keys                 = var.ssh_public_keys
+  gi_version                      = var.gi_version
+  license_model                   = var.license_model
+
+  cluster_name              = var.cluster_name != "" ? var.cluster_name : null
+  domain                    = var.domain != "" ? var.domain : null
+  backup_subnet_cidr        = var.backup_subnet_cidr != "" ? var.backup_subnet_cidr : null
+  data_storage_percentage   = var.data_storage_percentage
+  is_local_backup_enabled   = var.is_local_backup_enabled
+  is_sparse_diskgroup_enabled = var.is_sparse_diskgroup_enabled
+  time_zone                 = var.time_zone != "" ? var.time_zone : null
+  scan_listener_port_tcp    = var.scan_listener_port_tcp
+  scan_listener_port_tcp_ssl = var.scan_listener_port_tcp_ssl
+
+  data_collection_options {
+    diagnostics_events_enabled = var.dco_diagnostics_events_enabled
+    health_monitoring_enabled  = var.dco_health_monitoring_enabled
+    incident_logs_enabled      = var.dco_incident_logs_enabled
+  }
+
+  tags = var.tags
+
+  timeouts {
+    create = "1h30m"
+    delete = "20m"
+  }
+}

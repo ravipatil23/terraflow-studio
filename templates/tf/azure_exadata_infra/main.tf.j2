@@ -1,0 +1,29 @@
+terraform {
+  required_providers {
+    azurerm = { source = "hashicorp/azurerm", version = ">= 4.9.0" }
+  }
+}
+
+resource "azurerm_oracle_cloud_exadata_infrastructure" "this" {
+  name                = var.name
+  display_name        = var.display_name
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  shape               = var.shape
+  compute_count       = var.compute_count
+  storage_count       = var.storage_count
+  zones               = [var.zone]
+
+  maintenance_window {
+    lead_time_in_weeks = var.mw_lead_time_in_weeks
+    preference         = var.mw_preference
+    patching_mode      = var.mw_patching_mode
+  }
+
+  tags = var.tags
+
+  timeouts {
+    create = "1h30m"
+    delete = "20m"
+  }
+}

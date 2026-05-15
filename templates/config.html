@@ -142,6 +142,14 @@ function buildSection(group) {
   hdr.appendChild(btn);
   section.appendChild(hdr);
 
+  // Optional note banner
+  if (group.note) {
+    const note = document.createElement('div');
+    note.style.cssText = 'padding:8px 22px;font-size:11px;color:#888;background:#faf9f6;border-bottom:1px solid var(--line);font-family:var(--font-m)';
+    note.textContent = '⚠ ' + group.note;
+    section.appendChild(note);
+  }
+
   // Body
   const body = document.createElement('div');
   body.className = 'section-body';
