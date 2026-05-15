@@ -1,19 +1,19 @@
 variable "exadb_vm_cluster_id" {
-  type = string
+  type    = string
 {% if exadb_vm_cluster_id %}
   default = "{{ exadb_vm_cluster_id }}"
 {% endif %}
 }
 
 variable "display_name" {
-  type = string
+  type    = string
 {% if display_name %}
   default = "{{ display_name }}"
 {% endif %}
 }
 
 variable "location" {
-  type = string
+  type    = string
 {% if location %}
   default = "{{ location }}"
 {% endif %}
@@ -70,24 +70,24 @@ variable "deletion_protection" {
 
 variable "grid_image_id" {
   description = "ExaDB Grid Image resource ID e.g. projects/P/locations/L/giVersions/V/dbServerVersions/D."
-  type = string
+  type        = string
 {% if grid_image_id %}
-  default = "{{ grid_image_id }}"
+  default     = "{{ grid_image_id }}"
 {% endif %}
 }
 
 variable "exascale_db_storage_vault" {
   description = "Full resource path of the Exascale DB Storage Vault."
-  type = string
+  type        = string
 {% if exascale_db_storage_vault %}
-  default = "{{ exascale_db_storage_vault }}"
+  default     = "{{ exascale_db_storage_vault }}"
 {% endif %}
 }
 
 variable "shape_attribute" {
   description = "Shape of the Exadata infrastructure — SMART_STORAGE or BLOCK_STORAGE."
-  type    = string
-  default = "{{ shape_attribute }}"
+  type        = string
+  default     = "{{ shape_attribute }}"
   validation {
     condition     = contains(["SMART_STORAGE", "BLOCK_STORAGE"], var.shape_attribute)
     error_message = "Must be SMART_STORAGE or BLOCK_STORAGE."
@@ -96,9 +96,9 @@ variable "shape_attribute" {
 
 variable "hostname_prefix" {
   description = "Hostname prefix — max 12 chars, letters/numbers/hyphens, must start with a letter."
-  type = string
+  type        = string
 {% if hostname_prefix %}
-  default = "{{ hostname_prefix }}"
+  default     = "{{ hostname_prefix }}"
 {% endif %}
 }
 
@@ -113,32 +113,32 @@ variable "license_type" {
 
 variable "node_count" {
   description = "Number of VM nodes (minimum 2)."
-  type    = number
-  default = {{ node_count }}
+  type        = number
+  default     = {{ node_count }}
 }
 
 variable "enabled_ecpu_count_per_node" {
   description = "Enabled ECPUs per node — min 8, must be a multiple of 4."
-  type    = number
-  default = {{ enabled_ecpu_count_per_node }}
+  type        = number
+  default     = {{ enabled_ecpu_count_per_node }}
 }
 
 variable "additional_ecpu_count_per_node" {
   description = "Reserved ECPUs per node — 0–192, must be a multiple of 4."
-  type    = number
-  default = {{ additional_ecpu_count_per_node }}
+  type        = number
+  default     = {{ additional_ecpu_count_per_node }}
 }
 
 variable "vm_file_system_storage_size_gbs" {
   description = "Local file-system storage per node in GiB (60–900)."
-  type    = number
-  default = {{ vm_file_system_storage_size_gbs }}
+  type        = number
+  default     = {{ vm_file_system_storage_size_gbs }}
 }
 
 variable "ssh_public_keys" {
   description = "SSH public keys for cluster node access."
-  type    = list(string)
-  default = [{{ ssh_public_keys | map("tojson") | join(", ") }}]
+  type        = list(string)
+  default     = [{{ ssh_public_keys | map("tojson") | join(", ") }}]
 }
 
 variable "cluster_name" {

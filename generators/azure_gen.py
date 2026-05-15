@@ -29,6 +29,11 @@ def _azure_infra_defaults(d):
         'mw_preference':         d.get('mw_preference') or 'NoPreference',
         'mw_patching_mode':      d.get('mw_patching_mode') or 'Rolling',
         'mw_lead_time_in_weeks': int(d.get('mw_lead_time_in_weeks') or 0),
+        'mw_days_of_week':       d.get('mw_days_of_week') or '',
+        'mw_hours_of_day':       d.get('mw_hours_of_day') or '',
+        'mw_weeks_of_month':     d.get('mw_weeks_of_month') or '',
+        'mw_months':             d.get('mw_months') or '',
+        'customer_contacts':     d.get('customer_contacts') or [],
         'tags':                  d.get('tags') or {},
     }
 
@@ -57,7 +62,8 @@ def _azure_cluster_defaults(d, first_vnet_name='', first_infra_name=''):
         'data_storage_percentage':        int(d.get('data_storage_percentage') or 100),
         'is_local_backup_enabled':        bool(d.get('is_local_backup_enabled', False)),
         'is_sparse_diskgroup_enabled':    bool(d.get('is_sparse_diskgroup_enabled', False)),
-        'time_zone':             d.get('time_zone') or '',
+        'time_zone':             d.get('time_zone') or 'UTC',
+        'db_servers':            d.get('db_servers') or [],
         'scan_listener_port_tcp':     int(d.get('scan_listener_port_tcp') or 1521),
         'scan_listener_port_tcp_ssl': int(d.get('scan_listener_port_tcp_ssl') or 2484),
         'dco_diagnostics_events_enabled': bool(d.get('dco_diagnostics_events_enabled', True)),
@@ -81,7 +87,17 @@ def _azure_vnet_ctx(d):
     )
 
 
+def _parse_str_list(s):
+    return [v.strip() for v in s.split(',') if v.strip()] if s else []
+
+
 def _azure_infra_ctx(d):
+    contacts = d.get('customer_contacts') or []
+    customer_contacts_tf = '[' + ', '.join(f'"{e}"' for e in contacts) + ']'
+    days   = _parse_str_list(d.get('mw_days_of_week') or '')
+    hours  = _parse_str_list(d.get('mw_hours_of_day') or '')
+    weeks  = _parse_str_list(d.get('mw_weeks_of_month') or '')
+    months = _parse_str_list(d.get('mw_months') or '')
     return dict(
         resource_group_name=d['resource_group_name'],
         location=d['location'],
@@ -94,6 +110,12 @@ def _azure_infra_ctx(d):
         mw_preference=d['mw_preference'],
         mw_patching_mode=d['mw_patching_mode'],
         mw_lead_time_in_weeks=d['mw_lead_time_in_weeks'],
+        customer_contacts=contacts,
+        customer_contacts_tf=customer_contacts_tf,
+        mw_days_of_week=days,
+        mw_hours_of_day=[int(x) for x in hours if x.isdigit()],
+        mw_weeks_of_month=[int(x) for x in weeks if x.isdigit()],
+        mw_months=months,
         tags=d['tags'],
     )
 
@@ -101,6 +123,8 @@ def _azure_infra_ctx(d):
 def _azure_cluster_ctx(d):
     keys = d.get('ssh_public_keys') or []
     ssh_tf = '[' + ', '.join(f'"{k}"' for k in keys) + ']'
+    dbs = d.get('db_servers') or []
+    db_servers_tf = '[' + ', '.join(f'"{s}"' for s in dbs) + ']'
     return dict(
         resource_group_name=d['resource_group_name'],
         location=d['location'],
@@ -129,6 +153,7 @@ def _azure_cluster_ctx(d):
         dco_diagnostics_events_enabled=tf_bool(d['dco_diagnostics_events_enabled']),
         dco_health_monitoring_enabled=tf_bool(d['dco_health_monitoring_enabled']),
         dco_incident_logs_enabled=tf_bool(d['dco_incident_logs_enabled']),
+        db_servers_tf=db_servers_tf,
         tags=d['tags'],
     )
 

@@ -157,8 +157,20 @@ let gcpNets = [], gcpInfras = [], gcpClusters = [], gcpOciDbs = [];
 // ── Default factories ─────────────────────────────────────────────────────────
 function defGcpOciDb(i)   { return {module_name: i===0?'gcp_oci_database':`gcp_oci_database_${i+1}`, vmcluster_ref:'', db_home_display_name:'dbhome', db_version:'19.0.0.0', db_name:'MYDB', character_set:'AL32UTF8', ncharacter_set:'AL16UTF16', pdb_name:'MYPDB', db_unique_name:'', sid_prefix:'', create_pdb:true, auto_backup_enabled:false, auto_backup_window:'SLOT_TWO', recovery_window_in_days:7}; }
 function defGcpNet(i)     { return {module_name: i===0?'gcp_network':`gcp_network_${i+1}`, odb_network_id:'',location:'',network:'',project:'',gcp_oracle_zone:'',deletion_protection:true,client_subnet_module:i===0?'gcp_client_subnet':`gcp_client_subnet_${i+1}`,backup_subnet_module:i===0?'gcp_backup_subnet':`gcp_backup_subnet_${i+1}`,client_subnet_id:i===0?'gcp-client-subnet':`gcp-client-subnet-${i+1}`,client_cidr:'',backup_subnet_id:i===0?'gcp-backup-subnet':`gcp-backup-subnet-${i+1}`,backup_cidr:'',labels:{}}; }
-function defGcpInfra(i)   { return {module_name: i===0?'gcp_infra':`gcp_infra_${i+1}`,     cloud_exadata_infrastructure_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',shape:'Exadata.X9M',compute_count:2,storage_count:3,total_storage_size_gb:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',deletion_protection:true,labels:{}}; }
+function defGcpInfra(i)   { return {module_name: i===0?'gcp_infra':`gcp_infra_${i+1}`,     cloud_exadata_infrastructure_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',shape:'Exadata.X9M',compute_count:2,storage_count:3,total_storage_size_gb:'',mw_preference:'NO_PREFERENCE',mw_patching_mode:'ROLLING',mw_is_custom_action_timeout_enabled:false,mw_custom_action_timeout_mins:15,mw_lead_time_week:'',mw_months:'',mw_weeks_of_month:'',mw_days_of_week:'',mw_hours_of_day:'',customer_contacts:[],deletion_protection:true,labels:{}}; }
 function defGcpCluster(i) { return {module_name: i===0?'gcp_cluster':`gcp_cluster_${i+1}`, exadb_vm_cluster_id:'',display_name:'',location:'',gcp_oracle_zone:'',project:'',grid_image_id:'',exascale_db_storage_vault:'',shape_attribute:'SMART_STORAGE',hostname_prefix:'',license_type:'LICENSE_INCLUDED',node_count:2,enabled_ecpu_count_per_node:8,additional_ecpu_count_per_node:0,vm_file_system_storage_size_gbs:60,ssh_public_keys:[],db_servers:[],dco_diagnostics:true,dco_health:true,dco_incident_logs:true,cluster_name:'',time_zone:'',memory_per_node_in_gbs:'',db_node_storage_size_per_vm_in_gbs:'',data_storage_size_in_tbs:'',spare_snapshot_space_in_gbs:'',disk_redundancy:'',network_ref:'',client_subnet_ref:'',backup_subnet_ref:'',infra_ref:'',deletion_protection:true,labels:{}}; }
+
+// ── Customer contact helper ───────────────────────────────────────────────────
+function addContactToGcpInfra(i) {
+  const inp = document.getElementById(`gi${i}_contactin`);
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) return;
+  gcpInfras[i].customer_contacts = [...(gcpInfras[i].customer_contacts || []), val];
+  inp.value = '';
+  renderGcpInfras();
+  refresh();
+}
 
 // ── Card add helpers ──────────────────────────────────────────────────────────
 function addGcpNet()     { gcpNets.push(defGcpNet(gcpNets.length));           renderGcpNets();     refresh(); }
@@ -369,6 +381,14 @@ function gcpInfraCardHTML(d, i) {
             <div class="field"><div class="field-lbl">months</div><input type="text" id="${p}mwmonths" value="${d.mw_months||''}" placeholder="JANUARY,APRIL" oninput="readGcpInfra(${i});refresh()"></div>
           </div>
         </div>
+      </div>
+    </div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Customer Contacts</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+      <div class="field-hint" style="margin-bottom:8px">Oracle sends maintenance and system notifications to these addresses (up to 10).</div>
+      <div class="chip-list">${(d.customer_contacts||[]).map((e,ei)=>`<span class="chip"><span>${e}</span><button class="chip-rm" onclick="gcpInfras[${i}].customer_contacts.splice(${ei},1);renderGcpInfras();refresh()">×</button></span>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <input type="email" id="gi${i}_contactin" placeholder="ops@example.com" style="flex:1">
+        <button class="add-btn" style="height:32px" onclick="addContactToGcpInfra(${i})">+ Add</button>
       </div>
     </div>
   </div>

@@ -22,7 +22,7 @@
   --font-d:'Barlow Condensed',sans-serif;--font-b:'Barlow',sans-serif;--font-m:'DM Mono',monospace;
 }
 body.gcp{--accent:var(--gcp);--accent2:#5a9cff;--a-dim:var(--gcp-dim);--a-dim2:var(--gcp-dim2);background:linear-gradient(150deg,#f0f2f6 0%,#e3e8f0 100%);}
-body.azure{--accent:#0078D4;--accent2:#1a8fe8;--a-dim:rgba(0,120,212,0.10);--a-dim2:rgba(0,120,212,0.18);background:linear-gradient(150deg,#f0f4f8 0%,#dde8f2 100%);}
+body.azure{--accent:#1B7F4F;--accent2:#29a36a;--a-dim:rgba(27,127,79,0.10);--a-dim2:rgba(27,127,79,0.18);background:linear-gradient(150deg,#f0f5f2 0%,#daeee3 100%);}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{font-size:14px;}
 body{background:linear-gradient(150deg,#f4f2ee 0%,#e8e5dc 100%);color:var(--ink);font-family:var(--font-b);height:100vh;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;}
@@ -39,7 +39,7 @@ header{background:linear-gradient(180deg,#252320 0%,#1a1916 100%);padding:0 28px
 .csw-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 16px;cursor:pointer;color:#555;border:none;background:transparent;transition:all .15s;white-space:nowrap;text-decoration:none;display:flex;align-items:center;}
 .csw-btn.sel-aws{color:#ff6b2b;background:rgba(232,80,10,.15);}
 .csw-btn.sel-gcp{color:#5a9cff;background:rgba(66,133,244,.15);}
-.csw-btn.sel-azure{color:#1a8fe8;background:rgba(0,120,212,.15);}
+.csw-btn.sel-azure{color:#29a36a;background:rgba(27,127,79,.15);}
 .csw-btn:hover:not(.sel-aws):not(.sel-gcp):not(.sel-azure){color:#999;}
 .tool-sw{display:flex;background:#111;border:1px solid #2a2a2a;border-radius:6px;overflow:hidden;flex-shrink:0;}
 .tsw-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:6px 14px;cursor:pointer;color:#555;border:none;background:transparent;transition:all .15s;white-space:nowrap;}
@@ -209,6 +209,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.6;}
 .inner-card{background:linear-gradient(180deg,#f8f7f3 0%,#f2f0ea 100%);border:1px solid rgba(210,207,200,0.7);border-top-color:rgba(255,255,255,0.6);border-radius:var(--radius-lg);padding:18px;box-shadow:inset 0 2px 5px rgba(0,0,0,0.04),inset 0 1px 2px rgba(0,0,0,0.03),0 1px 0 rgba(255,255,255,0.7);}
 .notice{display:flex;gap:8px;align-items:flex-start;background:#fffbf5;border:1.5px solid #f0d090;border-radius:var(--radius);padding:8px 12px;font-size:11px;color:#7a5a10;margin-bottom:16px;line-height:1.55;}
 .notice.gcp{background:var(--gcp-dim);border-color:rgba(66,133,244,.3);color:#1a56a0;}
+.notice.azure{background:rgba(27,127,79,0.08);border-color:rgba(27,127,79,0.30);color:#1a5c38;}
 .notice code{font-family:var(--font-m);font-size:10px;background:#faefd0;padding:1px 4px;border-radius:3px;}
 .vbtn{width:100%;margin-top:12px;background:linear-gradient(180deg,#2c2a27 0%,#1a1916 100%);border:none;border-radius:var(--radius);color:var(--white);font-family:var(--font-d);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;padding:12px;cursor:pointer;transition:background .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(0,0,0,0.28),0 1px 0 rgba(255,255,255,0.07) inset;}
 .vbtn:hover{background:linear-gradient(180deg,var(--orange2) 0%,var(--accent) 100%);box-shadow:0 4px 18px rgba(232,80,10,0.38),0 1px 0 rgba(255,255,255,0.12) inset;}
@@ -665,7 +666,7 @@ function _safeRender(containerId, html) {
 function toggleMWCard(p) {
   const sel = document.getElementById(p+'mwp');
   const div = document.getElementById(p+'mwcustom');
-  if(sel&&div) div.style.display = sel.value==='CUSTOM_PREFERENCE'?'':'none';
+  if(sel&&div) div.style.display = (sel.value==='CUSTOM_PREFERENCE'||sel.value==='CustomPreference')?'':'none';
 }
 
 // ── SSH key add for cluster cards ─────────────────────────────────────────────

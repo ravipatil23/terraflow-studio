@@ -39,17 +39,17 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .product-card.aws:hover{border-color:#e8500a;}
 .product-card.gcp{border-top:4px solid #4285F4;}
 .product-card.gcp:hover{border-color:#4285F4;}
-.product-card.azure{border-top:4px solid #0078D4;}
-.product-card.azure:hover{border-color:#0078D4;}
+.product-card.azure{border-top:4px solid #1B7F4F;}
+.product-card.azure:hover{border-color:#1B7F4F;}
 .card-badge{display:inline-block;font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:3px 10px;border-radius:4px;margin-bottom:16px;}
 .card-badge.aws{background:rgba(232,80,10,.1);color:#e8500a;border:1px solid rgba(232,80,10,.2);}
 .card-badge.gcp{background:rgba(66,133,244,.1);color:#4285F4;border:1px solid rgba(66,133,244,.2);}
-.card-badge.azure{background:rgba(0,120,212,.1);color:#0078D4;border:1px solid rgba(0,120,212,.2);}
+.card-badge.azure{background:rgba(27,127,79,.1);color:#1B7F4F;border:1px solid rgba(27,127,79,.2);}
 .card-name{font-family:var(--font-d);font-weight:800;font-size:28px;color:var(--ink);line-height:1.1;margin-bottom:10px;}
 .card-name em{font-style:normal;}
 .card-name.aws em{color:#e8500a;}
 .card-name.gcp em{color:#4285F4;}
-.card-name.azure em{color:#0078D4;}
+.card-name.azure em{color:#1B7F4F;}
 .card-desc{font-family:var(--font-b);font-size:13px;color:var(--ink3);line-height:1.6;margin-bottom:20px;flex:1;}
 .card-provider{font-family:var(--font-m);font-size:10px;color:var(--ink4);letter-spacing:.04em;margin-bottom:20px;}
 .card-resources{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:24px;}
@@ -59,8 +59,8 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .card-cta.aws:hover{background:#c84208;}
 .card-cta.gcp{background:#4285F4;color:var(--white);}
 .card-cta.gcp:hover{background:#2a6ed4;}
-.card-cta.azure{background:#0078D4;color:var(--white);}
-.card-cta.azure:hover{background:#005fa3;}
+.card-cta.azure{background:#1B7F4F;color:var(--white);}
+.card-cta.azure:hover{background:#155f3a;}
 .footer{padding:20px 28px;text-align:center;font-family:var(--font-m);font-size:10px;color:var(--ink4);}
 .config-strip{max-width:1060px;width:100%;margin-top:16px;}
 .config-card{display:flex;align-items:center;justify-content:space-between;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius-lg);padding:18px 28px;box-shadow:var(--shadow-sm);text-decoration:none;transition:all .2s;gap:20px;}
@@ -92,7 +92,7 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
   <div class="cards">
     <a class="product-card aws" href="/aws">
       <span class="card-badge aws">AWS</span>
-      <div class="card-name aws">Oracle DB<em>@AWS</em></div>
+      <div class="card-name aws">Oracle ExaCS DB<em>@AWS</em></div>
       <div class="card-desc">Generate Terraform for Oracle Database@AWS — ODB networks, Exadata infrastructure, VM clusters, Autonomous VM clusters, peering connections, and OCI DB Home / CDB / PDB modules.</div>
       <div class="card-provider">hashicorp/aws &nbsp;≥&nbsp; 6.15.0</div>
       <div class="card-resources">
@@ -108,7 +108,7 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 
     <a class="product-card gcp" href="/gcp">
       <span class="card-badge gcp">GCP</span>
-      <div class="card-name gcp">Oracle DB<em>@GCP</em></div>
+      <div class="card-name gcp">Oracle ExaCS DB<em>@GCP</em></div>
       <div class="card-desc">Generate Terraform for Oracle Database@GCP — ODB networks with client and backup subnets, Exadata infrastructure, and ExaDB VM clusters running on Google Cloud.</div>
       <div class="card-provider">hashicorp/google &nbsp;≥&nbsp; 6.0.0</div>
       <div class="card-resources">
@@ -122,7 +122,7 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 
     <a class="product-card azure" href="/azure">
       <span class="card-badge azure">Azure</span>
-      <div class="card-name azure">Oracle DB<em>@Azure</em></div>
+      <div class="card-name azure">Oracle ExaCS DB<em>@Azure</em></div>
       <div class="card-desc">Generate Terraform for Oracle Database@Azure — virtual networks with Oracle-delegated subnets, Exadata infrastructure, and VM clusters running on Microsoft Azure.</div>
       <div class="card-provider">hashicorp/azurerm &nbsp;≥&nbsp; 4.9.0</div>
       <div class="card-resources">

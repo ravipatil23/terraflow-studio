@@ -18,12 +18,23 @@ resource "azurerm_oracle_cloud_exadata_infrastructure" "this" {
     lead_time_in_weeks = var.mw_lead_time_in_weeks
     preference         = var.mw_preference
     patching_mode      = var.mw_patching_mode
+    days_of_week       = length(var.mw_days_of_week) > 0 ? var.mw_days_of_week : null
+    hours_of_day       = length(var.mw_hours_of_day) > 0 ? var.mw_hours_of_day : null
+    weeks_of_month     = length(var.mw_weeks_of_month) > 0 ? var.mw_weeks_of_month : null
+    months             = length(var.mw_months) > 0 ? var.mw_months : null
+  }
+
+  dynamic "customer_contacts" {
+    for_each = var.customer_contacts
+    content {
+      email = customer_contacts.value
+    }
   }
 
   tags = var.tags
 
   timeouts {
-    create = "1h30m"
-    delete = "20m"
+    create = "6h"
+    delete = "3h"
   }
 }

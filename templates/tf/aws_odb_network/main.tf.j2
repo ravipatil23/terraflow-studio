@@ -1,3 +1,4 @@
+# Module: {{ module_name }}
 terraform {
   required_providers {
     aws = {
@@ -8,12 +9,12 @@ terraform {
 }
 
 resource "aws_odb_network" "this" {
-  display_name          = var.display_name
-  availability_zone_id  = var.availability_zone_id
-  client_subnet_cidr    = var.client_subnet_cidr
-  backup_subnet_cidr    = var.backup_subnet_cidr
-  s3_access             = var.s3_access
-  zero_etl_access       = var.zero_etl_access
+  display_name         = var.display_name
+  availability_zone_id = var.availability_zone_id
+  client_subnet_cidr   = var.client_subnet_cidr
+  backup_subnet_cidr   = var.backup_subnet_cidr
+  s3_access            = var.s3_access
+  zero_etl_access      = var.zero_etl_access
 
   availability_zone           = var.availability_zone != "" ? var.availability_zone : null
   region                      = var.region != "" ? var.region : null

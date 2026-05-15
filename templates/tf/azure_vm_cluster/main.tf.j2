@@ -31,6 +31,8 @@ resource "azurerm_oracle_cloud_vm_cluster" "this" {
   scan_listener_port_tcp    = var.scan_listener_port_tcp
   scan_listener_port_tcp_ssl = var.scan_listener_port_tcp_ssl
 
+  db_servers = length(var.db_servers) > 0 ? var.db_servers : null
+
   data_collection_options {
     diagnostics_events_enabled = var.dco_diagnostics_events_enabled
     health_monitoring_enabled  = var.dco_health_monitoring_enabled
@@ -40,7 +42,7 @@ resource "azurerm_oracle_cloud_vm_cluster" "this" {
   tags = var.tags
 
   timeouts {
-    create = "1h30m"
-    delete = "20m"
+    create = "3h"
+    delete = "1h"
   }
 }

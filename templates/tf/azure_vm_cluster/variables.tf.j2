@@ -94,6 +94,10 @@ variable "scan_listener_port_tcp_ssl" {
   type    = number
   default = {{ scan_listener_port_tcp_ssl }}
 }
+variable "db_servers" {
+  type    = list(string)
+  default = {{ db_servers_tf }}
+}
 variable "dco_diagnostics_events_enabled" {
   type    = bool
   default = {{ dco_diagnostics_events_enabled }}

@@ -9,6 +9,21 @@ zone                  = "{{ zone }}"
 mw_preference         = "{{ mw_preference }}"
 mw_patching_mode      = "{{ mw_patching_mode }}"
 mw_lead_time_in_weeks = {{ mw_lead_time_in_weeks }}
+{% if mw_days_of_week %}
+mw_days_of_week   = {{ mw_days_of_week | tojson }}
+{% endif %}
+{% if mw_hours_of_day %}
+mw_hours_of_day   = {{ mw_hours_of_day | tojson }}
+{% endif %}
+{% if mw_weeks_of_month %}
+mw_weeks_of_month = {{ mw_weeks_of_month | tojson }}
+{% endif %}
+{% if mw_months %}
+mw_months         = {{ mw_months | tojson }}
+{% endif %}
+{% if customer_contacts %}
+customer_contacts     = {{ customer_contacts_tf }}
+{% endif %}
 {% if tags %}
 tags = {
 {% for k, v in tags.items() %}

@@ -1,12 +1,12 @@
 variable "cloud_exadata_infrastructure_id" {
-  type = string
+  type    = string
 {% if cloud_exadata_infrastructure_id %}
   default = "{{ cloud_exadata_infrastructure_id }}"
 {% endif %}
 }
 
 variable "location" {
-  type = string
+  type    = string
 {% if location %}
   default = "{{ location }}"
 {% endif %}

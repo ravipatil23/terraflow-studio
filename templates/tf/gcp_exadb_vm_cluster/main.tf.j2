@@ -30,7 +30,7 @@ resource "google_oracle_database_exadb_vm_cluster" "this" {
     additional_ecpu_count_per_node = var.additional_ecpu_count_per_node
     ssh_public_keys                = var.ssh_public_keys
 
-    cluster_name           = var.cluster_name != "" ? var.cluster_name : null
+    cluster_name = var.cluster_name != "" ? var.cluster_name : null
     dynamic "time_zone" {
       for_each = var.time_zone != "" ? [1] : []
       content { id = var.time_zone }

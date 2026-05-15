@@ -42,6 +42,26 @@ variable "mw_lead_time_in_weeks" {
   type    = number
   default = {{ mw_lead_time_in_weeks }}
 }
+variable "mw_days_of_week" {
+  type    = list(string)
+  default = {{ mw_days_of_week | tojson }}
+}
+variable "mw_hours_of_day" {
+  type    = list(number)
+  default = {{ mw_hours_of_day | tojson }}
+}
+variable "mw_weeks_of_month" {
+  type    = list(number)
+  default = {{ mw_weeks_of_month | tojson }}
+}
+variable "mw_months" {
+  type    = list(string)
+  default = {{ mw_months | tojson }}
+}
+variable "customer_contacts" {
+  type    = list(string)
+  default = {{ customer_contacts_tf }}
+}
 variable "tags" {
   type    = map(string)
   default = {}

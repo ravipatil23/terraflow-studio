@@ -25,8 +25,9 @@ backup_subnet_cidr        = "{{ backup_subnet_cidr }}"
 data_storage_percentage   = {{ data_storage_percentage }}
 is_local_backup_enabled   = {{ is_local_backup_enabled }}
 is_sparse_diskgroup_enabled = {{ is_sparse_diskgroup_enabled }}
-{% if time_zone %}
 time_zone                 = "{{ time_zone }}"
+{% if db_servers_tf != '[]' %}
+db_servers                = {{ db_servers_tf }}
 {% endif %}
 scan_listener_port_tcp    = {{ scan_listener_port_tcp }}
 scan_listener_port_tcp_ssl = {{ scan_listener_port_tcp_ssl }}

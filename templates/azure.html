@@ -21,7 +21,7 @@
     <div class="page-resource-name" style="font-size:20px;line-height:1.2">azurerm_<em>virtual_network</em> + azurerm_<em>subnet</em></div>
     <a class="page-doc-link" href="https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network" target="_blank">docs ↗</a>
   </div>
-  <div class="notice azure" style="background:rgba(0,120,212,0.07);border-color:rgba(0,120,212,0.25)"><span style="font-size:14px;flex-shrink:0">ℹ</span> Each VNet entry also generates an Oracle-delegated subnet (<code>Oracle.Database/networkAttachments</code>) in the same module.</div>
+  <div class="notice azure" style="background:rgba(27,127,79,0.07);border-color:rgba(27,127,79,0.25)"><span style="font-size:14px;flex-shrink:0">ℹ</span> Each VNet entry also generates an Oracle-delegated subnet (<code>Oracle.Database/networkAttachments</code>) in the same module.</div>
   <div id="azure-vnet-list" class="inst-list"></div>
   <div class="inst-add-row">
     <button class="inst-add-btn" onclick="addAzureVnet()">＋ Add VNet</button>
@@ -60,28 +60,69 @@
 {% endblock %}
 
 {% block product_data %}
-// ── DB@Azure Region data ──────────────────────────────────────────────────────
+// ── DB@Azure Region + AZ data (source: Oracle DB@Azure Regions doc) ───────────
+// azs: valid availability zones for Oracle Database@Azure in that region.
+// Single-zone regions use ['1']. Source: docs.oracle.com/iaas/Content/database-at-azure/oaa_regions.htm
 const AZURE_REGIONS = [
-  { value:'eastus',             label:'East US (Virginia)'           },
-  { value:'eastus2',            label:'East US 2 (Virginia)'         },
-  { value:'westus',             label:'West US (California)'         },
-  { value:'westus2',            label:'West US 2 (Washington)'       },
-  { value:'uksouth',            label:'UK South (London)'            },
-  { value:'germanywestcentral', label:'Germany West Central (Frankfurt)' },
-  { value:'japaneast',          label:'Japan East (Tokyo)'           },
-  { value:'australiaeast',      label:'Australia East (New South Wales)' },
-  { value:'canadacentral',      label:'Canada Central (Toronto)'     },
-  { value:'southeastasia',      label:'Southeast Asia (Singapore)'   },
-  { value:'francecentral',      label:'France Central (Paris)'       },
-  { value:'qatarcentral',       label:'Qatar Central (Doha)'         },
-  { value:'southafricanorth',   label:'South Africa North (Johannesburg)' },
-  { value:'israelcentral',      label:'Israel Central (Tel Aviv)'    },
+  // ── North America ────────────────────────────────────────────────────────────
+  { value:'canadacentral',      label:'Canada Central',        group:'North America', azs:['2','3'] },
+  { value:'canadaeast',         label:'Canada East',           group:'North America', azs:['1'] },
+  { value:'centralus',          label:'Central US',            group:'North America', azs:['1','2'] },
+  { value:'eastus',             label:'East US',               group:'North America', azs:['1','3'] },
+  { value:'eastus2',            label:'East US 2',             group:'North America', azs:['2','3'] },
+  { value:'northcentralus',     label:'North Central US',      group:'North America', azs:['1'] },
+  { value:'southcentralus',     label:'South Central US',      group:'North America', azs:['1','2'] },
+  { value:'westus',             label:'West US',               group:'North America', azs:['1'] },
+  { value:'westus2',            label:'West US 2',             group:'North America', azs:['1','2'] },
+  { value:'westus3',            label:'West US 3',             group:'North America', azs:['1','2'] },
+  // ── Latin America ────────────────────────────────────────────────────────────
+  { value:'brazilsouth',        label:'Brazil South',          group:'Latin America', azs:['2','3'] },
+  { value:'brazilsoutheast',    label:'Brazil Southeast',      group:'Latin America', azs:['1'] },
+  // ── Europe / Middle East / Africa ────────────────────────────────────────────
+  { value:'francecentral',      label:'France Central',        group:'Europe / ME / Africa', azs:['2','3'] },
+  { value:'francesouth',        label:'France South',          group:'Europe / ME / Africa', azs:['1'] },
+  { value:'germanynorth',       label:'Germany North',         group:'Europe / ME / Africa', azs:['1'] },
+  { value:'germanywestcentral', label:'Germany West Central',  group:'Europe / ME / Africa', azs:['2','3'] },
+  { value:'italynorth',         label:'Italy North',           group:'Europe / ME / Africa', azs:['1','2'] },
+  { value:'northeurope',        label:'North Europe',          group:'Europe / ME / Africa', azs:['1','3'] },
+  { value:'spaincentral',       label:'Spain Central',         group:'Europe / ME / Africa', azs:['1','3'] },
+  { value:'swedencentral',      label:'Sweden Central',        group:'Europe / ME / Africa', azs:['1','3'] },
+  { value:'switzerlandnorth',   label:'Switzerland North',     group:'Europe / ME / Africa', azs:['1','2'] },
+  { value:'uaecentral',         label:'UAE Central',           group:'Europe / ME / Africa', azs:['1'] },
+  { value:'uaenorth',           label:'UAE North',             group:'Europe / ME / Africa', azs:['1','2'] },
+  { value:'uksouth',            label:'UK South',              group:'Europe / ME / Africa', azs:['1','2'] },
+  { value:'ukwest',             label:'UK West',               group:'Europe / ME / Africa', azs:['1'] },
+  { value:'westeurope',         label:'West Europe',           group:'Europe / ME / Africa', azs:['1','3'] },
+  // ── Asia Pacific ─────────────────────────────────────────────────────────────
+  { value:'australiaeast',      label:'Australia East',        group:'Asia Pacific', azs:['2','3'] },
+  { value:'australiasoutheast', label:'Australia Southeast',   group:'Asia Pacific', azs:['1'] },
+  { value:'centralindia',       label:'Central India',         group:'Asia Pacific', azs:['1','3'] },
+  { value:'japaneast',          label:'Japan East',            group:'Asia Pacific', azs:['2','3'] },
+  { value:'japanwest',          label:'Japan West',            group:'Asia Pacific', azs:['3'] },
+  { value:'southindia',         label:'South India',           group:'Asia Pacific', azs:['1'] },
+  { value:'southeastasia',      label:'Southeast Asia',        group:'Asia Pacific', azs:['1','2'] },
 ];
 
-function azureRegionSelectHTML(id, value, onchange) {
-  const opts = AZURE_REGIONS.map(r =>
-    `<option value="${r.value}"${r.value === value ? ' selected' : ''}>${r.label}</option>`
+const _AZURE_REGION_MAP = Object.fromEntries(AZURE_REGIONS.map(r => [r.value, r]));
+
+function getAzureAZs(location) {
+  return (_AZURE_REGION_MAP[location] || {azs:['1','2','3']}).azs;
+}
+
+function azureZoneOptions(location, selected) {
+  return getAzureAZs(location).map(az =>
+    `<option value="${az}"${az === String(selected) ? ' selected' : ''}>${az}</option>`
   ).join('');
+}
+
+function azureRegionSelectHTML(id, value, onchange) {
+  const groups = [...new Set(AZURE_REGIONS.map(r => r.group))];
+  const opts = groups.map(g => {
+    const items = AZURE_REGIONS.filter(r => r.group === g).map(r =>
+      `<option value="${r.value}"${r.value === value ? ' selected' : ''}>${r.label}</option>`
+    ).join('');
+    return `<optgroup label="${g}">${items}</optgroup>`;
+  }).join('');
   return `<select id="${id}" class="ref-select" onchange="${onchange}">
     <option value="">— select region —</option>
     ${opts}
@@ -120,6 +161,11 @@ function defAzureInfra(i) {
     mw_preference:        'NoPreference',
     mw_patching_mode:     'Rolling',
     mw_lead_time_in_weeks: 0,
+    mw_days_of_week:      '',
+    mw_hours_of_day:      '',
+    mw_weeks_of_month:    '',
+    mw_months:            '',
+    customer_contacts:    [],
     tags:                 {},
   };
 }
@@ -150,7 +196,7 @@ function defAzureCluster(i) {
     data_storage_percentage:        100,
     is_local_backup_enabled:        false,
     is_sparse_diskgroup_enabled:    false,
-    time_zone:                      '',
+    time_zone:                      'UTC',
     scan_listener_port_tcp:         1521,
     scan_listener_port_tcp_ssl:     2484,
     dco_diagnostics_events_enabled: true,
@@ -194,6 +240,10 @@ function readAzureInfra(i) {
     mw_preference:        fv(`${p}mwp`) || 'NoPreference',
     mw_patching_mode:     fv(`${p}mwpm`) || 'Rolling',
     mw_lead_time_in_weeks: parseInt(fv(`${p}mwlead`)) || 0,
+    mw_days_of_week:      fv(`${p}mwdays`)   || '',
+    mw_hours_of_day:      fv(`${p}mwhours`)  || '',
+    mw_weeks_of_month:    fv(`${p}mwweeks`)  || '',
+    mw_months:            fv(`${p}mwmonths`) || '',
   };
 }
 
@@ -233,6 +283,18 @@ function readAzureCluster(i) {
   };
 }
 
+// ── Zone update helper (call when location changes on an infra card) ─────────
+function updateAzureInfraZones(i) {
+  const locEl  = document.getElementById(`ai${i}_loc`);
+  const zoneEl = document.getElementById(`ai${i}_zone`);
+  if (!locEl || !zoneEl) return;
+  const loc = locEl.value;
+  const azs = getAzureAZs(loc);
+  const cur = zoneEl.value;
+  zoneEl.innerHTML = azureZoneOptions(loc, azs.includes(cur) ? cur : azs[0]);
+  azureInfras[i].zone = zoneEl.value;
+}
+
 // ── Dropdown option helpers ───────────────────────────────────────────────────
 function azureInfraOptions(selected) {
   return azureInfras.map(inf =>
@@ -243,6 +305,18 @@ function azureVnetOptions(selected) {
   return azureVnets.map(vn =>
     `<option value="${vn.module_name}"${vn.module_name === selected ? ' selected' : ''}>${vn.module_name}</option>`
   ).join('');
+}
+
+// ── Customer contact helper ───────────────────────────────────────────────────
+function addContactToAzureInfra(i) {
+  const inp = document.getElementById(`ai${i}_contactin`);
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) return;
+  azureInfras[i].customer_contacts = [...(azureInfras[i].customer_contacts || []), val];
+  inp.value = '';
+  renderAzureInfras();
+  refresh();
 }
 
 // ── SSH key helper ────────────────────────────────────────────────────────────
@@ -281,7 +355,7 @@ function azureVnetCardHTML(d, i) {
       </div>
     </div>
     <div class="section"><div class="section-head"><div class="section-title">Oracle-Delegated Subnet</div><span class="badge-req">required</span><div class="section-line"></div></div>
-      <div class="notice azure" style="background:rgba(0,120,212,0.06);border-color:rgba(0,120,212,0.2);margin-bottom:10px"><span style="font-size:12px;flex-shrink:0">ℹ</span> Subnet is delegated to <code>Oracle.Database/networkAttachments</code> automatically.</div>
+      <div class="notice azure" style="background:rgba(27,127,79,0.06);border-color:rgba(27,127,79,0.2);margin-bottom:10px"><span style="font-size:12px;flex-shrink:0">ℹ</span> Subnet is delegated to <code>Oracle.Database/networkAttachments</code> automatically.</div>
       <div class="g2">
         <div class="field"><div class="field-lbl">subnet_name <span class="req-star">*</span></div><input type="text" id="${p}sn" value="${d.subnet_name||''}" placeholder="oracle-delegated-subnet" oninput="readAzureVnet(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">subnet_address_prefix <span class="req-star">*</span></div><div class="field-hint">Must be /24 or larger within VNet CIDR</div><input type="text" id="${p}sp" value="${d.subnet_address_prefix||'10.0.1.0/24'}" placeholder="10.0.1.0/24" oninput="readAzureVnet(${i});refresh()"></div>
@@ -293,6 +367,7 @@ function azureVnetCardHTML(d, i) {
 
 function azureInfraCardHTML(d, i) {
   const p = `ai${i}_`, open = (_cardOpen[`ai-card-${i}`] ?? i === 0) ? 'open' : '';
+  const isCust = d.mw_preference === 'CustomPreference';
   return `<div class="inst-card ${open}" id="ai-card-${i}" draggable="true" ondragstart="onCardDragStart(event,azureInfras,${i},renderAzureInfras,'ai-card-')" ondragover="onCardDragOver(event,azureInfras,${i})" ondragleave="onCardDragLeave(event)" ondrop="onCardDrop(event,azureInfras,${i},renderAzureInfras,'ai-card-')" ondragend="onCardDragEnd(event)">
   <div class="inst-card-head" onclick="toggleCard('ai-card-${i}')">
     <span class="drag-handle" title="Drag to reorder">⠿</span>
@@ -306,7 +381,7 @@ function azureInfraCardHTML(d, i) {
     <div class="section"><div class="section-head"><div class="section-title">Required</div><span class="badge-req">required</span><div class="section-line"></div></div>
       <div class="g2">
         <div class="field"><div class="field-lbl">resource_group_name <span class="req-star">*</span></div><input type="text" id="${p}rg" value="${d.resource_group_name||''}" placeholder="my-resource-group" oninput="readAzureInfra(${i});refresh()"></div>
-        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${azureRegionSelectHTML(`${p}loc`, d.location||'eastus', `readAzureInfra(${i});refresh()`)}</div>
+        <div class="field"><div class="field-lbl">location <span class="req-star">*</span></div>${azureRegionSelectHTML(`${p}loc`, d.location||'eastus', `readAzureInfra(${i});updateAzureInfraZones(${i});refresh()`)}</div>
       </div>
       <div class="g2">
         <div class="field"><div class="field-lbl">name <span class="req-star">*</span></div><div class="field-hint">ARM resource name (immutable)</div><input type="text" id="${p}name" value="${d.name||''}" placeholder="my-exainfra" oninput="readAzureInfra(${i});refresh()"></div>
@@ -317,15 +392,33 @@ function azureInfraCardHTML(d, i) {
         <div class="field"><div class="field-lbl">compute_count <span class="req-star">*</span></div><div class="field-hint">Min 2</div><input type="number" id="${p}cc" value="${d.compute_count||2}" min="2" oninput="readAzureInfra(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">storage_count <span class="req-star">*</span></div><div class="field-hint">Min 3</div><input type="number" id="${p}sc" value="${d.storage_count||3}" min="3" oninput="readAzureInfra(${i});refresh()"></div>
       </div>
-      <div class="field"><div class="field-lbl">zone <span class="req-star">*</span></div><div class="field-hint">Availability zone within the region</div><select id="${p}zone" onchange="readAzureInfra(${i});refresh()"><option value="1"${(d.zone||'1')==='1'?' selected':''}>1</option><option value="2"${d.zone==='2'?' selected':''}>2</option><option value="3"${d.zone==='3'?' selected':''}>3</option></select></div>
+      <div class="field"><div class="field-lbl">zone <span class="req-star">*</span></div><div class="field-hint">Availability zone within the region</div><select id="${p}zone" onchange="readAzureInfra(${i});refresh()">${azureZoneOptions(d.location||'eastus', d.zone||'1')}</select></div>
     </div>
     <div class="section"><div class="section-head"><div class="section-title">Maintenance Window</div><span class="badge-opt">optional</span><div class="section-line"></div></div>
       <div class="inner-card">
         <div class="g3">
-          <div class="field"><div class="field-lbl">preference</div><select id="${p}mwp" onchange="readAzureInfra(${i});refresh()"><option value="NoPreference"${(d.mw_preference||'NoPreference')==='NoPreference'?' selected':''}>NoPreference</option><option value="CustomPreference"${d.mw_preference==='CustomPreference'?' selected':''}>CustomPreference</option></select></div>
+          <div class="field"><div class="field-lbl">preference</div><select id="${p}mwp" onchange="readAzureInfra(${i});toggleMWCard('${p}');refresh()"><option value="NoPreference"${(d.mw_preference||'NoPreference')==='NoPreference'?' selected':''}>NoPreference</option><option value="CustomPreference"${isCust?' selected':''}>CustomPreference</option></select></div>
           <div class="field"><div class="field-lbl">patching_mode</div><select id="${p}mwpm" onchange="readAzureInfra(${i});refresh()"><option value="Rolling"${(d.mw_patching_mode||'Rolling')==='Rolling'?' selected':''}>Rolling</option><option value="NonRolling"${d.mw_patching_mode==='NonRolling'?' selected':''}>NonRolling</option></select></div>
           <div class="field"><div class="field-lbl">lead_time_in_weeks</div><input type="number" id="${p}mwlead" value="${d.mw_lead_time_in_weeks||0}" min="0" max="4" oninput="readAzureInfra(${i});refresh()"></div>
         </div>
+        <div id="${p}mwcustom" style="${isCust?'':'display:none'};margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+          <div class="g2">
+            <div class="field"><div class="field-lbl">days_of_week</div><div class="field-hint">Comma-separated e.g. Monday,Wednesday</div><input type="text" id="${p}mwdays" value="${d.mw_days_of_week||''}" placeholder="Monday,Wednesday" oninput="readAzureInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">months</div><div class="field-hint">Comma-separated e.g. January,April</div><input type="text" id="${p}mwmonths" value="${d.mw_months||''}" placeholder="January,April" oninput="readAzureInfra(${i});refresh()"></div>
+          </div>
+          <div class="g2">
+            <div class="field"><div class="field-lbl">hours_of_day</div><div class="field-hint">Comma-separated hour slots: 0,4,8,12,16,20</div><input type="text" id="${p}mwhours" value="${d.mw_hours_of_day||''}" placeholder="8,20" oninput="readAzureInfra(${i});refresh()"></div>
+            <div class="field"><div class="field-lbl">weeks_of_month</div><div class="field-hint">Comma-separated 1–4 e.g. 1,3</div><input type="text" id="${p}mwweeks" value="${d.mw_weeks_of_month||''}" placeholder="1,3" oninput="readAzureInfra(${i});refresh()"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Customer Contacts</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+      <div class="field-hint" style="margin-bottom:8px">Oracle sends maintenance and system notifications to these addresses (up to 10).</div>
+      <div class="chip-list">${(d.customer_contacts||[]).map((e,ei)=>`<span class="chip"><span>${e}</span><button class="chip-rm" onclick="azureInfras[${i}].customer_contacts.splice(${ei},1);renderAzureInfras();refresh()">×</button></span>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <input type="email" id="${p}contactin" placeholder="ops@example.com" style="flex:1">
+        <button class="add-btn" style="height:32px" onclick="addContactToAzureInfra(${i})">+ Add</button>
       </div>
     </div>
   </div>
@@ -351,7 +444,7 @@ function azureClusterCardHTML(d, i) {
     <div class="module-path-row"><span class="mp-dir">modules/</span><input class="module-name-field" type="text" id="${p}mn" value="${d.module_name}" oninput="readAzureCluster(${i});refresh()"><span style="color:var(--ink4)">/ {main·variables·outputs·tfvars}</span></div>
 
     <div class="section"><div class="section-head"><div class="section-title">References</div><span class="badge-req">required</span><div class="section-line"></div></div>
-      <div class="notice azure" style="background:rgba(0,120,212,0.06);border-color:rgba(0,120,212,0.2);margin-bottom:8px"><span style="font-size:13px;flex-shrink:0">✓</span> <strong>Auto-wired in root main.tf</strong> — select the Exadata Infra and VNet this cluster uses.</div>
+      <div class="notice azure" style="background:rgba(27,127,79,0.06);border-color:rgba(27,127,79,0.2);margin-bottom:8px"><span style="font-size:13px;flex-shrink:0">✓</span> <strong>Auto-wired in root main.tf</strong> — select the Exadata Infra and VNet this cluster uses.</div>
       <div class="g2">
         <div class="field"><div class="field-lbl">Exadata Infrastructure</div><select class="ref-select" id="${p}infra_ref" onchange="readAzureCluster(${i});refresh()">${infOpts || '<option value="">— add infra first —</option>'}</select></div>
         <div class="field"><div class="field-lbl">VNet / Subnet</div><select class="ref-select" id="${p}vnet_ref" onchange="readAzureCluster(${i});refresh()">${vnetOpts || '<option value="">— add VNet first —</option>'}</select></div>

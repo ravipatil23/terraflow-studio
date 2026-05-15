@@ -1,5 +1,5 @@
 variable "display_name" {
-  type = string
+  type    = string
 {% if display_name %}
   default = "{{ display_name }}"
 {% endif %}
@@ -11,14 +11,14 @@ variable "cpu_core_count" {
 }
 
 variable "gi_version" {
-  type = string
+  type    = string
 {% if gi_version %}
   default = "{{ gi_version }}"
 {% endif %}
 }
 
 variable "hostname_prefix" {
-  type = string
+  type    = string
 {% if hostname_prefix %}
   default = "{{ hostname_prefix }}"
 {% endif %}
