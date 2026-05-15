@@ -1617,14 +1617,13 @@ async function refreshCustomerList() {
     const prev = sel.value;
     sel.innerHTML = '<option value="">— saved customers —</option>';
     list.forEach(c => {
-      c.clouds.forEach(cld => {
-        const opt = document.createElement('option');
-        opt.value = `${c.slug}|${cld}`;
-        opt.dataset.name = c.customer;
-        opt.textContent = `${c.customer} (${cld.toUpperCase()})`;
-        if (opt.value === prev) opt.selected = true;
-        sel.appendChild(opt);
-      });
+      if (!c.clouds.includes(cloud)) return;
+      const opt = document.createElement('option');
+      opt.value = `${c.slug}|${cloud}`;
+      opt.dataset.name = c.customer;
+      opt.textContent = c.customer;
+      if (opt.value === prev) opt.selected = true;
+      sel.appendChild(opt);
     });
     updateDelBtn();
   } catch(e) { console.warn('Could not refresh customer list:', e); }
