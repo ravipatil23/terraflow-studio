@@ -1617,11 +1617,17 @@ async function refreshCustomerList() {
     const prev = sel.value;
     sel.innerHTML = '<option value="">— saved customers —</option>';
     list.forEach(c => {
-      if (!c.clouds.includes(cloud)) return;
       const opt = document.createElement('option');
-      opt.value = `${c.slug}|${cloud}`;
+      // Use current cloud if customer has it saved, otherwise the first available cloud
+      const cld = c.clouds.includes(cloud) ? cloud : (c.clouds[0] || cloud);
+      opt.value = `${c.slug}|${cld}`;
       opt.dataset.name = c.customer;
-      opt.textContent = c.customer;
+      if (c.clouds.includes(cloud)) {
+        opt.textContent = c.customer;
+      } else {
+        opt.textContent = `${c.customer} [${c.clouds.join('/')}]`;
+        opt.style.color = '#999';
+      }
       if (opt.value === prev) opt.selected = true;
       sel.appendChild(opt);
     });
