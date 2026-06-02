@@ -1,6 +1,8 @@
 """AWS (ODB@AWS) and CloudFormation generators."""
 import re
+import datetime
 from .helpers import render_tf, is_ref, parse_list, tf_bool
+from .oci_dg_gen import generate_oci_dg_tf
 from .oci_gen import (
     _avmc_filled, _ocidb_filled, _oci_db_defaults,
     _mn_dbhome, _mn_cdb, _mn_pdb,
@@ -11,7 +13,7 @@ from .oci_gen import (
 
 _AWS_TO_OCI_REGION = {
     'us-east-1':      'us-ashburn-1',
-    'us-east-2':      'us-ashburn-1',
+    'us-east-2':      'us-chicago-1',
     'us-west-1':      'us-sanjose-1',
     'us-west-2':      'us-portland-1',
     'eu-west-1':      'eu-frankfurt-1',
@@ -170,7 +172,6 @@ def _mod3_ctx(d, mn0='', mn1='', defaults=False):
     dng     = d.get('db_node_storage_size_in_gbs', '') or 'null'
     mem     = d.get('memory_size_in_gbs', '')          or 'null'
     sc      = d.get('scan_listener_port_tcp', '')      or 'null'
-    sc_ssl  = d.get('scan_listener_port_tcp_ssl', '') or 'null'
     infraid = infraid or (f'module.{mn1}.infra_id' if mn1 else '')
     netid   = netid   or (f'module.{mn0}.network_id' if mn0 else '')
     infra_val = infraid if not is_ref(infraid) else infraid
@@ -198,7 +199,6 @@ def _mod3_ctx(d, mn0='', mn1='', defaults=False):
         db_node_storage_size_in_gbs=dng,
         memory_size_in_gbs=mem,
         scan_listener_port_tcp=sc,
-        scan_listener_port_tcp_ssl=sc_ssl,
         is_local_backup_enabled=tf_bool(d.get('is_local_backup_enabled', False)),
         is_sparse_diskgroup_enabled=tf_bool(d.get('is_sparse_diskgroup_enabled', False)),
         tags=d.get('tags', {}),
@@ -298,7 +298,26 @@ def build_root_vars(networks, infras, peerings, clusters, avmclusters=None, oci_
     oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
     return render_tf('aws_root/variables.tf.j2',
         aws_region=aws_region, oci_region=oci_region,
+        networks=networks, infras=infras, peerings=peerings,
+        clusters=clusters, avmclusters=avmclusters or [],
         oci_databases=oci_databases or [])
+
+
+def build_readme(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None, iac_tool='terraform', customer_name=''):
+    avmclusters = avmclusters or []
+    aws_region = 'us-east-1'
+    oci_region = 'us-ashburn-1'
+    for n in (networks or []):
+        if n.get('region'): aws_region = n['region']; break
+    oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
+    return render_tf('aws_root/README.md.j2',
+        aws_region=aws_region, oci_region=oci_region,
+        networks=networks, infras=infras, peerings=peerings,
+        clusters=clusters, avmclusters=avmclusters,
+        oci_databases=oci_databases or [],
+        iac_tool=iac_tool,
+        customer_name=customer_name,
+        generated_date=datetime.date.today().isoformat())
 
 
 def build_root_tfvars(networks, infras, peerings, clusters, avmclusters=None, iac_tool='terraform'):
@@ -331,8 +350,10 @@ def _aws_net_defaults(d):
         's3_access': 'ENABLED' if d.get('s3_access') else 'DISABLED',
         'zero_etl_access': 'ENABLED' if d.get('zero_etl_access') else 'DISABLED',
         'region': d.get('region', ''),
+        'availability_zone': d.get('availability_zone', ''),
         'custom_domain_name': cdn,
         'default_dns_prefix': '' if cdn else d.get('default_dns_prefix', ''),
+        'delete_associated_resources': bool(d.get('delete_associated_resources', False)),
     }
 
 
@@ -343,6 +364,10 @@ def _aws_infra_defaults(d):
         'compute_count': int(d.get('compute_count') or 2),
         'storage_count': int(d.get('storage_count') or 3),
         'availability_zone_id': d.get('availability_zone_id') or 'use1-az6',
+        'region': d.get('region', ''),
+        'availability_zone': d.get('availability_zone', ''),
+        'mw_preference': d.get('mw_preference') or 'NO_PREFERENCE',
+        'mw_patching_mode': d.get('mw_patching_mode') or 'ROLLING',
     }
 
 
@@ -351,6 +376,7 @@ def _aws_peer_defaults(d, first_network_name=''):
         'display_name': d.get('display_name') or 'odb-peering',
         'peer_network_id': d.get('peer_network_id') or 'vpc-CHANGEME',
         'network_ref': d.get('network_ref') or first_network_name,
+        'region': d.get('region', ''),
     }
 
 
@@ -618,38 +644,26 @@ def generate_aws_tf(data: dict) -> dict:
 
     iac_tool = data.get('iac_tool', 'terraform')
 
+    customer_name = data.get('customer_name', '')
     files = {
         'main.tf':          build_root_main(networks, infras, peerings, clusters, avmclusters, oci_dbs, iac_tool),
         'variables.tf':     build_root_vars(networks, infras, peerings, clusters, avmclusters, oci_dbs),
-        'terraform.tfvars': build_root_tfvars(networks, infras, peerings, clusters, avmclusters),
+        'terraform.auto.tfvars': build_root_tfvars(networks, infras, peerings, clusters, avmclusters),
+        'README.md':        build_readme(networks, infras, peerings, clusters, avmclusters, oci_dbs, iac_tool, customer_name),
     }
-    for net in networks:
-        mn = net['module_name']
-        files[f'modules/{mn}/main.tf']          = mod0_main(mn, net)
-        files[f'modules/{mn}/variables.tf']     = mod0_vars(mn, net)
-        files[f'modules/{mn}/outputs.tf']       = mod0_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod0_tfvars(mn, net)
-    for inf in infras:
-        mn = inf['module_name']
-        files[f'modules/{mn}/main.tf']          = mod1_main(mn)
-        files[f'modules/{mn}/variables.tf']     = mod1_vars(mn, inf)
-        files[f'modules/{mn}/outputs.tf']       = mod1_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod1_tfvars(mn, inf)
-    for peer in peerings:
-        mn  = peer['module_name']
-        mn0 = peer.get('network_ref', first_net_name)
-        files[f'modules/{mn}/main.tf']          = mod2_main(mn)
-        files[f'modules/{mn}/variables.tf']     = mod2_vars(mn, peer, mn0)
-        files[f'modules/{mn}/outputs.tf']       = mod2_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod2_tfvars(mn, peer, mn0)
-    for cl in clusters:
-        mn  = cl['module_name']
-        mn0 = cl.get('network_ref', first_net_name)
-        mn1 = cl.get('infra_ref', first_inf_name)
-        files[f'modules/{mn}/main.tf']          = mod3_main(mn, cl, mn0, mn1)
-        files[f'modules/{mn}/variables.tf']     = mod3_vars(mn, cl, mn0, mn1)
-        files[f'modules/{mn}/outputs.tf']       = mod3_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod3_tfvars(mn, cl, mn0, mn1)
+    # Shared static modules — one directory per resource type regardless of instance count
+    files['modules/aws-odb-network/main.tf']      = mod0_main('aws-odb-network', {})
+    files['modules/aws-odb-network/variables.tf'] = mod0_vars('aws-odb-network', {})
+    files['modules/aws-odb-network/outputs.tf']   = mod0_outputs('aws-odb-network')
+    files['modules/aws-exadata-infra/main.tf']      = mod1_main('aws-exadata-infra')
+    files['modules/aws-exadata-infra/variables.tf'] = mod1_vars('aws-exadata-infra', {})
+    files['modules/aws-exadata-infra/outputs.tf']   = mod1_outputs('aws-exadata-infra')
+    files['modules/aws-peering/main.tf']      = mod2_main('aws-peering')
+    files['modules/aws-peering/variables.tf'] = mod2_vars('aws-peering', {}, '')
+    files['modules/aws-peering/outputs.tf']   = mod2_outputs('aws-peering')
+    files['modules/aws-vm-cluster/main.tf']      = mod3_main('aws-vm-cluster')
+    files['modules/aws-vm-cluster/variables.tf'] = mod3_vars('aws-vm-cluster', {}, '', '')
+    files['modules/aws-vm-cluster/outputs.tf']   = mod3_outputs('aws-vm-cluster')
     for av in avmclusters:
         mn  = av['module_name']
         mn0 = av.get('network_ref', first_net_name)
@@ -657,7 +671,6 @@ def generate_aws_tf(data: dict) -> dict:
         files[f'modules/{mn}/main.tf']          = mod4_main(mn, av, mn0, mn1)
         files[f'modules/{mn}/variables.tf']     = mod4_vars(mn, av, mn0, mn1)
         files[f'modules/{mn}/outputs.tf']       = mod4_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod4_tfvars(mn, av, mn0, mn1)
     for db in oci_dbs:
         base = db['module_name']
         vcr  = db.get('vmcluster_ref', first_cl_name)
@@ -675,4 +688,5 @@ def generate_aws_tf(data: dict) -> dict:
             files[f'modules/{mn_p}/variables.tf']     = oci_pdb_vars(mn_p, db, mn_c)
             files[f'modules/{mn_p}/outputs.tf']       = oci_pdb_outputs(mn_p)
             files[f'modules/{mn_p}/terraform.tfvars'] = oci_pdb_tfvars(mn_p, db, mn_c)
+    files.update(generate_oci_dg_tf(data))
     return files

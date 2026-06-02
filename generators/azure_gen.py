@@ -1,5 +1,6 @@
 """Azure (DB@Azure) generators."""
 from .helpers import render_tf, tf_bool
+from .oci_dg_gen import generate_oci_dg_tf
 
 
 def _azure_vnet_defaults(d):
@@ -47,7 +48,7 @@ def _azure_cluster_defaults(d, first_vnet_name='', first_infra_name=''):
         'display_name':          d.get('display_name') or '',
         'cloud_exadata_infrastructure_id': d.get('cloud_exadata_infrastructure_id') or '',
         'subnet_id':             d.get('subnet_id') or '',
-        'vnet_id':               d.get('vnet_id') or '',
+        'virtual_network_id':    d.get('virtual_network_id') or d.get('vnet_id') or '',
         'hostname':              d.get('hostname') or '',
         'cpu_core_count':        int(d.get('cpu_core_count') or 4),
         'data_storage_size_in_tbs':    float(d.get('data_storage_size_in_tbs') or 2),
@@ -59,16 +60,22 @@ def _azure_cluster_defaults(d, first_vnet_name='', first_infra_name=''):
         'cluster_name':          d.get('cluster_name') or '',
         'domain':                d.get('domain') or '',
         'backup_subnet_cidr':    d.get('backup_subnet_cidr') or '',
-        'data_storage_percentage':        int(d.get('data_storage_percentage') or 100),
-        'is_local_backup_enabled':        bool(d.get('is_local_backup_enabled', False)),
-        'is_sparse_diskgroup_enabled':    bool(d.get('is_sparse_diskgroup_enabled', False)),
         'time_zone':             d.get('time_zone') or 'UTC',
         'db_servers':            d.get('db_servers') or [],
         'scan_listener_port_tcp':     int(d.get('scan_listener_port_tcp') or 1521),
-        'scan_listener_port_tcp_ssl': int(d.get('scan_listener_port_tcp_ssl') or 2484),
+        'scan_listener_port_tcp_ssl': d.get('scan_listener_port_tcp_ssl') or None,
+        'system_version':             d.get('system_version') or '',
+        'zone_id':                    d.get('zone_id') or '',
+        'file_system_configuration':  d.get('file_system_configuration') or (
+            [{'mount_point': d.get('fsc_mount_point') or '', 'size_in_gb': int(d['fsc_size_in_gb'])}]
+            if d.get('fsc_size_in_gb') else []
+        ),
         'dco_diagnostics_events_enabled': bool(d.get('dco_diagnostics_events_enabled', True)),
         'dco_health_monitoring_enabled':  bool(d.get('dco_health_monitoring_enabled', True)),
         'dco_incident_logs_enabled':      bool(d.get('dco_incident_logs_enabled', True)),
+        'local_backup_enabled':        bool(d.get('local_backup_enabled', d.get('is_local_backup_enabled', False))),
+        'sparse_diskgroup_enabled':    bool(d.get('sparse_diskgroup_enabled', d.get('is_sparse_diskgroup_enabled', False))),
+        'data_storage_percentage':     int(d.get('data_storage_percentage') or 80),
         'infra_ref':             d.get('infra_ref') or first_infra_name,
         'vnet_ref':              d.get('vnet_ref') or first_vnet_name,
         'tags':                  d.get('tags') or {},
@@ -92,8 +99,6 @@ def _parse_str_list(s):
 
 
 def _azure_infra_ctx(d):
-    contacts = d.get('customer_contacts') or []
-    customer_contacts_tf = '[' + ', '.join(f'"{e}"' for e in contacts) + ']'
     days   = _parse_str_list(d.get('mw_days_of_week') or '')
     hours  = _parse_str_list(d.get('mw_hours_of_day') or '')
     weeks  = _parse_str_list(d.get('mw_weeks_of_month') or '')
@@ -110,14 +115,23 @@ def _azure_infra_ctx(d):
         mw_preference=d['mw_preference'],
         mw_patching_mode=d['mw_patching_mode'],
         mw_lead_time_in_weeks=d['mw_lead_time_in_weeks'],
-        customer_contacts=contacts,
-        customer_contacts_tf=customer_contacts_tf,
         mw_days_of_week=days,
         mw_hours_of_day=[int(x) for x in hours if x.isdigit()],
         mw_weeks_of_month=[int(x) for x in weeks if x.isdigit()],
         mw_months=months,
         tags=d['tags'],
     )
+
+
+def _fsc_tf(fsc_list):
+    if not fsc_list:
+        return '[]'
+    items = []
+    for item in fsc_list:
+        mp = f'"{item["mount_point"]}"' if item.get('mount_point') else 'null'
+        sg = str(item['size_in_gb']) if item.get('size_in_gb') is not None else 'null'
+        items.append('{ mount_point = ' + mp + ', size_in_gb = ' + sg + ' }')
+    return '[' + ', '.join(items) + ']'
 
 
 def _azure_cluster_ctx(d):
@@ -132,7 +146,7 @@ def _azure_cluster_ctx(d):
         display_name=d['display_name'],
         cloud_exadata_infrastructure_id=d['cloud_exadata_infrastructure_id'],
         subnet_id=d['subnet_id'],
-        vnet_id=d['vnet_id'],
+        virtual_network_id=d['virtual_network_id'],
         hostname=d['hostname'],
         cpu_core_count=d['cpu_core_count'],
         data_storage_size_in_tbs=d['data_storage_size_in_tbs'],
@@ -145,14 +159,18 @@ def _azure_cluster_ctx(d):
         domain=d['domain'],
         backup_subnet_cidr=d['backup_subnet_cidr'],
         data_storage_percentage=d['data_storage_percentage'],
-        is_local_backup_enabled=tf_bool(d['is_local_backup_enabled']),
-        is_sparse_diskgroup_enabled=tf_bool(d['is_sparse_diskgroup_enabled']),
         time_zone=d['time_zone'],
         scan_listener_port_tcp=d['scan_listener_port_tcp'],
-        scan_listener_port_tcp_ssl=d['scan_listener_port_tcp_ssl'],
+        scan_listener_port_tcp_ssl=d.get('scan_listener_port_tcp_ssl') or '',
+        system_version=d.get('system_version') or '',
+        zone_id=d.get('zone_id') or '',
         dco_diagnostics_events_enabled=tf_bool(d['dco_diagnostics_events_enabled']),
         dco_health_monitoring_enabled=tf_bool(d['dco_health_monitoring_enabled']),
         dco_incident_logs_enabled=tf_bool(d['dco_incident_logs_enabled']),
+        local_backup_enabled=tf_bool(d['local_backup_enabled']),
+        sparse_diskgroup_enabled=tf_bool(d['sparse_diskgroup_enabled']),
+        file_system_configuration=d.get('file_system_configuration') or [],
+        file_system_configuration_tf=_fsc_tf(d.get('file_system_configuration') or []),
         db_servers_tf=db_servers_tf,
         tags=d['tags'],
     )
@@ -251,25 +269,27 @@ def generate_azure_tf(data: dict) -> dict:
     files = {
         'main.tf':          azure_build_root_main(vnets, infras, clusters, iac_tool),
         'variables.tf':     azure_build_root_vars(vnets, infras, clusters, subscription_id, resource_group_name, location, tags),
-        'terraform.tfvars': azure_build_root_tfvars(vnets, infras, clusters, subscription_id, resource_group_name, location, tags, iac_tool),
+        'terraform.auto.tfvars': azure_build_root_tfvars(vnets, infras, clusters, subscription_id, resource_group_name, location, tags, iac_tool),
     }
     for net in vnets:
         mn = net['module_name']
         files[f'modules/{mn}/main.tf']          = azure_vnet_main(mn, net)
         files[f'modules/{mn}/variables.tf']     = azure_vnet_vars(mn, net)
         files[f'modules/{mn}/outputs.tf']       = azure_vnet_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = azure_vnet_tfvars(mn, net)
     for inf in infras:
         mn = inf['module_name']
         files[f'modules/{mn}/main.tf']          = azure_infra_main(mn, inf)
         files[f'modules/{mn}/variables.tf']     = azure_infra_vars(mn, inf)
         files[f'modules/{mn}/outputs.tf']       = azure_infra_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = azure_infra_tfvars(mn, inf)
     for cl in clusters:
         mn = cl['module_name']
         files[f'modules/{mn}/main.tf']          = azure_cluster_main(mn, cl)
         files[f'modules/{mn}/variables.tf']     = azure_cluster_vars(mn, cl)
         files[f'modules/{mn}/outputs.tf']       = azure_cluster_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = azure_cluster_tfvars(mn, cl)
+
+    files.update(generate_oci_dg_tf({
+        'aws_dg_multi_az':    data.get('azure_dg_multi_az', []),
+        'aws_dg_cross_region': data.get('azure_dg_cross_region', []),
+    }))
 
     return files

@@ -48,15 +48,19 @@ from generators.aws_gen import (
     generate_aws_tf, generate_cfn,
 )
 from generators.gcp_gen import (
-    gcp0_main, gcp0_vars, gcp0_outputs, gcp0_tfvars,
-    gcp_subnet_main, gcp_subnet_vars, gcp_subnet_outputs, gcp_subnet_tfvars,
-    gcp2_main, gcp2_vars, gcp2_outputs, gcp2_tfvars,
-    gcp1_main, gcp1_vars, gcp1_outputs, gcp1_tfvars,
-    gcp_build_root_main, gcp_build_root_vars, gcp_build_root_tfvars,
     _gcp_net_defaults, _gcp_infra_defaults, _gcp_cluster_defaults,
     generate_gcp_tf,
+    _GCP_MOD_NET, _GCP_MOD_INFRA, _GCP_MOD_CLUSTER,
 )
-from generators.azure_gen import generate_azure_tf
+from generators.azure_gen import (
+    azure_vnet_main, azure_vnet_vars, azure_vnet_outputs, azure_vnet_tfvars,
+    azure_infra_main, azure_infra_vars, azure_infra_outputs, azure_infra_tfvars,
+    azure_cluster_main, azure_cluster_vars, azure_cluster_outputs, azure_cluster_tfvars,
+    azure_build_root_main, azure_build_root_vars, azure_build_root_tfvars,
+    _azure_vnet_defaults, _azure_infra_defaults, _azure_cluster_defaults,
+    generate_azure_tf,
+)
+from generators.oci_dg_gen import generate_oci_dg_tf
 
 app = Flask(__name__)
 
@@ -69,6 +73,8 @@ def generate_all(data: dict) -> dict:
         return generate_azure_tf(data)
     if cloud == 'gcp':
         return generate_gcp_tf(data)
+    if cloud == 'dg':
+        return generate_oci_dg_tf(data)
     return generate_aws_tf(data)
 
 # ─────────────────────────────────────────────
@@ -482,9 +488,74 @@ def api_rag_search():
         return jsonify({'error': 'query is required'}), 400
     chunks = rag_module.retrieve(query, k)
     return jsonify({'results': [
-        {'id': c['id'], 'source': c['source'], 'text': c['text'][:300]}
+        {'id': c['id'], 'source': c['source'],
+         'title': c.get('title', c['source']), 'text': c['text'][:500]}
         for c in chunks
     ]})
+
+@app.route('/api/rag/docs', methods=['GET'])
+def api_rag_docs():
+    docs_dir = rag_module.DOCS_DIR
+    docs = []
+    for p in sorted(docs_dir.glob('*.md')) + sorted(docs_dir.glob('*.txt')):
+        stat = p.stat()
+        docs.append({
+            'name':     p.name,
+            'size':     stat.st_size,
+            'modified': int(stat.st_mtime),
+        })
+    return jsonify({'docs': docs, **rag_module.index_stats()})
+
+@app.route('/api/rag/upload', methods=['POST'])
+def api_rag_upload():
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'No file provided'}), 400
+    name = os.path.basename(f.filename or '')
+    if not name:
+        return jsonify({'error': 'Invalid filename'}), 400
+
+    allowed = ('.md', '.txt', '.pptx', '.pdf', '.docx')
+    if not any(name.endswith(ext) for ext in allowed):
+        return jsonify({'error': 'Only .md, .txt, .pdf, .docx, and .pptx files are supported'}), 400
+
+    rag_module.DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+    _converters = {
+        '.pptx': (rag_module.pptx_to_markdown, 5),
+        '.pdf':  (rag_module.pdf_to_markdown,   4),
+        '.docx': (rag_module.docx_to_markdown,  5),
+    }
+    ext = next((e for e in _converters if name.endswith(e)), None)
+
+    if ext:
+        fn, ext_len = _converters[ext]
+        try:
+            md_text = fn(f.read(), name)
+        except RuntimeError as e:
+            return jsonify({'error': str(e)}), 400
+        save_name = name[:-ext_len] + '.md'
+        (rag_module.DOCS_DIR / save_name).write_text(md_text, encoding='utf-8')
+        saved = save_name
+    else:
+        dest = rag_module.DOCS_DIR / name
+        f.save(str(dest))
+        saved = name
+
+    n = rag_module.rebuild()
+    return jsonify({'ok': True, 'saved': saved, 'chunks_indexed': n, **rag_module.index_stats()})
+
+@app.route('/api/rag/docs/<filename>', methods=['DELETE'])
+def api_rag_delete_doc(filename):
+    name = os.path.basename(filename)
+    if not (name.endswith('.md') or name.endswith('.txt')):
+        return jsonify({'error': 'Invalid file type'}), 400
+    target = rag_module.DOCS_DIR / name
+    if not target.exists():
+        return jsonify({'error': 'File not found'}), 404
+    target.unlink()
+    n = rag_module.rebuild()
+    return jsonify({'ok': True, 'deleted': name, 'chunks_indexed': n, **rag_module.index_stats()})
 
 # ─────────────────────────────────────────────
 #  GITHUB ROUTES
@@ -547,6 +618,75 @@ def azure_page():
     return resp
 
 
+@app.route('/dg')
+def dg_page():
+    resp = make_response(render_template('dg.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+@app.route('/cidr')
+def cidr_page():
+    resp = make_response(render_template('cidr.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+@app.route('/rag')
+def rag_page():
+    resp = make_response(render_template('rag.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+@app.route('/hub')
+def hub_page():
+    resp = make_response(render_template('hub.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+@app.route('/api/llm/ask', methods=['POST'])
+def api_llm_ask():
+    body     = request.get_json(force=True)
+    question = body.get('question', '').strip()
+    cloud    = body.get('cloud', 'all').lower().strip()
+    if not question:
+        return jsonify({'error': 'question is required'}), 400
+    q_lower = question.lower()
+    cloud_prefix = '' if cloud == 'all' or q_lower.startswith(cloud) else f'{cloud} '
+    query = f'{cloud_prefix}{question}'
+    chunks  = rag_module.retrieve_hybrid(query, k=5)
+    context = '\n\n---\n\n'.join(
+        f'[{c["source"]} — {c.get("title", "")}]\n{c["text"]}' for c in chunks
+    )
+    sources = list(dict.fromkeys(c['source'] for c in chunks))
+    scope   = f' Focus on {cloud.upper()} specifically.' if cloud != 'all' else ''
+    system_msg = (
+        'You are an expert on Oracle Database@AWS, Oracle DB@Azure, and Oracle DB@GCP deployments '
+        'and Terraform/OpenTofu configuration.' + scope + '\n'
+        'Read ALL of the documentation chunks below before composing your answer — '
+        'relevant information may appear in any chunk, not just the first one.\n'
+        'IMPORTANT: Do NOT say a topic is undocumented if any chunk contains relevant content. '
+        'Synthesize across all chunks to give the most complete and accurate answer.\n'
+        'Use plain text with short paragraphs. Keep answers under 400 words unless detail is essential.\n\n'
+        'Reference documentation:\n' + context
+    )
+    try:
+        answer = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': question},
+        ])
+        return jsonify({
+            'answer':       answer.strip(),
+            'sources':      sources,
+            'source_links': rag_module.source_links(chunks),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/generate', methods=['POST'])
 def api_generate():
     data = request.get_json(force=True)
@@ -569,7 +709,14 @@ def api_download():
         content = generate_cfn(data)
         buf = io.BytesIO(content.encode('utf-8'))
         return send_file(buf, mimetype='text/yaml', as_attachment=True, download_name='odb-stack.yaml')
-    zip_name = 'terraflow-studio-gcp' if cloud == 'gcp' else 'terraflow-studio-aws'
+    if cloud == 'gcp':
+        zip_name = 'terraflow-studio-gcp'
+    elif cloud == 'azure':
+        zip_name = 'terraflow-studio-azure'
+    elif cloud == 'dg':
+        zip_name = 'terraflow-studio-dg'
+    else:
+        zip_name = 'terraflow-studio-aws'
     files = _fmt_files(generate_all(data), data.get('iac_tool', 'terraform'))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -600,16 +747,10 @@ def api_load_zip():
         return jsonify({'error': str(e)})
 
 
-@app.route('/api/validate', methods=['POST'])
-def api_validate():
-    data   = request.get_json(force=True)
-    tab    = data.get('tab', 0)
-    errors = {}   # {module_name: {field: message}}
+def _validate_aws(data, errors):
+    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
+    tab = data.get('tab', 0)
 
-    def _err(module_name, field, msg):
-        errors.setdefault(module_name, {})[field] = msg
-
-    # ── AWS tabs ──────────────────────────────────────────────────────────────
     if tab == 0:   # ODB Networks
         for net in data.get('aws_networks', [data.get('module_0', {})]):
             mn = net.get('module_name', 'odb_network')
@@ -653,13 +794,16 @@ def api_validate():
             if int(av.get('memory_per_oracle_compute_unit_in_gbs', 0) or 0) < 1: _err(mn, 'memory_per_oracle_compute_unit_in_gbs', 'Required, minimum 1')
             if int(av.get('total_container_databases', 0) or 0) < 1:            _err(mn, 'total_container_databases', 'Required, minimum 1')
 
-    # ── GCP tabs ──────────────────────────────────────────────────────────────
-    elif tab == 10:  # GCP Networks
+
+def _validate_gcp(data, errors):
+    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
+    tab = data.get('tab', 0)
+
+    if tab == 10:  # GCP Networks
         for net in data.get('gcp_networks', [data.get('gcp_module_0', {})]):
             mn = net.get('module_name', 'gcp_network')
             if not net.get('odb_network_id'): _err(mn, 'odb_network_id', 'Required')
             if not net.get('location'):        _err(mn, 'location',       'Required')
-            if not net.get('network'):         _err(mn, 'network',        'Required')
             if not net.get('client_cidr') and not net.get('client_subnet_cidr'):
                 _err(mn, 'client_cidr', 'Required')
             if not net.get('backup_cidr') and not net.get('backup_subnet_cidr'):
@@ -677,16 +821,11 @@ def api_validate():
     elif tab == 13:  # GCP VM Clusters
         for cl in data.get('gcp_clusters', [data.get('gcp_module_4', {})]):
             mn = cl.get('module_name', 'gcp_cluster')
-            if not cl.get('exadb_vm_cluster_id'): _err(mn, 'exadb_vm_cluster_id', 'Required')
-            if not cl.get('display_name'):         _err(mn, 'display_name',        'Required')
+            if not cl.get('cloud_vm_cluster_id'):  _err(mn, 'cloud_vm_cluster_id', 'Required')
             if not cl.get('location'):             _err(mn, 'location',            'Required')
-            if not cl.get('grid_image_id'):        _err(mn, 'grid_image_id',       'Required')
-            if not cl.get('exascale_db_storage_vault'): _err(mn, 'exascale_db_storage_vault', 'Required')
             if not cl.get('hostname_prefix'):      _err(mn, 'hostname_prefix',     'Required')
-            if int(cl.get('node_count', 0) or 0) < 2:
-                _err(mn, 'node_count', 'Minimum 2')
-            if int(cl.get('enabled_ecpu_count_per_node', 0) or 0) < 8:
-                _err(mn, 'enabled_ecpu_count_per_node', 'Minimum 8 (multiples of 4)')
+            if int(cl.get('cpu_core_count', 0) or 0) < 2:
+                _err(mn, 'cpu_core_count', 'Minimum 2')
             if not cl.get('ssh_public_keys'):
                 _err(mn, 'ssh_public_keys', 'At least one SSH key required')
 
@@ -697,6 +836,63 @@ def api_validate():
             if not db.get('db_version'):    _err(mn, 'db_version',    'Required')
             if not db.get('db_name'):       _err(mn, 'db_name',       'Required')
 
+
+def _validate_azure(data, errors):
+    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
+    tab = data.get('tab', 0)
+
+    if tab == 20:  # Azure VNet + Subnet
+        for vnet in data.get('azure_vnets', []):
+            mn = vnet.get('module_name', 'azure_vnet')
+            if not vnet.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
+            if not vnet.get('location'):             _err(mn, 'location',            'Required')
+            if not vnet.get('vnet_name'):            _err(mn, 'vnet_name',           'Required')
+            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', vnet.get('address_space', '')):
+                _err(mn, 'address_space', 'Valid CIDR required')
+            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', vnet.get('subnet_address_prefix', '')):
+                _err(mn, 'subnet_address_prefix', 'Valid CIDR required')
+
+    elif tab == 21:  # Azure Exadata Infrastructure
+        for inf in data.get('azure_infras', []):
+            mn = inf.get('module_name', 'azure_exainfra')
+            if not inf.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
+            if not inf.get('location'):             _err(mn, 'location',            'Required')
+            if not inf.get('name'):                 _err(mn, 'name',                'Required')
+            if not inf.get('display_name'):         _err(mn, 'display_name',        'Required')
+            if not inf.get('shape'):                _err(mn, 'shape',               'Required')
+            if int(inf.get('compute_count', 0) or 0) < 2: _err(mn, 'compute_count', 'Minimum 2')
+            if int(inf.get('storage_count', 0) or 0) < 3: _err(mn, 'storage_count', 'Minimum 3')
+
+    elif tab == 22:  # Azure VM Cluster
+        for cl in data.get('azure_clusters', []):
+            mn = cl.get('module_name', 'azure_vmcluster')
+            if not cl.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
+            if not cl.get('location'):             _err(mn, 'location',            'Required')
+            if not cl.get('name'):                 _err(mn, 'name',                'Required')
+            if not cl.get('display_name'):         _err(mn, 'display_name',        'Required')
+            if not cl.get('hostname'):             _err(mn, 'hostname',            'Required')
+            if not cl.get('gi_version'):           _err(mn, 'gi_version',          'Required')
+            if int(cl.get('cpu_core_count', 0) or 0) < 2:
+                _err(mn, 'cpu_core_count', 'Minimum 2')
+            if float(cl.get('data_storage_size_in_tbs', 0) or 0) < 2:
+                _err(mn, 'data_storage_size_in_tbs', 'Minimum 2 TiB')
+            if not cl.get('ssh_public_keys'):
+                _err(mn, 'ssh_public_keys', 'At least one SSH key required')
+
+
+@app.route('/api/validate', methods=['POST'])
+def api_validate():
+    data   = request.get_json(force=True)
+    cloud  = data.get('cloud', 'aws')
+    errors = {}
+    if cloud == 'gcp':
+        _validate_gcp(data, errors)
+    elif cloud == 'azure':
+        _validate_azure(data, errors)
+    elif cloud == 'dg':
+        pass  # DG has no server-side required fields
+    else:
+        _validate_aws(data, errors)
     flat_errors = {}
     for mn_errors in errors.values():
         flat_errors.update(mn_errors)
@@ -805,6 +1001,16 @@ def api_test():
         first_inf  = infras[0]['module_name'] if infras else 'odb_exaInfra'
         peerings = [_aws_peer_defaults(p, first_net)         for p in raw_peerings]
         clusters = [_aws_cluster_defaults(c, first_net, first_inf) for c in raw_clusters]
+    elif cloud == 'azure':
+        raw_nets     = payload.get('azure_vnets') or []
+        raw_infras   = payload.get('azure_infras') or []
+        raw_clusters = payload.get('azure_clusters') or []
+        nets     = [_azure_vnet_defaults(n) for n in raw_nets]
+        infras   = [_azure_infra_defaults(i) for i in raw_infras]
+        first_vnet = nets[0]['module_name']    if nets   else 'azure_vnet'
+        first_inf  = infras[0]['module_name']  if infras else 'azure_exainfra'
+        clusters = [_azure_cluster_defaults(c, first_vnet, first_inf) for c in raw_clusters]
+        peerings = []
     else:
         raw_nets     = payload.get('gcp_networks') or []
         raw_infras   = payload.get('gcp_infras') or []
@@ -861,6 +1067,33 @@ def api_test():
             run_test(grp, f'Cluster "{mn}": hostname_prefix present',
                      lambda c=cl: (_ for _ in ()).throw(AssertionError('hostname_prefix missing'))
                      if not c.get('hostname_prefix') else None)
+    elif cloud == 'azure':
+        for net in raw_nets:
+            mn = net.get('module_name','?')
+            run_test(grp, f'VNet "{mn}": resource_group_name present',
+                     lambda n=net: (_ for _ in ()).throw(AssertionError('resource_group_name missing')) if not n.get('resource_group_name') else None)
+            run_test(grp, f'VNet "{mn}": address_space valid CIDR',
+                     lambda n=net: (_ for _ in ()).throw(AssertionError(f'Invalid CIDR: {n.get("address_space")}'))
+                     if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', n.get('address_space','')) else None)
+            run_test(grp, f'VNet "{mn}": subnet_address_prefix valid CIDR',
+                     lambda n=net: (_ for _ in ()).throw(AssertionError(f'Invalid CIDR: {n.get("subnet_address_prefix")}'))
+                     if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', n.get('subnet_address_prefix','')) else None)
+        for inf in raw_infras:
+            mn = inf.get('module_name','?')
+            run_test(grp, f'Infra "{mn}": compute_count >= 2',
+                     lambda i=inf: (_ for _ in ()).throw(AssertionError(f'compute_count={i.get("compute_count")} < 2'))
+                     if int(i.get('compute_count',0) or 0) < 2 else None)
+            run_test(grp, f'Infra "{mn}": storage_count >= 3',
+                     lambda i=inf: (_ for _ in ()).throw(AssertionError(f'storage_count={i.get("storage_count")} < 3'))
+                     if int(i.get('storage_count',0) or 0) < 3 else None)
+        for cl in raw_clusters:
+            mn = cl.get('module_name','?')
+            run_test(grp, f'Cluster "{mn}": ssh_public_keys not empty',
+                     lambda c=cl: (_ for _ in ()).throw(AssertionError('No SSH keys'))
+                     if not c.get('ssh_public_keys') else None)
+            run_test(grp, f'Cluster "{mn}": hostname present',
+                     lambda c=cl: (_ for _ in ()).throw(AssertionError('hostname missing'))
+                     if not c.get('hostname') else None)
     else:
         for net in raw_nets:
             mn = net.get('module_name','?')
@@ -878,21 +1111,21 @@ def api_test():
             run_test(grp, f'Cluster "{mn}": ssh_public_keys not empty',
                      lambda c=cl: (_ for _ in ()).throw(AssertionError('No SSH keys'))
                      if not c.get('ssh_public_keys') else None)
-            run_test(grp, f'Cluster "{mn}": grid_image_id present',
-                     lambda c=cl: (_ for _ in ()).throw(AssertionError('grid_image_id missing'))
-                     if not c.get('grid_image_id') else None)
 
     # ── TEST GROUP 2: Module file generation ───────────────────────────────
     grp = 'Module Generation'
     try:
         all_files = generate_all({**payload, 'cloud': cloud,
-                                  'aws_networks': nets if cloud=='aws' else [],
-                                  'aws_infras': infras if cloud=='aws' else [],
-                                  'aws_peerings': peerings if cloud=='aws' else [],
-                                  'aws_clusters': clusters if cloud=='aws' else [],
-                                  'gcp_networks': nets if cloud=='gcp' else [],
-                                  'gcp_infras': infras if cloud=='gcp' else [],
-                                  'gcp_clusters': clusters if cloud=='gcp' else []})
+                                  'aws_networks':   nets     if cloud=='aws'   else [],
+                                  'aws_infras':     infras   if cloud=='aws'   else [],
+                                  'aws_peerings':   peerings if cloud=='aws'   else [],
+                                  'aws_clusters':   clusters if cloud=='aws'   else [],
+                                  'azure_vnets':    nets     if cloud=='azure' else [],
+                                  'azure_infras':   infras   if cloud=='azure' else [],
+                                  'azure_clusters': clusters if cloud=='azure' else [],
+                                  'gcp_networks':   nets     if cloud=='gcp'   else [],
+                                  'gcp_infras':     infras   if cloud=='gcp'   else [],
+                                  'gcp_clusters':   clusters if cloud=='gcp'   else []})
         run_test(grp, 'generate_all() succeeds without error', lambda: None)
     except Exception as e:
         results.append({'group': grp, 'name': 'generate_all() succeeds without error',
@@ -901,27 +1134,33 @@ def api_test():
 
     run_test(grp, 'root main.tf generated',
              lambda: (_ for _ in ()).throw(AssertionError('main.tf missing')) if 'main.tf' not in all_files else None)
-    run_test(grp, 'root terraform.tfvars generated',
-             lambda: (_ for _ in ()).throw(AssertionError('terraform.tfvars missing')) if 'terraform.tfvars' not in all_files else None)
+    run_test(grp, 'root terraform.auto.tfvars generated',
+             lambda: (_ for _ in ()).throw(AssertionError('terraform.auto.tfvars missing')) if 'terraform.auto.tfvars' not in all_files else None)
     run_test(grp, 'All generated files are non-empty',
              lambda: [(_ for _ in ()).throw(AssertionError(f'{p} is empty')) for p, c in all_files.items() if not c.strip()])
 
     # Per-module file checks
     if cloud == 'aws':
-        for mn in ([n['module_name'] for n in nets] + [i['module_name'] for i in infras] +
-                   [p['module_name'] for p in peerings] + [c['module_name'] for c in clusters]):
-            for ftype in ['main.tf','variables.tf','outputs.tf','terraform.tfvars']:
+        # AWS uses shared for_each modules — check shared module directories exist
+        for mod_dir in ['aws-odb-network', 'aws-exadata-infra', 'aws-peering', 'aws-vm-cluster']:
+            for ftype in ['main.tf', 'variables.tf', 'outputs.tf']:
+                key = f'modules/{mod_dir}/{ftype}'
+                run_test(grp, f'{key} generated',
+                         lambda k=key: (_ for _ in ()).throw(AssertionError(f'{k} missing')) if k not in all_files else None)
+    elif cloud == 'azure':
+        module_names = ([n['module_name'] for n in nets] +
+                        [i['module_name'] for i in infras] +
+                        [c['module_name'] for c in clusters])
+        for mn in filter(None, module_names):
+            for ftype in ['main.tf','variables.tf','outputs.tf']:
                 key = f'modules/{mn}/{ftype}'
                 run_test(grp, f'{key} generated',
                          lambda k=key: (_ for _ in ()).throw(AssertionError(f'{k} missing')) if k not in all_files else None)
     else:
-        module_names = []
-        for n in nets:
-            module_names += [n['module_name'], n.get('client_subnet_module',''), n.get('backup_subnet_module','')]
-        module_names += [i['module_name'] for i in infras] + [c['module_name'] for c in clusters]
-        for mn in filter(None, module_names):
-            for ftype in ['main.tf','variables.tf','outputs.tf','terraform.tfvars']:
-                key = f'modules/{mn}/{ftype}'
+        # GCP uses shared for_each modules — check shared module directories exist
+        for mod_dir in [_GCP_MOD_NET, _GCP_MOD_INFRA, _GCP_MOD_CLUSTER]:
+            for ftype in ['main.tf', 'variables.tf', 'outputs.tf']:
+                key = f'modules/{mod_dir}/{ftype}'
                 run_test(grp, f'{key} generated',
                          lambda k=key: (_ for _ in ()).throw(AssertionError(f'{k} missing')) if k not in all_files else None)
 
@@ -931,43 +1170,75 @@ def api_test():
     if cloud == 'aws':
         run_test(grp, 'root main.tf contains AWS provider',
                  lambda: (_ for _ in ()).throw(AssertionError('hashicorp/aws missing')) if 'hashicorp/aws' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on aws_networks',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on aws_networks missing'))
+                 if 'for_each = var.aws_networks' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on aws_clusters',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on aws_clusters missing'))
+                 if 'for_each = var.aws_clusters' not in root else None)
+        run_test(grp, 'root main.tf wires infra_id to vm clusters',
+                 lambda: (_ for _ in ()).throw(AssertionError('module.aws_exadata_infra infra_id missing'))
+                 if 'module.aws_exadata_infra' not in root or 'infra_id' not in root else None)
+        tfvars = all_files.get('terraform.auto.tfvars', '')
         for n in nets:
             mn = n['module_name']
-            run_test(grp, f'root main.tf references module "{mn}"',
-                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'module "{m}" not in root')) if f'module "{m}"' not in root else None)
+            run_test(grp, f'network "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
         for cl in clusters:
-            mn, ir, nr = cl['module_name'], cl.get('infra_ref',''), cl.get('network_ref','')
+            mn, ir, nr = cl['module_name'], cl.get('infra_ref', ''), cl.get('network_ref', '')
+            run_test(grp, f'cluster "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
             if ir:
                 run_test(grp, f'Cluster "{mn}" wired to infra "{ir}"',
-                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError(f'infra ref missing'))
-                         if f'module.{i}.infra_id' not in root else None)
+                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError(f'infra_ref "{i}" missing in tfvars'))
+                         if f'"{i}"' not in tfvars else None)
             if nr:
                 run_test(grp, f'Cluster "{mn}" wired to network "{nr}"',
-                         lambda m=mn, n2=nr: (_ for _ in ()).throw(AssertionError(f'network ref missing'))
-                         if f'module.{n2}.network_id' not in root else None)
-        for p in peerings:
-            mn, nr = p['module_name'], p.get('network_ref','')
-            if nr:
-                run_test(grp, f'Peering "{mn}" wired to network "{nr}"',
-                         lambda m=mn, n2=nr: (_ for _ in ()).throw(AssertionError(f'network ref missing'))
-                         if f'module.{n2}.network_id' not in root else None)
-    else:
-        run_test(grp, 'root main.tf contains GCP provider',
-                 lambda: (_ for _ in ()).throw(AssertionError('hashicorp/google missing')) if 'hashicorp/google' not in root else None)
+                         lambda m=mn, n2=nr: (_ for _ in ()).throw(AssertionError(f'network_ref "{n2}" missing in tfvars'))
+                         if f'"{n2}"' not in tfvars else None)
+    elif cloud == 'azure':
+        run_test(grp, 'root main.tf contains Azure provider',
+                 lambda: (_ for _ in ()).throw(AssertionError('hashicorp/azurerm missing')) if 'hashicorp/azurerm' not in root else None)
         for n in nets:
             mn = n['module_name']
-            run_test(grp, f'root main.tf references network "{mn}"',
+            run_test(grp, f'root main.tf references VNet "{mn}"',
                      lambda m=mn: (_ for _ in ()).throw(AssertionError(f'module "{m}" not in root')) if f'module "{m}"' not in root else None)
-            csm = n.get('client_subnet_module','')
-            if csm:
-                run_test(grp, f'root main.tf references client subnet "{csm}"',
-                         lambda m=csm: (_ for _ in ()).throw(AssertionError(f'subnet "{m}" not in root')) if f'module "{m}"' not in root else None)
         for cl in clusters:
-            mn, ir, nr = cl['module_name'], cl.get('infra_ref',''), cl.get('network_ref','')
+            mn, ir, vr = cl['module_name'], cl.get('infra_ref',''), cl.get('vnet_ref','')
             if ir:
                 run_test(grp, f'Cluster "{mn}" wired to infra "{ir}"',
-                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError('infra ref missing'))
-                         if f'module.{i}.infra_name' not in root else None)
+                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError('infra_id ref missing'))
+                         if f'module.{i}.infra_id' not in root else None)
+            if vr:
+                run_test(grp, f'Cluster "{mn}" wired to VNet "{vr}"',
+                         lambda m=mn, v=vr: (_ for _ in ()).throw(AssertionError('subnet_id ref missing'))
+                         if f'module.{v}.subnet_id' not in root else None)
+    else:
+        # GCP uses for_each modules — check structural patterns in root main.tf
+        run_test(grp, 'root main.tf contains GCP provider',
+                 lambda: (_ for _ in ()).throw(AssertionError('hashicorp/google missing')) if 'hashicorp/google' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on GCP networks',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on gcp_odb_networks missing'))
+                 if 'for_each = var.gcp_odb_networks' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on GCP clusters',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on gcp_vm_clusters missing'))
+                 if 'for_each = var.gcp_vm_clusters' not in root else None)
+        run_test(grp, 'root main.tf exposes client_subnet_name',
+                 lambda: (_ for _ in ()).throw(AssertionError('client_subnet_name missing in root'))
+                 if 'client_subnet_name' not in root else None)
+        tfvars = all_files.get('terraform.auto.tfvars', '')
+        for n in nets:
+            mn = n['module_name']
+            run_test(grp, f'network "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
+        for cl in clusters:
+            mn = cl['module_name']
+            run_test(grp, f'cluster "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
 
     # ── TEST GROUP 4: Uniqueness ─────────────────────────────────────────────
     grp = 'Uniqueness'
@@ -1195,19 +1466,53 @@ def api_tf_cli():
         # ── terraform init -backend=false ─────────────────────────────────────
         init_ok = False
         try:
+            tf_env = {**os.environ}
+            cache_dir = os.path.expanduser('~/.terraform.d/plugin-cache')
+            os.makedirs(cache_dir, exist_ok=True)
+            tf_env['TF_PLUGIN_CACHE_DIR'] = cache_dir
+
+            # Write a minimal CLI config that sets the cache dir.
+            # Do NOT add a provider_installation block — mixing filesystem_mirror
+            # with plugin_cache_dir pointing to the same path causes Terraform to
+            # error with "cannot install provider directory to itself".
+            cache_fwd = cache_dir.replace('\\', '/')
+            rc_path = os.path.join(tmpdir, 'terraform.rc')
+            with open(rc_path, 'w', encoding='utf-8') as _rc:
+                _rc.write(f'plugin_cache_dir = "{cache_fwd}"\n')
+            tf_env['TF_CLI_CONFIG_FILE'] = rc_path
+
             init = subprocess.run(
                 [bin_path, 'init', '-backend=false', '-no-color', '-input=false'],
-                cwd=tmpdir, capture_output=True, text=True, timeout=180
+                cwd=tmpdir, capture_output=True, text=True, timeout=180,
+                env=tf_env
             )
             if init.returncode == 0:
                 results.append({'group': 'terraform init', 'name': 'terraform init -backend=false', 'status': 'pass'})
                 init_ok = True
             else:
-                results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
-                                'status': 'fail', 'error': _strip(init.stderr or init.stdout)})
+                err = _strip(init.stderr or init.stdout)
+                _net_keywords = ('registry.terraform.io', 'could not retrieve', 'failed to query',
+                                 'wsarecv', 'connection refused', 'no such host', 'i/o timeout',
+                                 'dial tcp', 'tls handshake', 'EOF')
+                is_network_err = any(kw in err.lower() for kw in _net_keywords)
+                if is_network_err:
+                    # Network failure ≠ bad generated code — report as warn so the
+                    # overall test result reflects code quality, not connectivity.
+                    results.append({'group': 'terraform init',
+                                    'name': 'terraform init -backend=false',
+                                    'status': 'warn',
+                                    'error': (f'Provider registry unreachable (network/IPv6 issue). '
+                                              f'Providers are cached at {cache_dir} after the first '
+                                              f'successful download. Run terraform init manually once '
+                                              f'with internet access (or via VPN/proxy) to populate '
+                                              f'the cache — TF CLI tests will then work offline.\n\n'
+                                              f'Original error: {err}')})
+                else:
+                    results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
+                                    'status': 'fail', 'error': err})
         except subprocess.TimeoutExpired:
             results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
-                            'status': 'fail', 'error': 'Timed out after 180s — check internet connectivity or provider registry access'})
+                            'status': 'warn', 'error': 'Timed out after 180s — provider registry unreachable. Providers will be cached after the first successful init.'})
         except Exception as e:
             results.append({'group': 'terraform init', 'name': 'terraform init -backend=false', 'status': 'fail', 'error': str(e)})
 

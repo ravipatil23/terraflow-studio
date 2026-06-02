@@ -1,0 +1,19 @@
+output "hub_vcn_id" {
+  description = "OCID of the Hub VCN"
+  value       = oci_core_vcn.hub.id
+}
+
+output "hub_lpg_id" {
+  description = "OCID of the Hub-side Local Peering Gateway"
+  value       = oci_core_local_peering_gateway.hub_lpg.id
+}
+
+output "cluster_lpg_id" {
+  description = "OCID of the Cluster-side Local Peering Gateway"
+  value       = oci_core_local_peering_gateway.cluster_lpg.id
+}
+
+output "drg_id" {
+  description = "OCID of the DRG — pass to the oci-dg-peering module"
+  value       = oci_core_drg.hub.id
+}

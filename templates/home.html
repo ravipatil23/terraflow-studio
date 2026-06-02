@@ -32,7 +32,7 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .hero{text-align:center;margin-bottom:56px;}
 .hero-title{font-family:var(--font-d);font-weight:800;font-size:52px;line-height:1;color:var(--ink);letter-spacing:-0.02em;margin-bottom:10px;}
 .hero-sub{font-family:var(--font-m);font-size:13px;color:var(--ink3);letter-spacing:.04em;}
-.cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;max-width:1060px;width:100%;}
+.cards{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px;max-width:1360px;width:100%;}
 .product-card{display:flex;flex-direction:column;background:var(--white);border:2px solid var(--line2);border-radius:var(--radius-lg);padding:36px 32px 28px;box-shadow:var(--shadow);text-decoration:none;transition:all .2s;cursor:pointer;}
 .product-card:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,0.12);}
 .product-card.aws{border-top:4px solid #e8500a;}
@@ -61,6 +61,12 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 .card-cta.gcp:hover{background:#2a6ed4;}
 .card-cta.azure{background:#1B7F4F;color:var(--white);}
 .card-cta.azure:hover{background:#155f3a;}
+.product-card.oci{border-top:4px solid #c74634;}
+.product-card.oci:hover{border-color:#c74634;}
+.card-badge.oci{background:rgba(199,70,52,.1);color:#c74634;border:1px solid rgba(199,70,52,.2);}
+.card-name.oci em{color:#c74634;}
+.card-cta.oci{background:#c74634;color:var(--white);}
+.card-cta.oci:hover{background:#a83828;}
 .footer{padding:20px 28px;text-align:center;font-family:var(--font-m);font-size:10px;color:var(--ink4);}
 .config-strip{max-width:1060px;width:100%;margin-top:16px;}
 .config-card{display:flex;align-items:center;justify-content:space-between;background:var(--white);border:1.5px solid var(--line2);border-radius:var(--radius-lg);padding:18px 28px;box-shadow:var(--shadow-sm);text-decoration:none;transition:all .2s;gap:20px;}
@@ -77,7 +83,7 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
 <body>
 <header>
   <div class="logo">
-    <div class="logo-name">Terraflow<span class="ac"> Studio</span><span style="font-size:10px;font-weight:400;color:#C9A227;margin-left:8px;font-family:var(--font-m);letter-spacing:.04em">v5.3</span></div>
+    <div class="logo-name">Terraflow<span class="ac"> Studio</span><span style="font-size:10px;font-weight:400;color:#C9A227;margin-left:8px;font-family:var(--font-m);letter-spacing:.04em">v5.6</span></div>
     <div class="logo-sub" style="color:#C9A227">Oracle DB@Cloud · Terraform Generator</div>
   </div>
   <span class="pill">Choose your cloud platform below</span>
@@ -128,17 +134,61 @@ header{background:var(--ink);padding:0 28px;height:54px;display:flex;align-items
       <div class="card-resources">
         <span class="card-res-tag">azurerm_virtual_network</span>
         <span class="card-res-tag">azurerm_subnet (Oracle delegated)</span>
-        <span class="card-res-tag">azurerm_oracle_cloud_exadata_infrastructure</span>
+        <span class="card-res-tag">azurerm_oracle_exadata_infrastructure</span>
         <span class="card-res-tag">azurerm_oracle_cloud_vm_cluster</span>
       </div>
       <span class="card-cta azure">Open DB@Azure &rarr;</span>
     </a>
+
+    <a class="product-card oci" href="/dg">
+      <span class="card-badge oci">OCI</span>
+      <div class="card-name oci">Oracle <em>Data Guard</em></div>
+      <div class="card-desc">Generate Terraform for OCI Data Guard networking — Multi-AZ (same region) and Cross-Region with Hub VCNs, LPGs, DRGs, and Remote Peering Connections.</div>
+      <div class="card-provider">oracle/oci &nbsp;≥&nbsp; 6.0.0</div>
+      <div class="card-resources">
+        <span class="card-res-tag">oci_core_vcn</span>
+        <span class="card-res-tag">oci_core_drg</span>
+        <span class="card-res-tag">oci_core_local_peering_gateway</span>
+        <span class="card-res-tag">oci_core_remote_peering_connection</span>
+      </div>
+      <span class="card-cta oci">Open Data Guard &rarr;</span>
+    </a>
   </div>
 
   <div class="config-strip">
-    <a class="config-card" href="/config">
+    <a class="config-card" href="/hub" style="margin-bottom:10px;">
       <div class="config-card-left">
-        <span class="config-icon">⚙</span>
+        <span class="config-icon" style="color:#e8500a;">&#128172;</span>
+        <div class="config-text">
+          <div class="config-title">Oracle DB Info Hub</div>
+          <div class="config-desc">Ask natural language questions about Oracle DB@AWS, DB@Azure, and DB@GCP — networking, Terraform, constraints, and provisioning</div>
+        </div>
+      </div>
+      <span class="config-cta" style="background:#e8500a;border-color:#e8500a;color:#fff;">Ask a Question →</span>
+    </a>
+    <a class="config-card" href="/rag" style="margin-bottom:10px;">
+      <div class="config-card-left">
+        <span class="config-icon" style="color:#1a7a4a;">&#128218;</span>
+        <div class="config-text">
+          <div class="config-title">RAG Knowledge Base</div>
+          <div class="config-desc">Upload and manage markdown docs that improve LLM fill accuracy — view index stats, search chunks, and rebuild the index</div>
+        </div>
+      </div>
+      <span class="config-cta" style="background:#1a7a4a;border-color:#1a7a4a;color:#fff;">Manage Docs →</span>
+    </a>
+    <a class="config-card" href="/cidr">
+      <div class="config-card-left">
+        <span class="config-icon" style="color:#4285F4;">&#9675;</span>
+        <div class="config-text">
+          <div class="config-title">CIDR Planner</div>
+          <div class="config-desc">Calculate IP requirements for ExaCS clusters, suggest non-overlapping CIDRs, and validate existing subnets — AWS, GCP, and Azure</div>
+        </div>
+      </div>
+      <span class="config-cta" style="background:#4285F4;border-color:#4285F4;color:#fff;">Plan CIDRs →</span>
+    </a>
+    <a class="config-card" href="/config" style="margin-top:10px;">
+      <div class="config-card-left">
+        <span class="config-icon">&#9881;</span>
         <div class="config-text">
           <div class="config-title">Application Configuration</div>
           <div class="config-desc">LLM provider, API keys, GitHub integration, CouchDB, RAG embeddings, Terraform CLI paths</div>
