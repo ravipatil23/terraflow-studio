@@ -1,24 +1,47 @@
-# Terraflow Studio v5.1
+# Terraflow Studio v5.6
 
 **Oracle DB@Cloud · Terraform Generator**
 
-A Python/Flask web app that generates production-ready, modular Terraform/OpenTofu code for Oracle Database@AWS (ODB@AWS) and Oracle Database@GCP (DB@GCP). Fill in the form, see live HCL output, and download a ZIP or push directly to GitHub.
+A Python/Flask web app that generates production-ready, modular Terraform/OpenTofu for Oracle Database across AWS, GCP, Azure, and OCI Data Guard. Fill in the form, see live HCL output, and download a ZIP or push directly to GitHub.
 
 ---
 
 ## Features
 
-- **Multi-cloud** — AWS and GCP tabs, switch with one click; Terraform or OpenTofu toggle
+- **Multi-cloud** — AWS, GCP, Azure, and OCI Data Guard pages; cloud switcher in header
 - **Multi-instance** — add as many networks, infras, peerings, and clusters as needed; all auto-wired in root `main.tf`
 - **Live output** — Terraform HCL generates in real time as you fill in fields; file tree + syntax-highlighted code viewer
-- **✦ Explain** — click Explain on any file to get an AI explanation of what that Terraform file does and why
-- **✦ AI fill** — describe your infrastructure in plain English and the AI fills in the entire form
-- **Region & AZ dropdowns** — populated from Oracle's official regional availability docs
+- **✦ AI fill** — describe your infrastructure in plain English and the AI fills the entire form
+- **✦ Explain** — click Explain on any file for an AI explanation of what that Terraform does and why
+- **✦ Plan Analyser** — paste `terraform plan` output for an AI risk + change summary
+- **✦ Error Troubleshooter** — paste a Terraform error and get root cause + fix steps
+- **✦ Security Review** — AI security scan of the current config with severity-graded findings
+- **RAG knowledge base** — AI answers grounded in curated ODB documentation (BM25 or ChromaDB)
+- **RAG admin UI** — upload PDF/DOCX/PPTX/Markdown, manage docs, search, rebuild index at `/rag`
+- **Info Hub** — ask any Oracle DB@Cloud question, cloud-filtered, at `/hub`
+- **CIDR Planner** — calculate ExaCS IP requirements, suggest non-overlapping CIDRs at `/cidr`
 - **Customer config persistence** — save/load configs by customer name; FileStore (default) or CouchDB backend
-- **Validation** — per-field inline errors with card highlighting; VALIDATE & GENERATE ALL button per tab
-- **Testing** — 🧪 Test button runs 220 functional checks + mock Terraform validator against any saved or current config
+- **Validation** — per-field inline errors with card highlighting; Validate & Generate All per tab
+- **Testing** — 🧪 Test button runs 451 functional checks + mock Terraform validator per config
 - **GitHub push** — push generated Terraform directly to a GitHub repo via the Contents API
+- **Load ZIP** — load a previously downloaded ZIP back into the form to restore full configuration
+- **CloudFormation** — generate AWS CloudFormation YAML for ODB resources (AWS page only)
 - **Docker Compose** — single `docker compose up` for app + CouchDB
+
+---
+
+## Pages
+
+| URL | Description |
+|-----|-------------|
+| `/` | Product chooser — select cloud or tool |
+| `/aws` | Oracle DB@AWS — ODB networks, Exadata, VM Clusters, AVMC, DB Home/CDB/PDB |
+| `/gcp` | Oracle DB@GCP — ODB networks, Exadata, VM Clusters, DB Home/CDB/PDB |
+| `/azure` | Oracle DB@Azure — Virtual Networks, Oracle-delegated Subnets, Exadata, VM Clusters |
+| `/dg` | OCI Data Guard — Multi-AZ (LPG) and Cross-Region (DRG + RPC) networking |
+| `/cidr` | CIDR Planner — IP requirement calculator for ExaCS deployments |
+| `/rag` | RAG admin — upload docs, manage index, test search |
+| `/hub` | Info Hub — RAG-powered Q&A across all clouds |
 
 ---
 
@@ -26,22 +49,38 @@ A Python/Flask web app that generates production-ready, modular Terraform/OpenTo
 
 ### AWS (`hashicorp/aws ≥ 6.15.0`)
 
-| Tab | Resource | Default module name |
-|-----|----------|---------------------|
+| Tab | Resource | Module name |
+|-----|----------|-------------|
 | 1 | `aws_odb_network` | `odb_network` |
 | 2 | `aws_odb_cloud_exadata_infrastructure` | `odb_exaInfra` |
 | 3 | `aws_odb_network_peering_connection` | `odb_peering` |
 | 4 | `aws_odb_cloud_vm_cluster` | `odb_vmcluster` |
 | 5 | `aws_odb_cloud_autonomous_vm_cluster` | `odb_avmcluster` |
-| 6 | OCI DB Home / CDB / PDB (via `oracle/oci` provider) | `oci_db_home` / `oci_cdb` / `oci_pdb` |
+| 6 | OCI DB Home / CDB / PDB (`oracle/oci` provider) | `oci_db_home` / `oci_cdb` / `oci_pdb` |
 
-### GCP (`hashicorp/google ≥ 7.0`, `oracle/oci ≥ 7.29.0`)
+### GCP (`hashicorp/google ≥ 6.0.0`, `oracle/oci ≥ 6.0.0`)
 
-| Tab | Resource | Default module name |
-|-----|----------|---------------------|
-| A | `google_oracle_database_odb_network` + client & backup subnets | `gcp_network` |
-| C | `google_oracle_database_cloud_exadata_infrastructure` | `gcp_infra` |
-| D | `google_oracle_database_exadb_vm_cluster` | `gcp_cluster` |
+| Tab | Resource | Module name |
+|-----|----------|-------------|
+| A | `google_oracle_database_odb_network` + client & backup subnets | `gcp-odb-network` |
+| C | `google_oracle_database_cloud_exadata_infrastructure` | `gcp-exadata-infra` |
+| D | `google_oracle_database_exadb_vm_cluster` | `gcp-vm-cluster` |
+| E | OCI DB Home / CDB / PDB (`oracle/oci` provider) | `<name>_dbhome` / `_cdb` / `_pdb` |
+
+### Azure (`hashicorp/azurerm ≥ 4.9.0`)
+
+| Tab | Resource | Module name |
+|-----|----------|-------------|
+| A | `azurerm_virtual_network` | `azure_vnet` |
+| B | `azurerm_oracle_exadata_infrastructure` | `azure_exainfra` |
+| C | `azurerm_oracle_cloud_vm_cluster` | `azure_vmcluster` |
+
+### OCI Data Guard (`oracle/oci ≥ 6.0.0`)
+
+| Tab | Type | What it generates |
+|-----|------|-------------------|
+| A | Multi-AZ | LPG pair, NSG rules (TCP 1521), default route table entries — standalone dir |
+| B | Cross-Region | Hub VCNs, LPGs, DRGs, DRG attachments, Remote Peering Connections, transit route tables — 3-module structure |
 
 ---
 
@@ -51,33 +90,80 @@ A Python/Flask web app that generates production-ready, modular Terraform/OpenTo
 
 ```
 terraflow-studio-aws/
-├── main.tf                    # root — wires all modules, outputs id + arn for each
-├── terraform.tfvars
+├── main.tf                    # root — wires all modules
+├── variables.tf
+├── terraform.auto.tfvars
 └── modules/
     ├── odb_network/           # aws_odb_network
     ├── odb_exaInfra/          # aws_odb_cloud_exadata_infrastructure
     ├── odb_peering/           # aws_odb_network_peering_connection
     ├── odb_vmcluster/         # aws_odb_cloud_vm_cluster
     ├── odb_avmcluster/        # aws_odb_cloud_autonomous_vm_cluster
-    ├── oci_db_home/           # oci_db_home
-    ├── oci_cdb/               # oci_database (CDB)
-    └── oci_pdb/               # oci_pluggable_database (PDB)
+    ├── oci_db_home/           # oci_database_db_home
+    ├── oci_cdb/               # oci_database_database (CDB)
+    └── oci_pdb/               # oci_database_pluggable_database (PDB)
 ```
-
-Each module: `main.tf`, `variables.tf`, `outputs.tf`, `terraform.tfvars`.
 
 ### GCP
 
 ```
 terraflow-studio-gcp/
 ├── main.tf
-├── terraform.tfvars
+├── variables.tf
+├── terraform.auto.tfvars
+├── README.md
 └── modules/
-    ├── gcp_network/           # google_oracle_database_odb_network
-    ├── gcp_network_client_subnet/   # google_oracle_database_odb_subnet (CLIENT_SUBNET)
-    ├── gcp_network_backup_subnet/   # google_oracle_database_odb_subnet (BACKUP_SUBNET)
-    ├── gcp_infra/             # google_oracle_database_cloud_exadata_infrastructure
-    └── gcp_cluster/           # google_oracle_database_exadb_vm_cluster
+    ├── gcp-odb-network/          # google_oracle_database_odb_network (shared)
+    ├── gcp-exadata-infra/        # google_oracle_database_cloud_exadata_infrastructure (shared)
+    ├── gcp-vm-cluster/           # google_oracle_database_exadb_vm_cluster (shared)
+    ├── <name>_dbhome/            # oci_database_db_home (per-instance)
+    ├── <name>_cdb/               # oci_database_database
+    └── <name>_pdb/               # oci_database_pluggable_database
+```
+
+### Azure
+
+```
+terraflow-studio-azure/
+├── main.tf
+├── variables.tf
+├── terraform.auto.tfvars
+└── modules/
+    ├── <vnet_name>/              # azurerm_virtual_network
+    ├── <infra_name>/             # azurerm_oracle_exadata_infrastructure
+    └── <cluster_name>/           # azurerm_oracle_cloud_vm_cluster
+```
+
+### OCI Data Guard — Multi-AZ
+
+```
+terraflow-studio-dg/
+└── dg_multi_az_<name>/
+    ├── main.tf          # LPG pair, NSG rules, default route tables
+    ├── variables.tf
+    ├── terraform.tfvars
+    ├── outputs.tf
+    └── README.md        # import commands + apply guide
+```
+
+### OCI Data Guard — Cross-Region
+
+```
+terraflow-studio-dg/
+└── dg_cross_region_<name>/
+    ├── main.tf          # 2x provider aliases + 3 module calls
+    ├── variables.tf
+    ├── terraform.tfvars
+    ├── README.md        # staged apply guide + terraform import commands
+    └── modules/
+        ├── oci-dg-region/     # reusable — instantiated for primary AND dr
+        │   ├── main.tf        # Hub VCN, LPGs, DRG, route tables, NSG rules
+        │   ├── variables.tf
+        │   └── outputs.tf     # hub_vcn_id, drg_id, lpg IDs
+        └── oci-dg-peering/    # activates after both regions via depends_on
+            ├── main.tf        # DR RPC (acceptor) + Primary RPC (sets peer_id)
+            ├── variables.tf
+            └── outputs.tf     # rpc IDs, peering_status → "PEERED"
 ```
 
 ---
@@ -89,7 +175,7 @@ git clone https://github.com/ravipatil23/terraflow-studio.git
 cd terraflow-studio/odb_terraform_app
 
 python3 -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 python app.py
@@ -114,164 +200,180 @@ docker compose up -d --build
 
 ### ✦ Fill form with AI
 
-Type a plain-English description in the AI bar at the top of the page:
+Type a plain-English description in the AI bar at the top of any product page:
 
-> *"Production ExaDB in us-east-1 AZ use1-az6, X11M 2c/3s, 16-core VM cluster, GI 23.0.0.0, LICENSE_INCLUDED"*
+> *"Cross-region Data Guard from Ashburn to Portland, compartment ocid1.compartment.oc1..xyz"*
 
 The AI fills in all form fields and explains what it configured.
 
-Supported LLM providers: **Anthropic**, **OpenAI**, **Gemini**, **Ollama** (local).
+Supported LLM providers: **Anthropic**, **OpenAI** (and compatible — Groq, etc.), **Gemini**, **Ollama** (local), **OCI GenAI**.
 
 ### ✦ Explain Terraform
 
-Select any file in the output panel and click **✦ Explain**. The AI explains:
-1. What the file does
-2. Key resources or variables and their purpose
-3. Notable configuration choices, cross-module dependencies, or gotchas
+Select any file in the output panel and click **✦ Explain**. Works on all file types including README.md, module main.tf, variables.tf.
 
-Both AI features are augmented by a **RAG knowledge base** (`rag_docs/`) covering ODB@AWS and DB@GCP resource schemas, immutable fields, provisioning times, and common pitfalls.
+### ✦ AI Tools (Plan · Fix Error · Security)
+
+Accessible from the LLM bar on each product page:
+- **Plan** — paste `terraform plan` output, get a risk-graded change summary
+- **Fix Error** — paste a Terraform error, get root cause + numbered fix steps
+- **Security** — scan current config, get severity-graded findings (critical/high/medium/low/info)
 
 ---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` (or edit `.env` directly) and set:
+Edit `.env`:
 
 ```bash
-# ── CouchDB ────────────────────────────────
+# ── CouchDB (optional — FileStore used if not set) ──
 COUCHDB_URL=http://couchdb:5984
 COUCHDB_USER=admin
 COUCHDB_PASSWORD=changeme
 COUCHDB_DB=terraflow_studio_configs
 
-# ── LLM provider ───────────────────────────
-# Provider: anthropic | openai | gemini | ollama
-LLM_PROVIDER=anthropic
-LLM_API_KEY=sk-ant-...
-LLM_MODEL=claude-opus-4-7
+# ── LLM provider ───────────────────────────────────
+# Provider: anthropic | openai | gemini | ollama | oci_genai
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...
+LLM_MODEL=gpt-4o-mini
+LLM_BASE_URL=                    # optional: Groq, Vertex AI, etc.
 LLM_MAX_TOKENS=2048
 LLM_TEMPERATURE=0.2
 LLM_TIMEOUT=60
 
-# Ollama only
-# LLM_BASE_URL=http://localhost:11434
+# ── OCI GenAI (oci_genai provider only) ────────────
+OCI_GENAI_COMPARTMENT_ID=ocid1.compartment.oc1..
+OCI_GENAI_REGION=us-chicago-1
+OCI_GENAI_AUTH=config_file       # config_file | instance_principal | resource_principal
 
-# ── Embeddings (optional — enables ChromaDB RAG) ──
-# Provider: ollama | openai | gemini
-# EMBEDDING_PROVIDER=ollama
+# ── Embeddings (enables ChromaDB semantic RAG) ─────
+# EMBEDDING_PROVIDER=ollama      # ollama | openai | gemini
 # EMBEDDING_MODEL=nomic-embed-text
 # EMBEDDING_BASE_URL=http://localhost:11434
 
-# ── GitHub push ────────────────────────────
+# ── GitHub push ─────────────────────────────────────
 GITHUB_TOKEN=ghp_...
 GITHUB_REPO=myorg/my-terraform-repo
 GITHUB_BRANCH=main
 GITHUB_BASE_PATH=terraform
-```
 
-If `LLM_API_KEY` is not set, AI features are disabled gracefully (the AI bar is hidden).
-If `GITHUB_TOKEN` is not set, the Push to Git button is disabled.
+# ── Terraform / OpenTofu binary (for TF CLI tests) ──
+TERRAFORM_PATH=terraform         # or full path
+OPENTOFU_PATH=tofu
+```
 
 ---
 
 ## RAG Knowledge Base
 
-Terraform generation advice is grounded in a curated knowledge base in `rag_docs/`:
+AI answers are grounded in `rag_docs/` — curated Markdown covering all supported clouds:
 
 | File | Contents |
 |------|----------|
-| `aws_odb_network.md` | CIDR constraints, DNS gotchas, s3_access defaults |
+| `aws_odb_network.md` | CIDR constraints, DNS, s3_access defaults |
 | `aws_exadata_infra.md` | Shapes, maintenance windows, NON_ROLLING patching |
-| `aws_vm_cluster.md` | Required fields, db_servers data source, immutable fields |
-| `aws_peering_avmcluster.md` | Peering limits, AVM cluster reserved ports |
-| `aws_gotchas.md` | Comprehensive AWS pitfalls reference |
+| `aws_vm_cluster.md` | Required fields, db_servers, immutable fields |
+| `aws_hadr.md` | Multi-AZ HA + Cross-Region DR — LPG, DRG, RPC patterns |
+| `aws_onboarding.md` | Subscription sharing, account linking |
+| `aws_subscription_sharing.md` | Cross-account ODB access |
 | `gcp_resources.md` | Full GCP resource schemas, immutable fields, CIDR rules |
-| `gcp_gotchas.md` | grid_image_id vs gi_version, time_zone block syntax, etc. |
-| `constraints_valid_values.md` | Valid enums, ranges, and format rules across both clouds |
-| `example_configurations.md` | Reference configurations (prod, dev, multi-env, HA) |
-| `oci_database.md` | OCI DB Home / CDB / PDB resource reference |
+| `gcp_hadr.md` | GCP HA/DR — DRG peering, OCI LPG, GCP-native paths |
+| `gcp_onboarding.md` | GCP project setup, enabling ODB API |
+| `azure_resources.md` | Azure resource schemas, delegated subnet requirements |
+| `azure_hadr.md` | Azure cross-zone + cross-region Data Guard |
+| `azure_network_design.md` | VNet sizing, peering, Oracle-delegated subnets |
+| `azure_onboarding.md` | Azure subscription + ODB service setup |
+| `maa_multicloud.md` | Oracle MAA best practices across all three clouds |
+| `multicloud_hub.md` | Multi-cloud topology patterns |
 
-**RAG auto-builds on first use.** No manual setup required — the index is created from `rag_docs/` at startup if it doesn't exist. To force a rebuild: `POST /api/rag/rebuild`.
+**RAG auto-builds on first use.** To force a rebuild: `POST /api/rag/rebuild`.
 
-Two backends are supported:
-- **BM25** (default) — pure Python, no extra dependencies
+Two backends:
+- **BM25** (default) — pure Python, no extra dependencies, section-aware with title-boost scoring
 - **ChromaDB** (semantic) — install `chromadb` and set `EMBEDDING_PROVIDER`
 
 ---
 
 ## API Reference
 
+### Pages
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Product chooser |
+| `GET` | `/aws` | ODB@AWS page |
+| `GET` | `/gcp` | DB@GCP page |
+| `GET` | `/azure` | DB@Azure page |
+| `GET` | `/dg` | OCI Data Guard page |
+| `GET` | `/cidr` | CIDR Planner |
+| `GET` | `/rag` | RAG admin UI |
+| `GET` | `/hub` | Info Hub |
+
 ### Core generation
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/` | Product chooser landing page |
-| `GET` | `/aws` | ODB@AWS product page |
-| `GET` | `/gcp` | DB@GCP product page |
-| `POST` | `/api/generate` | Generate a single file; returns `{ content }` |
-| `POST` | `/api/validate` | Validate fields for one tab; returns `{ valid, errors }` |
+| `POST` | `/api/generate` | Generate a single file; body: `{ cloud, file_key, … }` → `{ content }` |
+| `POST` | `/api/validate` | Validate fields for one tab → `{ valid, errors, errors_by_module }` |
 | `POST` | `/api/download` | Stream ZIP of all generated files |
+| `POST` | `/api/load-zip` | Parse a downloaded ZIP back into config JSON |
 
 ### Config persistence
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/config/save` | Save full payload for `{ customer, cloud }` |
+| `POST` | `/api/config/save` | Save payload for `{ customer, cloud }` |
 | `GET` | `/api/config/load/<customer>/<cloud>` | Load saved config |
 | `GET` | `/api/config/list` | List all saved customers |
 | `DELETE` | `/api/config/delete/<customer>/<cloud>` | Delete a config |
-| `GET` | `/api/config/backend` | Returns active backend name |
+| `GET` | `/api/config/backend` | Returns active backend (`filestore` or `couchdb`) |
 
 ### AI
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/llm/fill` | Fill form from natural language; returns `{ payload, explanation }` |
-| `POST` | `/api/llm/explain` | Explain a Terraform file; body: `{ content, filename }`; returns `{ explanation }` |
-| `GET` | `/api/llm/status` | Returns LLM provider availability |
+| `POST` | `/api/llm/fill` | Fill form from natural language → `{ payload, explanation }` |
+| `POST` | `/api/llm/explain` | Explain a Terraform file → `{ explanation }` |
+| `POST` | `/api/llm/ask` | Ask a free-form question → `{ answer }` |
+| `GET` | `/api/llm/info` | LLM provider info + availability |
+| `POST` | `/api/ai/security-review` | Security scan of current config → findings + score |
+| `POST` | `/api/ai/explain-plan` | Analyse `terraform plan` output → changes + risks |
+| `POST` | `/api/ai/troubleshoot` | Diagnose terraform error → root cause + fix steps |
 
 ### RAG
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/rag/stats` | Index statistics (`backend`, `n_chunks`, `n_docs`) |
-| `POST` | `/api/rag/rebuild` | Force re-index of `rag_docs/` |
-| `POST` | `/api/rag/search` | Search; body: `{ query, k }`; returns top-k chunks |
+| `GET` | `/api/rag/stats` | Index stats: `{ backend, n_docs, n_chunks }` |
+| `POST` | `/api/rag/rebuild` | Force re-index all `rag_docs/` |
+| `POST` | `/api/rag/search` | Search: `{ query, k }` → top-k chunks |
+| `GET` | `/api/rag/docs` | List indexed documents |
+| `POST` | `/api/rag/upload` | Upload a new RAG document (PDF/DOCX/PPTX/MD) |
+| `DELETE` | `/api/rag/docs/<filename>` | Remove a document from the index |
 
 ### Testing & GitHub
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/test` | Run functional tests against a payload or saved config |
-| `POST` | `/api/tf-validate` | Run mock Terraform structural validator |
+| `POST` | `/api/test` | Run functional tests against payload or saved config |
+| `POST` | `/api/tf-validate` | Mock Terraform structural validator |
+| `POST` | `/api/tf-cli` | Run `terraform fmt + init + validate` via CLI binary |
 | `POST` | `/api/github/push` | Push generated files to GitHub repo |
-| `GET` | `/api/github/status` | Returns GitHub integration status |
-
-### `/api/validate` tab numbers
-
-| `tab` | Resource |
-|-------|----------|
-| `0` | AWS ODB Network |
-| `1` | AWS Exadata Infrastructure |
-| `2` | AWS Network Peering |
-| `3` | AWS VM Cluster |
-| `4` | AWS Autonomous VM Cluster |
-| `10` | GCP ODB Network |
-| `12` | GCP Exadata Infrastructure |
-| `13` | GCP VM Cluster |
+| `GET` | `/api/github/info` | GitHub integration status |
 
 ---
 
 ## Mock Terraform Validator
 
-Pure-Python structural validator — no Terraform binary required. Simulates `terraform validate` across 8 check groups:
+Pure-Python structural validator — no Terraform binary required. Checks:
 
 | Group | What is checked |
 |-------|----------------|
-| File Structure | All 4 files present per module |
+| File Structure | All required files present per module |
 | HCL Syntax | Balanced `{}[]()`, no empty assignments |
-| Provider | Correct provider source + version constraint declared |
-| Resource Schema | Resource types match ODB provider schemas; required arguments present |
+| Provider | Correct provider source + version constraint |
+| Resource Schema | Resource types match provider schemas; required args present |
 | Variable Resolution | Every `var.<n>` in `main.tf` resolves to a declared variable |
 | Output Validity | Outputs reference known resource attributes |
 | Module Cross-References | `source` paths correct; `module.<n>.<attr>` resolves to declared outputs |
@@ -281,34 +383,13 @@ Pure-Python structural validator — no Terraform binary required. Simulates `te
 
 ## Test Suite
 
-220 tests — run with:
+451 tests — run with:
 
 ```bash
 python -m unittest tests/test_all.py
 ```
 
-| Class | Coverage |
-|-------|----------|
-| `TestHelpers` | `is_ref`, `parse_list`, `tf_bool` |
-| `TestAwsOdbNetwork` | `mod0_*` — all 4 file generators |
-| `TestAwsExadataInfra` | `mod1_*` — shapes, maintenance window |
-| `TestAwsPeering` | `mod2_*` |
-| `TestAwsVmCluster` | `mod3_*` — ARN/ID modes, db_servers, license |
-| `TestAwsAvmCluster` | `mod4_*` — autonomous VM cluster |
-| `TestAwsRoot` | Multi-network/infra/peering/cluster wiring |
-| `TestGcpOdbNetwork` | `gcp0_*` |
-| `TestGcpOdbSubnet` | Client + backup subnet generators |
-| `TestGcpExadataInfra` | `gcp2_*` |
-| `TestGcpVmCluster` | `gcp1_*` — grid_image_id, exascale_db_storage_vault, shape_attribute |
-| `TestGcpRoot` | Subnet auto-wiring, multi-cluster |
-| `TestGenerateAll` | End-to-end AWS + GCP, backward-compat |
-| `TestDefaultNormalisers` | `_aws_*_defaults`, `_gcp_*_defaults` |
-| `TestApiRoutes` | All HTTP routes, all tabs, pass + fail |
-| `TestFileStore` | `_slug`, CRUD, multi-cloud, overwrite |
-| `TestConfigApiRoutes` | Mocked storage — save/load/list/delete |
-| `TestCouchDBStore` | Fully mocked urllib — all operations |
-| `TestApiTestRoute` | `/api/test` — validation, wiring, multi-network |
-| `TestTFValidator` | HCL syntax, schema, var resolution, cross-refs |
+Covers AWS, GCP, Azure, OCI DG, API routes, storage backends, mock TF validator, and CloudFormation generation.
 
 ---
 
@@ -316,39 +397,50 @@ python -m unittest tests/test_all.py
 
 ```
 odb_terraform_app/
-├── app.py                  # Flask app — all routes and Terraform generators
-├── llm.py                  # LLM provider adapter (Anthropic, OpenAI, Gemini, Ollama)
-├── rag.py                  # RAG engine — BM25 or ChromaDB backend
+├── app.py                  # Flask app — all routes
+├── llm.py                  # LLM adapter (Anthropic, OpenAI, Gemini, Ollama, OCI GenAI)
+├── rag.py                  # RAG engine — BM25 or ChromaDB
 ├── github.py               # GitHub Contents API integration
-├── store.py                # FileStore + CouchDBStore backends
+├── store.py                # FileStore + CouchDBStore
 ├── tf_validator.py         # Mock Terraform structural validator
 ├── requirements.txt
 ├── docker-compose.yml
 ├── .env                    # Config (not in git)
-├── rag_docs/               # Knowledge base markdown files (10 files, git-tracked)
-├── data/                   # Runtime data — configs, RAG index (not in git)
+├── generators/             # Cloud-specific Terraform generators
+│   ├── aws_gen.py          # AWS ODB resources + CloudFormation
+│   ├── gcp_gen.py          # GCP ODB resources
+│   ├── azure_gen.py        # Azure ODB resources
+│   ├── oci_gen.py          # OCI DB Home / CDB / PDB
+│   └── oci_dg_gen.py       # OCI Data Guard (Multi-AZ + Cross-Region)
+├── rag_docs/               # Knowledge base markdown files (git-tracked)
+├── data/                   # Runtime: configs, RAG index (not in git)
 ├── templates/
-│   ├── home.html           # Product chooser landing page
-│   ├── base.html           # Shared layout — header, LLM bar, output panel, JS
-│   ├── aws.html            # ODB@AWS product page (extends base)
-│   ├── gcp.html            # DB@GCP product page (extends base)
+│   ├── home.html           # Product chooser
+│   ├── base.html           # Shared layout (used by GCP page)
+│   ├── aws.html            # ODB@AWS page (standalone)
+│   ├── gcp.html            # DB@GCP page (standalone)
+│   ├── azure.html          # DB@Azure page (standalone)
+│   ├── dg.html             # OCI Data Guard page (standalone)
+│   ├── cidr.html           # CIDR Planner
+│   ├── rag.html            # RAG admin UI
+│   ├── hub.html            # Info Hub
 │   └── tf/                 # Jinja2 Terraform templates
 │       ├── aws_odb_network/
 │       ├── aws_exadata_infra/
 │       ├── aws_peering/
 │       ├── aws_vm_cluster/
 │       ├── aws_avmcluster/
+│       ├── aws_dg_multi_az/
+│       ├── aws_dg_cross_region/
 │       ├── aws_root/
-│       ├── oci_db_home/
-│       ├── oci_cdb/
-│       ├── oci_pdb/
-│       ├── gcp_odb_network/
-│       ├── gcp_odb_subnet/
-│       ├── gcp_exadb_infra/
-│       ├── gcp_exadb_vm_cluster/
-│       └── gcp_root/
+│       ├── oci_db_home/ · oci_cdb/ · oci_pdb/
+│       ├── oci_dg_region/ · oci_dg_peering/ · oci_dg_root/
+│       ├── gcp_odb_network/ · gcp_odb_subnet/
+│       ├── gcp_exadb_infra/ · gcp_exadb_vm_cluster/ · gcp_root/
+│       ├── azure_vnet/ · azure_exadata_infra/ · azure_vm_cluster/
+│       └── azure_root/
 └── tests/
-    └── test_all.py         # 220 tests across 20 classes
+    └── test_all.py         # 451 tests across all clouds
 ```
 
 ---
@@ -365,18 +457,30 @@ odb_terraform_app/
 
 Source: [Oracle Regional Availability for ODB@AWS](https://docs.oracle.com/en-us/iaas/Content/database-at-aws/oaaws-regions.htm)
 
+## OCI Regions (Data Guard)
+
+| OCI Region | Location |
+|------------|----------|
+| `us-ashburn-1` | US East (Ashburn) |
+| `us-chicago-1` | US Central (Columbus / Ohio) |
+| `us-portland-1` | US West (Portland) |
+| `eu-frankfurt-1` | EU (Frankfurt) |
+| `ap-singapore-1` | Asia Pacific (Singapore) |
+| `ap-tokyo-1` | Asia Pacific (Tokyo) |
+| `ap-mumbai-1` | Asia Pacific (Mumbai) |
+| `ap-sydney-1` | Asia Pacific (Sydney) |
+
 ## GCP Region Reference
 
-| GCP Region | Location | Oracle Zone examples |
-|------------|----------|----------------------|
-| `us-east4` | N. Virginia | `us-east4-b-r1` |
-| `us-central1` | Iowa | `us-central1-a-r1` |
-| `europe-west1` | Belgium | — |
-| `europe-west4` | Netherlands | — |
-| `europe-west3` | Frankfurt | `europe-west3-b-r1` |
-| `europe-west2` | London | `europe-west2-c-r2` |
-| `asia-northeast1` | Tokyo | — |
-| `australia-southeast1` | Sydney | — |
-| `southamerica-east1` | São Paulo | — |
+| GCP Region | Location |
+|------------|----------|
+| `us-east4` | N. Virginia |
+| `us-central1` | Iowa |
+| `europe-west3` | Frankfurt |
+| `europe-west2` | London |
+| `asia-northeast1` | Tokyo |
+| `australia-southeast1` | Sydney |
+| `asia-south1` | Mumbai |
+| `southamerica-east1` | São Paulo |
 
 Source: [Oracle Regional Availability for DB@GCP](https://docs.oracle.com/en-us/iaas/Content/database-at-gcp/get-started-regions.htm)
