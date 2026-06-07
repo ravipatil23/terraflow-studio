@@ -1327,7 +1327,8 @@ function buildDeployGuide(){
     const peerings=p.aws_peerings||[];
     const clusters=p.aws_clusters||[];
     const avmcs   =p.aws_avmclusters||[];
-    if(!nets.length&&!infras.length&&!clusters.length&&!avmcs.length) return [];
+    const ociDbs  =p.aws_oci_databases||[];
+    if(!nets.length&&!infras.length&&!clusters.length&&!avmcs.length&&!ociDbs.length) return [];
 
     const firstNet  = nets[0]?.module_name  || 'odb_network';
     const firstInfra= infras[0]?.module_name|| 'odb_exadata_infra';
@@ -1433,8 +1434,151 @@ function buildDeployGuide(){
       ],[])),
     });
 
+    if(ociDbs.length){
+      const dbRes=[];
+      const dbCmds=[];
+      ociDbs.forEach(db=>{
+        const vcr=db.vmcluster_ref||clusters[0]?.module_name||'odb_vm_cluster';
+        dbCmds.push(`terraform apply -target=module.${db.module_name}_dbhome`);
+        dbRes.push(_dgRes(db.module_name+'_dbhome','DB Home',[
+          `DB Home name: <b>${db.db_home_display_name||db.module_name}</b>`,
+          `DB version: <b>${db.db_version||'—'}</b>`,
+        ],[
+          `var.vm_cluster_id  ←  module.${vcr}.cloud_vm_cluster_id`,
+        ],[
+          `module.${db.module_name}_dbhome.db_home_id  →  used by CDB as var.db_home_id`,
+        ]));
+        dbCmds.push(`terraform apply -target=module.${db.module_name}_cdb`);
+        dbRes.push(_dgRes(db.module_name+'_cdb','Container DB',[
+          `DB name: <b>${db.db_name||db.module_name}</b>`,
+          `Admin password: <b>var.admin_password</b>`,
+        ],[
+          `var.db_home_id  ←  module.${db.module_name}_dbhome.db_home_id`,
+        ],[
+          db.create_pdb&&db.pdb_name?`module.${db.module_name}_cdb.database_id  →  used by PDB as var.cdb_id`:'',
+        ]));
+        if(db.create_pdb&&db.pdb_name){
+          dbCmds.push(`terraform apply -target=module.${db.module_name}_pdb`);
+          dbRes.push(_dgRes(db.module_name+'_pdb','Pluggable DB',[
+            `PDB name: <b>${db.pdb_name}</b>`,
+          ],[
+            `var.cdb_id  ←  module.${db.module_name}_cdb.database_id`,
+          ],[]));
+        }
+      });
+      if(dbCmds.length) steps.push({
+        title:'Deploy OCI Database — DB Home → CDB → PDB (sequential)',
+        cmds: dbCmds,
+        desc:'Each layer depends on the one above. Deploy strictly in order: DB Home first, then CDB, then PDB.',
+        time:'15–30 min total',
+        resources: dbRes,
+      });
+    }
+
+  } else { // GCP
+    const nets    =p.gcp_networks||[];
+    const infras  =p.gcp_infras||[];
+    const clusters=p.gcp_clusters||[];
+    if(!nets.length&&!infras.length&&!clusters.length) return [];
+
+    const firstNet  = nets[0]?.module_name   ||'gcp_odb_network';
+    const firstInfra= infras[0]?.module_name ||'gcp_exadb_infra';
+
+    if(nets.length) steps.push({
+      title: `Deploy ODB Network${nets.length>1?' ('+nets.length+')':''}`,
+      cmds: nets.map(n=>`terraform apply -target=module.${n.module_name}`),
+      desc: 'Creates the ODB network and registers it with your GCP VPC. All other Oracle DB resources depend on this.',
+      time: '5–10 min each',
+      resources: nets.map(n=>_dgRes(n.module_name,'ODB Network',[
+        `Display name: <b>${n.display_name||n.odb_network_id||'—'}</b>`,
+        `GCP project: <b>${n.project||'—'}</b>`,
+        `Location: <b>${n.location||'—'}</b>`,
+        `VPC network: <b>${n.network||'—'}</b>`,
+      ],[],[
+        `module.${n.module_name}.odb_network_id  →  used by subnets &amp; VM clusters as var.odb_network_id`,
+      ])),
+    });
+
+    if(nets.length){
+      const subRes=[];
+      const subCmds=[];
+      nets.forEach(n=>{
+        subCmds.push(`terraform apply -target=module.${n.module_name}_client_subnet`);
+        subRes.push(_dgRes(n.module_name+'_client_subnet','Client Subnet',[
+          `CIDR: <b>${n.client_cidr||'—'}</b>`,
+          `Purpose: <b>CLIENT_SUBNET</b>`,
+        ],[
+          `var.odb_network_id  ←  module.${n.module_name}.odb_network_id`,
+        ],[
+          `module.${n.module_name}_client_subnet.odb_subnet_id  →  used by VM cluster as var.client_subnet_id`,
+        ]));
+        subCmds.push(`terraform apply -target=module.${n.module_name}_backup_subnet`);
+        subRes.push(_dgRes(n.module_name+'_backup_subnet','Backup Subnet',[
+          `CIDR: <b>${n.backup_cidr||'—'}</b>`,
+          `Purpose: <b>BACKUP_SUBNET</b>`,
+        ],[
+          `var.odb_network_id  ←  module.${n.module_name}.odb_network_id`,
+        ],[
+          `module.${n.module_name}_backup_subnet.odb_subnet_id  →  used by VM cluster as var.backup_subnet_id`,
+        ]));
+      });
+      steps.push({
+        title:'Deploy ODB Subnets — client + backup (parallel per network)',
+        cmds: subCmds,
+        desc:'Two subnets required per ODB network. Client subnet hosts database SCAN IPs and DNS listener. Backup subnet is used for Exadata VM Cluster backups only.',
+        tip: infras.length?'Start Exadata Infrastructure in a second terminal while subnets deploy — Infra has no subnet dependency.':'',
+        time:'2–3 min each',
+        resources: subRes,
+      });
+    }
+
+    if(infras.length) steps.push({
+      title: `Deploy Exadata Infrastructure${infras.length>1?' ('+infras.length+', parallel)':''}`,
+      cmds: infras.map(i=>`terraform apply -target=module.${i.module_name}`),
+      desc: 'Provisions physical Exadata hardware. Can run in parallel with subnet creation.',
+      warn: 'Infrastructure must reach lifecycle_state = ACTIVE before VM cluster creation.',
+      time: '60–90 min each',
+      resources: infras.map(i=>_dgRes(i.module_name,'Exadata Infrastructure',[
+        `Display name: <b>${i.display_name||'—'}</b>`,
+        `Zone: <b>${i.gcp_oracle_zone||'—'}</b>`,
+        `Shape: <b>${i.shape||'—'}</b>`,
+        `Compute nodes: <b>${i.compute_count||2}</b>`,
+        `Storage nodes: <b>${i.storage_count||3}</b>`,
+      ],[],[
+        `module.${i.module_name}.cloud_exadata_infrastructure_id  →  used by VM cluster as var.cloud_exadata_infrastructure_id`,
+      ])),
+    });
+
+    if(clusters.length) steps.push({
+      title: `Deploy ExaDB VM Cluster${clusters.length>1?' ('+clusters.length+', parallel)':''}`,
+      cmds: clusters.map(c=>`terraform apply -target=module.${c.module_name}`),
+      desc: 'Provisions Oracle software on the Exadata hardware. All four dependencies (network, subnets ×2, infra) must be healthy before this step.',
+      time: '45–60 min each',
+      resources: clusters.map(c=>_dgRes(c.module_name,'ExaDB VM Cluster',[
+        `Display name: <b>${c.display_name||'—'}</b>`,
+        `GI version: <b>${c.gi_version||'—'}</b>`,
+        `Hostname: <b>${c.hostname||'—'}</b>`,
+        `CPU cores/node: <b>${c.cpu_core_count_per_node||'—'}</b>`,
+        `License: <b>${c.license_model||'LICENSE_INCLUDED'}</b>`,
+      ],[
+        `var.odb_network_id  ←  module.${c.network_ref||firstNet}.odb_network_id`,
+        `var.client_subnet_id  ←  module.${c.client_subnet_ref||(c.network_ref||firstNet)+'_client_subnet'}.odb_subnet_id`,
+        `var.backup_subnet_id  ←  module.${c.backup_subnet_ref||(c.network_ref||firstNet)+'_backup_subnet'}.odb_subnet_id`,
+        `var.cloud_exadata_infrastructure_id  ←  module.${c.infra_ref||firstInfra}.cloud_exadata_infrastructure_id`,
+      ],[])),
+    });
   }
-});
+
+  if(steps.length) steps.push({
+    title:'Verify — confirm no remaining changes',
+    cmds:['terraform plan'],
+    desc:'A clean plan confirms Terraform state matches your deployed infrastructure.',
+    time:'< 1 min',
+    resources:[],
+  });
+
+  return steps;
+}
 
 // ── LLM Prompt Bar ────────────────────────────────────────────────────────────
 async function initLlmBar() {
