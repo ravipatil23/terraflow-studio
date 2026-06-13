@@ -1,0 +1,19 @@
+variable "subscription_id" {
+  type        = string
+  description = "Azure subscription ID"
+  default     = "{{ subscription_id }}"
+}
+variable "resource_group_name" {
+  type        = string
+  description = "Azure resource group name"
+  default     = "{{ resource_group_name }}"
+}
+variable "location" {
+  type        = string
+  description = "Azure region"
+  default     = "{{ location }}"
+}
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

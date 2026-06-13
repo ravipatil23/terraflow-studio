@@ -1,0 +1,10 @@
+subscription_id     = "{{ subscription_id }}"
+resource_group_name = "{{ resource_group_name }}"
+location            = "{{ location }}"
+{% if tags %}
+tags = {
+{% for k, v in tags.items() %}
+  "{{ k }}" = "{{ v }}"
+{% endfor %}
+}
+{% endif %}

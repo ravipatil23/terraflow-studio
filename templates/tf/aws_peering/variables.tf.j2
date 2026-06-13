@@ -1,7 +1,5 @@
-# modules/{{ module_name }}/variables.tf
-
 variable "display_name" {
-  type = string
+  type    = string
 {% if display_name %}
   default = "{{ display_name }}"
 {% endif %}

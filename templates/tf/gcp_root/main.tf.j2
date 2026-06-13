@@ -94,8 +94,12 @@ module "{{ cl.module_name }}" {
   exadata_infrastructure = module.{{ cl.infra_ref }}.infra_name
   labels                 = var.labels
 
-  depends_on = [module.{{ cl.network_ref }}, module.{{ cl.client_subnet_ref }},
-                module.{{ cl.backup_subnet_ref }}, module.{{ cl.infra_ref }}]
+  depends_on = [
+    module.{{ cl.network_ref }},
+    module.{{ cl.client_subnet_ref }},
+    module.{{ cl.backup_subnet_ref }},
+    module.{{ cl.infra_ref }},
+  ]
 }
 
 {% endfor %}
@@ -135,13 +139,13 @@ output "{{ db.module_name }}_pdb_id" { value = module.{{ db.module_name }}_pdb.p
 # ── Outputs ────────────────────────────────────────────────────────────────────
 {% for net in networks %}
 output "{{ net.module_name }}_odb_network_name" { value = module.{{ net.module_name }}.odb_network_name }
-output "{{ net.client_subnet_module }}_name"    { value = module.{{ net.client_subnet_module }}.odb_subnet_name }
-output "{{ net.backup_subnet_module }}_name"    { value = module.{{ net.backup_subnet_module }}.odb_subnet_name }
+output "{{ net.client_subnet_module }}_name" { value = module.{{ net.client_subnet_module }}.odb_subnet_name }
+output "{{ net.backup_subnet_module }}_name" { value = module.{{ net.backup_subnet_module }}.odb_subnet_name }
 {% endfor %}
 {% for inf in infras %}
 output "{{ inf.module_name }}_infra_name" { value = module.{{ inf.module_name }}.infra_name }
 {% endfor %}
 {% for cl in clusters %}
 output "{{ cl.module_name }}_vm_cluster_name" { value = module.{{ cl.module_name }}.vm_cluster_name }
-output "{{ cl.module_name }}_ocid"            { value = module.{{ cl.module_name }}.ocid }
+output "{{ cl.module_name }}_ocid" { value = module.{{ cl.module_name }}.ocid }
 {% endfor %}

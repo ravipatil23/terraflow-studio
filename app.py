@@ -30,959 +30,52 @@ import subprocess
 import tempfile
 import zipfile
 from flask import Flask, render_template, request, jsonify, send_file, make_response
-from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from store import storage
 import llm as llm_module
 import github as github_module
+import rag as rag_module
+
+from generators.helpers import render_tf, is_ref, parse_list, tf_bool
+from generators.aws_gen import (
+    mod0_main, mod0_vars, mod0_outputs, mod0_tfvars,
+    mod1_main, mod1_vars, mod1_outputs, mod1_tfvars,
+    mod2_main, mod2_vars, mod2_outputs, mod2_tfvars,
+    mod3_main, mod3_vars, mod3_outputs, mod3_tfvars,
+    mod4_main, mod4_vars, mod4_outputs, mod4_tfvars,
+    build_root_main, build_root_vars, build_root_tfvars,
+    _aws_net_defaults, _aws_infra_defaults, _aws_peer_defaults,
+    _aws_cluster_defaults, _aws_avmc_defaults,
+    generate_aws_tf, generate_cfn,
+)
+from generators.gcp_gen import (
+    _gcp_net_defaults, _gcp_infra_defaults, _gcp_cluster_defaults,
+    generate_gcp_tf,
+    _GCP_MOD_NET, _GCP_MOD_INFRA, _GCP_MOD_CLUSTER,
+)
+from generators.azure_gen import (
+    azure_vnet_main, azure_vnet_vars, azure_vnet_outputs, azure_vnet_tfvars,
+    azure_infra_main, azure_infra_vars, azure_infra_outputs, azure_infra_tfvars,
+    azure_cluster_main, azure_cluster_vars, azure_cluster_outputs, azure_cluster_tfvars,
+    azure_build_root_main, azure_build_root_vars, azure_build_root_tfvars,
+    _azure_vnet_defaults, _azure_infra_defaults, _azure_cluster_defaults,
+    generate_azure_tf,
+)
+from generators.oci_dg_gen import generate_oci_dg_tf
 
 app = Flask(__name__)
 
-# ─────────────────────────────────────────────
-#  JINJA2 ENVIRONMENT FOR TF TEMPLATES
-# ─────────────────────────────────────────────
-
-_tf_env = Environment(
-    loader=FileSystemLoader('templates/tf'),
-    undefined=StrictUndefined,
-    trim_blocks=True,
-    lstrip_blocks=True,
-    keep_trailing_newline=True,
-)
-
-def render_tf(template_path: str, **ctx) -> str:
-    """Render a Terraform Jinja2 template with the given context."""
-    return _tf_env.get_template(template_path).render(**ctx).rstrip('\n')
-
-
-# ─────────────────────────────────────────────
-#  SHARED HELPERS
-# ─────────────────────────────────────────────
-
-def is_ref(s: str) -> bool:
-    """Return True if s looks like a Terraform reference (e.g. module.x.y)."""
-    if not s:
-        return False
-    return bool(re.match(r'^[a-z_][a-z0-9_.]*(\.[a-z_][a-z0-9_.\[\]*]*)+$', s))
-
-def parse_list(s: str) -> list:
-    """Split a comma-separated string into a list, stripping whitespace."""
-    if not s:
-        return []
-    return [x.strip() for x in s.split(',') if x.strip()]
-
-def tf_bool(v) -> str:
-    return 'true' if v else 'false'
-
-
-# ─────────────────────────────────────────────
-#  AWS MODULE 0 — aws_odb_network
-# ─────────────────────────────────────────────
-
-def mod0_main(mn, d):
-    return render_tf('aws_odb_network/main.tf.j2',
-        module_name=mn,
-        custom_domain_name=d.get('custom_domain_name', ''),
-        default_dns_prefix=d.get('default_dns_prefix', ''),
-    )
-
-def _s3_val(v):
-    """Normalise s3_access / zero_etl_access to ENABLED or DISABLED string."""
-    if isinstance(v, str): return v if v in ('ENABLED','DISABLED') else ('ENABLED' if v else 'DISABLED')
-    return 'ENABLED' if v else 'DISABLED'
-
-def mod0_vars(mn, d):
-    return render_tf('aws_odb_network/variables.tf.j2',
-        module_name=mn,
-        display_name=d.get('display_name', ''),
-        availability_zone_id=d.get('availability_zone_id', ''),
-        client_subnet_cidr=d.get('client_subnet_cidr', ''),
-        backup_subnet_cidr=d.get('backup_subnet_cidr', ''),
-        s3_access=_s3_val(d.get('s3_access')),
-        zero_etl_access=_s3_val(d.get('zero_etl_access')),
-        availability_zone=d.get('availability_zone', ''),
-        region=d.get('region', ''),
-        default_dns_prefix=d.get('default_dns_prefix', ''),
-        custom_domain_name=d.get('custom_domain_name', ''),
-        delete_associated_resources=tf_bool(d.get('delete_associated_resources', False)),
-        tags=d.get('tags', {}),
-    )
-
-def mod0_outputs(mn):
-    return render_tf('aws_odb_network/outputs.tf.j2', module_name=mn)
-
-def mod0_tfvars(mn, d):
-    return render_tf('aws_odb_network/terraform.tfvars.j2',
-        module_name=mn,
-        display_name=d.get('display_name', '') or 'odb-my-net',
-        availability_zone_id=d.get('availability_zone_id', '') or 'use1-az6',
-        client_subnet_cidr=d.get('client_subnet_cidr', '') or '10.2.0.0/24',
-        backup_subnet_cidr=d.get('backup_subnet_cidr', '') or '10.2.1.0/24',
-        s3_access=_s3_val(d.get('s3_access')),
-        zero_etl_access=_s3_val(d.get('zero_etl_access')),
-        availability_zone=d.get('availability_zone', ''),
-        region=d.get('region', ''),
-        default_dns_prefix=d.get('default_dns_prefix', ''),
-        custom_domain_name=d.get('custom_domain_name', ''),
-        delete_associated_resources=tf_bool(d.get('delete_associated_resources', False)),
-        tags=d.get('tags', {}),
-    )
-
-
-# ─────────────────────────────────────────────
-#  AWS MODULE 1 — aws_odb_cloud_exadata_infrastructure
-# ─────────────────────────────────────────────
-
-def _mod1_ctx(d, defaults=False):
-    # hours_of_day and weeks_of_month are number lists
-    raw_hours  = parse_list(d.get('mw_hours_of_day', ''))
-    raw_weeks  = parse_list(d.get('mw_weeks_of_month', ''))
-    hours_ints = [int(x) for x in raw_hours  if x.strip().lstrip('-').isdigit()]
-    weeks_ints = [int(x) for x in raw_weeks  if x.strip().lstrip('-').isdigit()]
-    # days_of_week and months stay as plain strings; template renders { name = "..." }
-    days  = parse_list(d.get('mw_days_of_week', ''))
-    months = parse_list(d.get('mw_months', ''))
-    return dict(
-        display_name=d.get('display_name', '') or ('exadb-inf-demo' if defaults else ''),
-        shape=d.get('shape', 'Exadata.X11M') or 'Exadata.X11M',
-        compute_count=int(d.get('compute_count', 2) or 2),
-        storage_count=int(d.get('storage_count', 3) or 3),
-        availability_zone_id=d.get('availability_zone_id', '') or ('usw2-az3' if defaults else ''),
-        availability_zone=d.get('availability_zone', ''),
-        region=d.get('region', ''),
-        database_server_type=d.get('database_server_type', ''),
-        storage_server_type=d.get('storage_server_type', ''),
-        customer_contacts=d.get('customer_contacts', []),
-        mw_preference=d.get('mw_preference', 'NO_PREFERENCE'),
-        mw_patching_mode=d.get('mw_patching_mode', 'ROLLING'),
-        mw_is_custom_action_timeout_enabled=tf_bool(d.get('mw_is_custom_action_timeout_enabled', False)),
-        mw_custom_action_timeout_in_mins=int(d.get('mw_custom_action_timeout_in_mins', 15) or 15),
-        is_custom_mw=(d.get('mw_preference', '') == 'CUSTOM_PREFERENCE'),
-        mw_lead_time_in_weeks=d.get('mw_lead_time_in_weeks', ''),
-        mw_hours_of_day=hours_ints,
-        mw_weeks_of_month=weeks_ints,
-        mw_days_of_week=days,
-        mw_months=months,
-        tags=d.get('tags', {}),
-    )
-
-def mod1_main(mn):
-    return render_tf('aws_exadata_infra/main.tf.j2', module_name=mn)
-
-def mod1_vars(mn, d):
-    return render_tf('aws_exadata_infra/variables.tf.j2', module_name=mn, **_mod1_ctx(d))
-
-def mod1_outputs(mn):
-    return render_tf('aws_exadata_infra/outputs.tf.j2', module_name=mn)
-
-def mod1_tfvars(mn, d):
-    return render_tf('aws_exadata_infra/terraform.tfvars.j2', module_name=mn, **_mod1_ctx(d, defaults=True))
-
-
-# ─────────────────────────────────────────────
-#  AWS MODULE 2 — aws_odb_network_peering_connection
-# ─────────────────────────────────────────────
-
-def _mod2_ctx(d, mn0, defaults=False):
-    odb  = d.get('odb_network_id', '') or (f'module.{mn0}.network_id' if mn0 else '')
-    peer = d.get('peer_network_id', '')
-    return dict(
-        display_name=d.get('display_name', '') or ('odb-peering-conn' if defaults else ''),
-        odb_network_id=odb,
-        odb_network_id_is_ref=is_ref(odb),
-        peer_network_id=peer,
-        peer_network_id_is_ref=is_ref(peer),
-        mn0=mn0,
-        region=d.get('region', ''),
-        cidrs=d.get('peer_network_cidrs', []),
-        tags=d.get('tags', {}),
-    )
-
-def mod2_main(mn):
-    return render_tf('aws_peering/main.tf.j2', module_name=mn)
-
-def mod2_vars(mn, d, mn0):
-    return render_tf('aws_peering/variables.tf.j2', module_name=mn, **_mod2_ctx(d, mn0))
-
-def mod2_outputs(mn):
-    return render_tf('aws_peering/outputs.tf.j2', module_name=mn)
-
-def mod2_tfvars(mn, d, mn0):
-    return render_tf('aws_peering/terraform.tfvars.j2', module_name=mn, **_mod2_ctx(d, mn0, defaults=True))
-
-
-# ─────────────────────────────────────────────
-#  AWS MODULE 3 — aws_odb_cloud_vm_cluster
-# ─────────────────────────────────────────────
-
-def _mod3_ctx(d, mn0='', mn1='', defaults=False):
-    infraid = d.get('cloud_exadata_infrastructure_id', '')
-    netid   = d.get('odb_network_id', '')
-    ds      = d.get('data_storage_size_in_tbs', '')  or 'null'
-    dng     = d.get('db_node_storage_size_in_gbs', '') or 'null'
-    mem     = d.get('memory_size_in_gbs', '')          or 'null'
-    sc      = d.get('scan_listener_port_tcp', '')      or 'null'
-    # Auto-resolve to module refs when user left fields empty
-    infraid = infraid or (f'module.{mn1}.infra_id' if mn1 else '')
-    netid   = netid   or (f'module.{mn0}.network_id' if mn0 else '')
-    infra_val = infraid if not is_ref(infraid) else infraid
-    net_val   = netid   if not is_ref(netid)   else netid
-    return dict(
-        display_name=d.get('display_name', '') or ('tf-vmc-demo' if defaults else ''),
-        cpu_core_count=int(d.get('cpu_core_count', 16) or 16),
-        gi_version=d.get('gi_version', ''),
-        hostname_prefix=d.get('hostname_prefix', ''),
-        license_model=d.get('license_model', 'LICENSE_INCLUDED'),
-        cloud_exadata_infrastructure_id=infraid,
-        odb_network_id=netid,
-        infra_id=infra_val,
-        net_id=net_val,
-        mn0=mn0, mn1=mn1,
-        ssh_public_keys=d.get('ssh_public_keys', []),
-        db_servers=d.get('db_servers', []),
-        db_servers_mode=d.get('db_servers_mode', 'auto'),
-        dco_is_diagnostics_events_enabled=tf_bool(d.get('dco_is_diagnostics_events_enabled', True)),
-        dco_is_health_monitoring_enabled=tf_bool(d.get('dco_is_health_monitoring_enabled', True)),
-        dco_is_incident_logs_enabled=tf_bool(d.get('dco_is_incident_logs_enabled', True)),
-        cluster_name=d.get('cluster_name', ''),
-        timezone=d.get('timezone', ''),
-        data_storage_size_in_tbs=ds,
-        db_node_storage_size_in_gbs=dng,
-        memory_size_in_gbs=mem,
-        scan_listener_port_tcp=sc,
-        is_local_backup_enabled=tf_bool(d.get('is_local_backup_enabled', False)),
-        is_sparse_diskgroup_enabled=tf_bool(d.get('is_sparse_diskgroup_enabled', False)),
-        tags=d.get('tags', {}),
-    )
-
-def mod3_main(mn, d=None, mn0='', mn1=''):
-    ctx = _mod3_ctx(d, mn0, mn1) if d else {'db_servers_mode': 'auto', 'db_servers': [], 'vm_mode': 'arn'}
-    return render_tf('aws_vm_cluster/main.tf.j2', module_name=mn, **ctx)
-
-def mod3_vars(mn, d, mn0='', mn1=''):
-    return render_tf('aws_vm_cluster/variables.tf.j2', module_name=mn, **_mod3_ctx(d, mn0, mn1))
-
-def mod3_outputs(mn):
-    return render_tf('aws_vm_cluster/outputs.tf.j2', module_name=mn)
-
-def mod3_tfvars(mn, d, mn0, mn1):
-    return render_tf('aws_vm_cluster/terraform.tfvars.j2', module_name=mn, **_mod3_ctx(d, mn0, mn1, defaults=True))
-
-
-# ─────────────────────────────────────────────
-#  AWS AUTONOMOUS VM CLUSTER (mod4)
-# ─────────────────────────────────────────────
-
-def _mod4_ctx(d, mn0='', mn1='', defaults=False):
-    infra_arn = d.get('cloud_exadata_infrastructure_arn', '') or (f'module.{mn1}.infra_arn' if mn1 else '')
-    net_arn   = d.get('odb_network_arn', '') or (f'module.{mn0}.network_arn' if mn0 else '')
-    infra_id  = d.get('cloud_exadata_infrastructure_id', '') or (f'module.{mn1}.infra_id' if mn1 else '')
-    net_id    = d.get('odb_network_id', '') or (f'module.{mn0}.network_id' if mn0 else '')
-    has_sched = any([d.get('mw_days_of_week'), d.get('mw_hours_of_day'),
-                     d.get('mw_months'), d.get('mw_weeks_of_month'), d.get('mw_lead_time_week')])
-    return dict(
-        display_name=d.get('display_name', '') or ('tf-avmc-demo' if defaults else ''),
-        autonomous_data_storage_size_in_tbs=float(d.get('autonomous_data_storage_size_in_tbs', 5) or 5),
-        cpu_core_count_per_node=int(d.get('cpu_core_count_per_node', 40) or 40),
-        memory_per_oracle_compute_unit_in_gbs=int(d.get('memory_per_oracle_compute_unit_in_gbs', 2) or 2),
-        total_container_databases=int(d.get('total_container_databases', 2) or 2),
-        scan_listener_port_non_tls=int(d.get('scan_listener_port_non_tls', 1521) or 1521),
-        scan_listener_port_tls=int(d.get('scan_listener_port_tls', 2484) or 2484),
-        license_model=d.get('license_model', 'LICENSE_INCLUDED'),
-        is_mtls_enabled_vm_cluster=tf_bool(d.get('is_mtls_enabled_vm_cluster', False)),
-        description=d.get('description', ''),
-        time_zone=d.get('time_zone', ''),
-        cloud_exadata_infrastructure_id=infra_id,
-        odb_network_id=net_id,
-        cloud_exadata_infrastructure_arn=infra_arn,
-        odb_network_arn=net_arn,
-        db_servers=d.get('db_servers', []),
-        db_servers_mode=d.get('db_servers_mode', 'auto'),
-        mw_preference=d.get('mw_preference', 'NO_PREFERENCE'),
-        mw_patching_mode=d.get('mw_patching_mode', 'ROLLING'),
-        mw_is_custom_action_timeout_enabled=tf_bool(d.get('mw_is_custom_action_timeout_enabled', False)),
-        mw_custom_action_timeout_mins=int(d.get('mw_custom_action_timeout_mins', 15) or 15),
-        maintenance_window_has_schedule=has_sched,
-        mn0=mn0, mn1=mn1,
-        tags=d.get('tags', {}),
-    )
-
-def mod4_main(mn, d=None, mn0='', mn1=''):
-    ctx = _mod4_ctx(d, mn0, mn1) if d else {'db_servers_mode': 'auto', 'db_servers': [], 'vm_mode': 'arn'}
-    return render_tf('aws_avmcluster/main.tf.j2', module_name=mn, **ctx)
-
-def mod4_vars(mn, d, mn0='', mn1=''):
-    return render_tf('aws_avmcluster/variables.tf.j2', module_name=mn, **_mod4_ctx(d, mn0, mn1))
-
-def mod4_outputs(mn):
-    return render_tf('aws_avmcluster/outputs.tf.j2', module_name=mn)
-
-def mod4_tfvars(mn, d, mn0, mn1):
-    return render_tf('aws_avmcluster/terraform.tfvars.j2', module_name=mn, **_mod4_ctx(d, mn0, mn1, defaults=True))
-
-
-# ─────────────────────────────────────────────
-#  OCI DATABASE MODULE (DB Home / CDB / PDB)
-# ─────────────────────────────────────────────
-
-_AWS_TO_OCI_REGION = {
-    'us-east-1':      'us-ashburn-1',
-    'us-east-2':      'us-ashburn-1',
-    'us-west-1':      'us-sanjose-1',
-    'us-west-2':      'us-portland-1',
-    'eu-west-1':      'eu-frankfurt-1',
-    'eu-central-1':   'eu-frankfurt-1',
-    'ap-southeast-1': 'ap-singapore-1',
-    'ap-northeast-1': 'ap-tokyo-1',
-}
-
-_GCP_TO_OCI_REGION = {
-    'us-east4':                'us-ashburn-1',
-    'us-central1':             'us-desmoines-1',
-    'us-west3':                'us-saltlake-2',
-    'northamerica-northeast1': 'ca-montreal-1',
-    'northamerica-northeast2': 'ca-toronto-1',
-    'europe-west3':            'eu-frankfurt-1',
-    'europe-west2':            'uk-london-1',
-    'europe-west8':            'eu-milan-1',
-    'asia-south2':             'ap-delhi-1',
-    'australia-southeast2':    'ap-melbourne-1',
-    'asia-south1':             'ap-mumbai-1',
-    'asia-northeast2':         'ap-osaka-1',
-    'australia-southeast1':    'ap-sydney-1',
-    'asia-northeast1':         'ap-tokyo-1',
-    'southamerica-east1':      'sa-saopaulo-1',
-}
-
-def _oci_db_defaults(d, first_cluster_name=''):
-    return {**d,
-        'module_name':          d.get('module_name') or 'oci_database',
-        'vmcluster_ref':        d.get('vmcluster_ref') or first_cluster_name,
-        'db_home_display_name': d.get('db_home_display_name') or 'dbhome',
-        'db_version':           d.get('db_version') or '19.0.0.0',
-        'db_name':              d.get('db_name') or 'MYDB',
-        'character_set':        d.get('character_set') or 'AL32UTF8',
-        'ncharacter_set':       d.get('ncharacter_set') or 'AL16UTF16',
-        'pdb_name':             d.get('pdb_name') or '',
-        'db_unique_name':       d.get('db_unique_name') or '',
-        'sid_prefix':           d.get('sid_prefix') or '',
-        'create_pdb':           bool(d.get('create_pdb', True)),
-        'auto_backup_enabled':  bool(d.get('auto_backup_enabled', False)),
-        'auto_backup_window':   d.get('auto_backup_window') or 'SLOT_TWO',
-        'recovery_window_in_days': int(d.get('recovery_window_in_days') or 7),
-    }
-
-def _mn_dbhome(base): return f'{base}_dbhome'
-def _mn_cdb(base):    return f'{base}_cdb'
-def _mn_pdb(base):    return f'{base}_pdb'
-
-def oci_dbhome_main(mn, d, vmcluster_ref=''):
-    return render_tf('oci_db_home/main.tf.j2', module_name=mn, vmcluster_ref=vmcluster_ref,
-        display_name=d.get('db_home_display_name','dbhome'), db_version=d.get('db_version','19.0.0.0'))
-
-def oci_dbhome_vars(mn, d, vmcluster_ref=''):
-    return render_tf('oci_db_home/variables.tf.j2', module_name=mn, vmcluster_ref=vmcluster_ref,
-        display_name=d.get('db_home_display_name','dbhome'), db_version=d.get('db_version','19.0.0.0'))
-
-def oci_dbhome_outputs(mn):
-    return render_tf('oci_db_home/outputs.tf.j2', module_name=mn)
-
-def oci_dbhome_tfvars(mn, d, vmcluster_ref=''):
-    return render_tf('oci_db_home/terraform.tfvars.j2', module_name=mn, vmcluster_ref=vmcluster_ref,
-        display_name=d.get('db_home_display_name','dbhome'), db_version=d.get('db_version','19.0.0.0'))
-
-def _cdb_ctx(mn, d, dbhome_ref=''):
-    ab = bool(d.get('auto_backup_enabled', False))
-    return dict(module_name=mn, dbhome_ref=dbhome_ref,
-        db_name=d.get('db_name','MYDB'), character_set=d.get('character_set','AL32UTF8'),
-        ncharacter_set=d.get('ncharacter_set','AL16UTF16'), pdb_name=d.get('pdb_name',''),
-        db_unique_name=d.get('db_unique_name',''), sid_prefix=d.get('sid_prefix',''),
-        auto_backup_enabled=tf_bool(ab), auto_backup_window=d.get('auto_backup_window','SLOT_TWO'),
-        recovery_window_in_days=int(d.get('recovery_window_in_days') or 7))
-
-def oci_cdb_main(mn, d, dbhome_ref=''):    return render_tf('oci_cdb/main.tf.j2', **_cdb_ctx(mn, d, dbhome_ref))
-def oci_cdb_vars(mn, d, dbhome_ref=''):    return render_tf('oci_cdb/variables.tf.j2', **_cdb_ctx(mn, d, dbhome_ref))
-def oci_cdb_outputs(mn):                   return render_tf('oci_cdb/outputs.tf.j2', module_name=mn)
-def oci_cdb_tfvars(mn, d, dbhome_ref=''):  return render_tf('oci_cdb/terraform.tfvars.j2', **_cdb_ctx(mn, d, dbhome_ref))
-
-def oci_pdb_main(mn, d, cdb_ref=''):
-    return render_tf('oci_pdb/main.tf.j2', module_name=mn, cdb_ref=cdb_ref, pdb_name=d.get('pdb_name','MYPDB'))
-def oci_pdb_vars(mn, d, cdb_ref=''):
-    return render_tf('oci_pdb/variables.tf.j2', module_name=mn, cdb_ref=cdb_ref, pdb_name=d.get('pdb_name','MYPDB'))
-def oci_pdb_outputs(mn):
-    return render_tf('oci_pdb/outputs.tf.j2', module_name=mn)
-def oci_pdb_tfvars(mn, d, cdb_ref=''):
-    return render_tf('oci_pdb/terraform.tfvars.j2', module_name=mn, cdb_ref=cdb_ref, pdb_name=d.get('pdb_name','MYPDB'))
-
-
-# ─────────────────────────────────────────────
-#  AWS ROOT
-# ─────────────────────────────────────────────
-
-def build_root_main(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None, iac_tool='terraform'):
-    aws_region = 'us-east-1'
-    for n in (networks or []):
-        if n.get('region'): aws_region = n['region']; break
-    oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
-    return render_tf('aws_root/main.tf.j2',
-        networks=networks, infras=infras, peerings=peerings,
-        clusters=clusters, avmclusters=avmclusters or [],
-        oci_databases=oci_databases or [],
-        oci_region=oci_region,
-        iac_tool=iac_tool)
-
-def build_root_vars(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None):
-    aws_region = 'us-east-1'
-    for n in (networks or []):
-        if n.get('region'): aws_region = n['region']; break
-    oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
-    return render_tf('aws_root/variables.tf.j2',
-        aws_region=aws_region, oci_region=oci_region,
-        oci_databases=oci_databases or [])
-
-def build_root_tfvars(networks, infras, peerings, clusters, avmclusters=None, iac_tool='terraform'):
-    avmclusters = avmclusters or []
-    all_tags = {}
-    for items in [networks, infras, peerings, clusters, avmclusters]:
-        for item in items:
-            all_tags.update(item.get('tags', {}))
-    region = 'us-east-1'
-    for items in [networks, infras]:
-        for item in items:
-            if item.get('region'): region = item['region']; break
-    return render_tf('aws_root/terraform.tfvars.j2',
-        aws_region=region,
-        networks=networks, infras=infras, peerings=peerings,
-        clusters=clusters, avmclusters=avmclusters,
-        tags=all_tags if all_tags else {'ManagedBy': 'Terraform'},
-    )
-
-
-# ═════════════════════════════════════════════
-#  GCP MODULE 0 — google_oracle_database_odb_network
-# ═════════════════════════════════════════════
-
-def gcp0_main(mn):
-    return render_tf('gcp_odb_network/main.tf.j2', module_name=mn)
-
-def gcp0_vars(mn, d):
-    return render_tf('gcp_odb_network/variables.tf.j2',
-        module_name=mn,
-        odb_network_id=d.get('odb_network_id', ''),
-        location=d.get('location', ''),
-        network=d.get('network', ''),
-        project=d.get('project', ''),
-        gcp_oracle_zone=d.get('gcp_oracle_zone', ''),
-        deletion_protection=tf_bool(d.get('deletion_protection', True)),
-        labels=d.get('labels', {}),
-    )
-
-def gcp0_outputs(mn):
-    return render_tf('gcp_odb_network/outputs.tf.j2', module_name=mn)
-
-def gcp0_tfvars(mn, d):
-    return render_tf('gcp_odb_network/terraform.tfvars.j2',
-        module_name=mn,
-        odb_network_id=d.get('odb_network_id', '') or 'my-odb-network',
-        location=d.get('location', '') or 'us-east4',
-        network=d.get('network', '') or 'projects/my-project/global/networks/default',
-        project=d.get('project', ''),
-        gcp_oracle_zone=d.get('gcp_oracle_zone', ''),
-        deletion_protection=tf_bool(d.get('deletion_protection', True)),
-        labels=d.get('labels', {}),
-    )
-
-
-# ═════════════════════════════════════════════
-#  GCP MODULE 1 — google_oracle_database_odb_subnet
-# ═════════════════════════════════════════════
-
-def _gcp_subnet_ctx(d, mn0='', defaults=False):
-    odb_net = d.get('odb_network', '')
-    return dict(
-        odb_subnet_id=d.get('odb_subnet_id', '') or ('my-odb-subnet' if defaults else ''),
-        location=d.get('location', '') or ('us-east4' if defaults else ''),
-        odb_network=odb_net,
-        odb_network_is_literal=bool(odb_net) and not is_ref(odb_net),
-        cidr_range=d.get('cidr_range', '') or ('10.0.1.0/24' if defaults else ''),
-        purpose=d.get('purpose', 'CLIENT_SUBNET'),
-        project=d.get('project', ''),
-        deletion_protection=tf_bool(d.get('deletion_protection', True)),
-        mn0=mn0,
-    )
-
-def gcp_subnet_main(mn):
-    return render_tf('gcp_odb_subnet/main.tf.j2', module_name=mn)
-
-def gcp_subnet_vars(mn, d, mn0=''):
-    return render_tf('gcp_odb_subnet/variables.tf.j2', module_name=mn, **_gcp_subnet_ctx(d, mn0))
-
-def gcp_subnet_outputs(mn):
-    return render_tf('gcp_odb_subnet/outputs.tf.j2', module_name=mn)
-
-def gcp_subnet_tfvars(mn, d, mn0=''):
-    return render_tf('gcp_odb_subnet/terraform.tfvars.j2', module_name=mn, **_gcp_subnet_ctx(d, mn0, defaults=True))
-
-
-# ═════════════════════════════════════════════
-#  GCP MODULE 2 — google_oracle_database_cloud_exadata_infrastructure
-# ═════════════════════════════════════════════
-
-def _gcp2_ctx(d, defaults=False):
-    raw_hours  = parse_list(d.get('mw_hours_of_day', ''))
-    raw_weeks  = parse_list(d.get('mw_weeks_of_month', ''))
-    hours_ints = [int(x) for x in raw_hours  if x.strip().lstrip('-').isdigit()]
-    weeks_ints = [int(x) for x in raw_weeks  if x.strip().lstrip('-').isdigit()]
-    return dict(
-        cloud_exadata_infrastructure_id=d.get('cloud_exadata_infrastructure_id', '') or ('my-exadb-infra' if defaults else ''),
-        location=d.get('location', '') or ('us-east4' if defaults else ''),
-        display_name=d.get('display_name', ''),
-        gcp_oracle_zone=d.get('gcp_oracle_zone', ''),
-        project=d.get('project', ''),
-        deletion_protection=tf_bool(d.get('deletion_protection', True)),
-        shape=d.get('shape', 'Exadata.X9M') or 'Exadata.X9M',
-        compute_count=int(d.get('compute_count', 2) or 2),
-        storage_count=int(d.get('storage_count', 3) or 3),
-        total_storage_size_gb=int(d.get('total_storage_size_gb', 0) or 0),
-        customer_contacts=d.get('customer_contacts', []),
-        mw_preference=d.get('mw_preference', 'NO_PREFERENCE'),
-        mw_patching_mode=d.get('mw_patching_mode', 'ROLLING'),
-        mw_is_custom_action_timeout_enabled=tf_bool(d.get('mw_is_custom_action_timeout_enabled', False)),
-        mw_custom_action_timeout_mins=int(d.get('mw_custom_action_timeout_mins', 15) or 15),
-        is_custom_mw=(d.get('mw_preference', '') == 'CUSTOM_PREFERENCE'),
-        mw_lead_time_week=d.get('mw_lead_time_week', ''),
-        mw_months=parse_list(d.get('mw_months', '')),
-        mw_weeks_of_month=weeks_ints,
-        mw_days_of_week=parse_list(d.get('mw_days_of_week', '')),
-        mw_hours_of_day=hours_ints,
-        labels=d.get('labels', {}),
-    )
-
-def gcp2_main(mn):
-    return render_tf('gcp_exadb_infra/main.tf.j2', module_name=mn)
-
-def gcp2_vars(mn, d):
-    return render_tf('gcp_exadb_infra/variables.tf.j2', module_name=mn, **_gcp2_ctx(d))
-
-def gcp2_outputs(mn):
-    return render_tf('gcp_exadb_infra/outputs.tf.j2', module_name=mn)
-
-def gcp2_tfvars(mn, d):
-    return render_tf('gcp_exadb_infra/terraform.tfvars.j2', module_name=mn, **_gcp2_ctx(d, defaults=True))
-
-
-# ═════════════════════════════════════════════
-#  GCP MODULE 2 — google_oracle_database_exadb_vm_cluster
-# ═════════════════════════════════════════════
-
-def _gcp1_ctx(d, mn0='', mn1='', mn2='', mn3='', defaults=False):
-    # If user left these blank, default to the canonical module output references
-    odb_net   = d.get('odb_network', '')    or (f'module.{mn0}.odb_network_name'    if mn0 else '')
-    odb_sub   = d.get('odb_subnet', '')     or (f'module.{mn1}.odb_subnet_name'     if mn1 else '')
-    bak_sub   = d.get('backup_odb_subnet','') or (f'module.{mn2}.odb_subnet_name'   if mn2 else '')
-    exa_infra = d.get('exadata_infrastructure','') or (f'module.{mn3}.infra_name'   if mn3 else '')
-    return dict(
-        exadb_vm_cluster_id=d.get('exadb_vm_cluster_id', '') or ('my-exadb-cluster' if defaults else ''),
-        display_name=d.get('display_name', '') or ('my-exadb-vm-cluster' if defaults else ''),
-        location=d.get('location', '') or ('us-east4' if defaults else ''),
-        gcp_oracle_zone=d.get('gcp_oracle_zone', ''),
-        odb_network=odb_net,
-        odb_network_is_literal=bool(odb_net) and not is_ref(odb_net),
-        odb_subnet=odb_sub,
-        odb_subnet_is_literal=bool(odb_sub) and not is_ref(odb_sub),
-        backup_odb_subnet=bak_sub,
-        backup_subnet_is_literal=bool(bak_sub) and not is_ref(bak_sub),
-        exadata_infrastructure=exa_infra,
-        exainfra_is_literal=bool(exa_infra) and not is_ref(exa_infra),
-        project=d.get('project', ''),
-        deletion_protection=tf_bool(d.get('deletion_protection', True)),
-        gi_version=d.get('gi_version', ''),
-        hostname_prefix=d.get('hostname_prefix', ''),
-        license_type=d.get('license_type', 'LICENSE_INCLUDED'),
-        cluster_name=d.get('cluster_name', ''),
-        node_count=int(d.get('node_count', 2) or 2),
-        enabled_ecpu_count_per_node=int(d.get('enabled_ecpu_count_per_node', 8) or 8),
-        additional_ecpu_count_per_node=int(d.get('additional_ecpu_count_per_node', 0) or 0),
-        vm_file_system_storage_size_gbs=int(d.get('vm_file_system_storage_size_gbs', 60) or 60),
-        ssh_public_keys=d.get('ssh_public_keys', []),
-        dco_diagnostics=tf_bool(d.get('dco_diagnostics', True)),
-        dco_health=tf_bool(d.get('dco_health', True)),
-        dco_incident_logs=tf_bool(d.get('dco_incident_logs', True)),
-        time_zone=d.get('time_zone', ''),
-        system_version=d.get('system_version', ''),
-        memory_per_node_in_gbs=int(d.get('memory_per_node_in_gbs', 0) or 0),
-        db_node_storage_size_per_vm_in_gbs=int(d.get('db_node_storage_size_per_vm_in_gbs', 0) or 0),
-        data_storage_size_in_tbs=int(d.get('data_storage_size_in_tbs', 0) or 0),
-        spare_snapshot_space_in_gbs=int(d.get('spare_snapshot_space_in_gbs', 0) or 0),
-        disk_redundancy=d.get('disk_redundancy', ''),
-        db_servers=d.get('db_servers', []),
-        mn0=mn0, mn1=mn1, mn2=mn2, mn3=mn3,
-        labels=d.get('labels', {}),
-    )
-
-def gcp1_main(mn, d=None, mn0='', mn1='', mn2='', mn3=''):
-    ctx = _gcp1_ctx(d, mn0, mn1, mn2, mn3) if d else {'db_servers': []}
-    return render_tf('gcp_exadb_vm_cluster/main.tf.j2', module_name=mn, **ctx)
-
-def gcp1_vars(mn, d, mn0='', mn1='', mn2='', mn3=''):
-    return render_tf('gcp_exadb_vm_cluster/variables.tf.j2', module_name=mn, **_gcp1_ctx(d, mn0, mn1, mn2, mn3))
-
-def gcp1_outputs(mn):
-    return render_tf('gcp_exadb_vm_cluster/outputs.tf.j2', module_name=mn)
-
-def gcp1_tfvars(mn, d, mn0='', mn1='', mn2='', mn3=''):
-    return render_tf('gcp_exadb_vm_cluster/terraform.tfvars.j2', module_name=mn, **_gcp1_ctx(d, mn0, mn1, mn2, mn3, defaults=True))
-
-
-# ═════════════════════════════════════════════
-#  GCP ROOT
-# ═════════════════════════════════════════════
-
-def gcp_build_root_vars(networks, infras, clusters, oci_databases=None, oci_region='us-ashburn-1'):
-    gcp_project = 'my-gcp-project'
-    gcp_region  = 'us-east4'
-    for n in (networks or []):
-        if n.get('project'): gcp_project = n['project']; break
-    for items in [networks, infras, clusters]:
-        for item in items:
-            if item.get('location'): gcp_region = item['location']; break
-    return render_tf('gcp_root/variables.tf.j2',
-        gcp_project=gcp_project, gcp_region=gcp_region,
-        oci_databases=oci_databases or [], oci_region=oci_region)
-
-def gcp_build_root_main(networks, infras, clusters, oci_databases=None, oci_region='us-ashburn-1', iac_tool='terraform'):
-    return render_tf('gcp_root/main.tf.j2', networks=networks, infras=infras, clusters=clusters,
-                     oci_databases=oci_databases or [], oci_region=oci_region, iac_tool=iac_tool)
-
-def gcp_build_root_tfvars(networks, infras, clusters):
-    proj = 'my-gcp-project'
-    loc  = 'us-east4'
-    all_labels = {}
-    for items in [networks, infras, clusters]:
-        for item in items:
-            all_labels.update(item.get('labels', {}))
-            if item.get('project'): proj = item['project']
-            if item.get('location'): loc = item['location']
-    return render_tf('gcp_root/terraform.tfvars.j2',
-        gcp_project=proj, gcp_region=loc,
-        networks=networks, infras=infras, clusters=clusters,
-        labels=all_labels if all_labels else {'managed-by': 'terraform'},
-    )
-
-
-# ─────────────────────────────────────────────
-#  GENERATE ALL FILES
-# ─────────────────────────────────────────────
-
-def _aws_net_defaults(d):
-    """Ensure required fields have defaults for tfvars rendering."""
-    cdn = d.get('custom_domain_name', '')
-    return {**d,
-        'display_name': d.get('display_name') or 'odb-network',
-        'availability_zone_id': d.get('availability_zone_id') or 'use1-az6',
-        'client_subnet_cidr': d.get('client_subnet_cidr') or '10.2.0.0/24',
-        'backup_subnet_cidr': d.get('backup_subnet_cidr') or '10.2.1.0/24',
-        's3_access': 'ENABLED' if d.get('s3_access') else 'DISABLED',
-        'zero_etl_access': 'ENABLED' if d.get('zero_etl_access') else 'DISABLED',
-        'region': d.get('region', ''),
-        'custom_domain_name': cdn,
-        # clear default_dns_prefix when custom_domain_name is set (mutually exclusive)
-        'default_dns_prefix': '' if cdn else d.get('default_dns_prefix', ''),
-    }
-
-def _aws_infra_defaults(d):
-    return {**d,
-        'display_name': d.get('display_name') or 'odb-exadata-infra',
-        'shape': d.get('shape') or 'Exadata.X11M',
-        'compute_count': int(d.get('compute_count') or 2),
-        'storage_count': int(d.get('storage_count') or 3),
-        'availability_zone_id': d.get('availability_zone_id') or 'use1-az6',
-    }
-
-def _aws_peer_defaults(d, first_network_name=''):
-    return {**d,
-        'display_name': d.get('display_name') or 'odb-peering',
-        'peer_network_id': d.get('peer_network_id') or 'vpc-CHANGEME',
-        'network_ref': d.get('network_ref') or first_network_name,
-    }
-
-def _aws_cluster_defaults(d, first_network_name='', first_infra_name=''):
-    return {**d,
-        'display_name': d.get('display_name') or 'odb-vm-cluster',
-        'cpu_core_count': int(d.get('cpu_core_count') or 16),
-        'gi_version': d.get('gi_version') or '23.0.0.0',
-        'hostname_prefix': d.get('hostname_prefix') or 'vm',
-        'license_model': d.get('license_model') or 'LICENSE_INCLUDED',
-        'ssh_public_keys': d.get('ssh_public_keys') or [],
-        'db_servers': d.get('db_servers') or [],
-        'db_servers_mode': d.get('db_servers_mode') or 'auto',
-        'vm_mode': d.get('vm_mode') or 'arn',
-        'network_ref': d.get('network_ref') or first_network_name,
-        'infra_ref': d.get('infra_ref') or first_infra_name,
-    }
-
-def _aws_avmc_defaults(d, first_network_name='', first_infra_name=''):
-    return {**d,
-        'display_name': d.get('display_name') or 'odb-avmc',
-        'autonomous_data_storage_size_in_tbs': float(d.get('autonomous_data_storage_size_in_tbs') or 5),
-        'cpu_core_count_per_node': int(d.get('cpu_core_count_per_node') or 40),
-        'memory_per_oracle_compute_unit_in_gbs': int(d.get('memory_per_oracle_compute_unit_in_gbs') or 2),
-        'total_container_databases': int(d.get('total_container_databases') or 2),
-        'scan_listener_port_non_tls': int(d.get('scan_listener_port_non_tls') or 1521),
-        'scan_listener_port_tls': int(d.get('scan_listener_port_tls') or 2484),
-        'license_model': d.get('license_model') or 'LICENSE_INCLUDED',
-        'is_mtls_enabled_vm_cluster': bool(d.get('is_mtls_enabled_vm_cluster', False)),
-        'db_servers': d.get('db_servers') or [],
-        'db_servers_mode': d.get('db_servers_mode') or 'auto',
-        'network_ref': d.get('network_ref') or first_network_name,
-        'infra_ref': d.get('infra_ref') or first_infra_name,
-        'description': d.get('description') or '',
-        'time_zone': d.get('time_zone') or '',
-        'mw_preference': d.get('mw_preference') or 'NO_PREFERENCE',
-        'mw_patching_mode': d.get('mw_patching_mode') or 'ROLLING',
-        'mw_is_custom_action_timeout_enabled': bool(d.get('mw_is_custom_action_timeout_enabled', False)),
-        'mw_custom_action_timeout_mins': int(d.get('mw_custom_action_timeout_mins') or 15),
-    }
-
-def _gcp_net_defaults(d):
-    csm = d.get('client_subnet_module') or (d.get('module_name', 'gcp-net') + '-client-subnet')
-    bsm = d.get('backup_subnet_module') or (d.get('module_name', 'gcp-net') + '-backup-subnet')
-    return {**d,
-        'odb_network_id': d.get('odb_network_id') or 'my-odb-network',
-        'network': d.get('network') or 'projects/PROJECT/global/networks/default',
-        'client_subnet_module': csm,
-        'backup_subnet_module': bsm,
-        'client_subnet_id': d.get('client_subnet_id') or (csm),
-        'client_cidr': d.get('client_cidr') or d.get('client_subnet_cidr') or '10.0.1.0/24',
-        'backup_subnet_id': d.get('backup_subnet_id') or (bsm),
-        'backup_cidr': d.get('backup_cidr') or d.get('backup_subnet_cidr') or '10.0.2.0/24',
-    }
-
-def _gcp_infra_defaults(d):
-    return {**d,
-        'cloud_exadata_infrastructure_id': d.get('cloud_exadata_infrastructure_id') or 'my-exadb-infra',
-        'display_name': d.get('display_name') or 'my-exadb-infra',
-        'gcp_oracle_zone': d.get('gcp_oracle_zone') or '',
-        'shape': d.get('shape') or 'Exadata.X9M',
-        'compute_count': int(d.get('compute_count') or 2),
-        'storage_count': int(d.get('storage_count') or 3),
-    }
-
-def _gcp_cluster_defaults(d, first_net=None, first_infra=None):
-    first_net = first_net or {}
-    net_mn = first_net.get('module_name', 'gcp_odb_network')
-    return {**d,
-        'exadb_vm_cluster_id': d.get('exadb_vm_cluster_id') or 'my-exadb-cluster',
-        'display_name': d.get('display_name') or 'my-exadb-vm-cluster',
-        'gcp_oracle_zone': d.get('gcp_oracle_zone') or '',
-        'gi_version': d.get('gi_version') or '23.0.0.0',
-        'hostname_prefix': d.get('hostname_prefix') or 'vm',
-        'license_type': d.get('license_type') or 'LICENSE_INCLUDED',
-        'node_count': int(d.get('node_count') or 2),
-        'enabled_ecpu_count_per_node': int(d.get('enabled_ecpu_count_per_node') or 8),
-        'ssh_public_keys': d.get('ssh_public_keys') or [],
-        'network_ref': d.get('network_ref') or net_mn,
-        'client_subnet_ref': d.get('client_subnet_ref') or first_net.get('client_subnet_module') or (net_mn + '-client-subnet'),
-        'backup_subnet_ref': d.get('backup_subnet_ref') or first_net.get('backup_subnet_module') or (net_mn + '-backup-subnet'),
-        'infra_ref': d.get('infra_ref') or (first_infra or {}).get('module_name') or 'gcp_exadb_infra',
-    }
-
 
 def generate_all(data: dict) -> dict:
-    """Generate all Terraform files. Returns a dict of path -> content."""
+    if data.get('iac_tool') == 'cloudformation':
+        return {'cfn': generate_cfn(data)}
     cloud = data.get('cloud', 'aws')
-
+    if cloud == 'azure':
+        return generate_azure_tf(data)
     if cloud == 'gcp':
-        # ── Multi-instance GCP ──────────────────────────────────────────────
-        raw_nets    = data.get('gcp_networks', [])
-        raw_infras  = data.get('gcp_infras', [])
-        raw_clusters = data.get('gcp_clusters', [])
-        raw_oci_dbs  = data.get('gcp_oci_databases', [])
-
-        # Default module names when not provided
-        if not raw_nets:
-            raw_nets = [{**data.get('gcp_module_0', {}), 'module_name': data.get('gcp_module_names',{}).get('0','gcp_odb_network'),
-                         'client_subnet_module': data.get('gcp_module_names',{}).get('1','gcp_odb_client_subnet'),
-                         'backup_subnet_module': data.get('gcp_module_names',{}).get('2','gcp_odb_backup_subnet'),
-                         'client_subnet_id': data.get('gcp_module_1',{}).get('odb_subnet_id','gcp-odb-client-subnet'),
-                         'client_cidr': data.get('gcp_module_1',{}).get('cidr_range','10.0.1.0/24'),
-                         'backup_subnet_id': data.get('gcp_module_2',{}).get('odb_subnet_id','gcp-odb-backup-subnet'),
-                         'backup_cidr': data.get('gcp_module_2',{}).get('cidr_range','10.0.2.0/24')}]
-        if not raw_infras:
-            raw_infras = [{**data.get('gcp_module_3', {}), 'module_name': data.get('gcp_module_names',{}).get('3','gcp_exadb_infra')}]
-        if not raw_clusters:
-            raw_clusters = [{**data.get('gcp_module_4', {}), 'module_name': data.get('gcp_module_names',{}).get('4','gcp_exadb_vm_cluster')}]
-
-        networks  = [_gcp_net_defaults(n) for n in raw_nets]
-        infras    = [_gcp_infra_defaults(i) for i in raw_infras]
-        clusters  = [_gcp_cluster_defaults(c, networks[0] if networks else None, infras[0] if infras else None) for c in raw_clusters]
-
-        first_cl_name = clusters[0]['module_name'] if clusters else ''
-        oci_dbs = [_oci_db_defaults(db, first_cl_name) for db in raw_oci_dbs]
-
-        gcp_region = 'us-east4'
-        for n in networks:
-            if n.get('location'): gcp_region = n['location']; break
-        oci_region = _GCP_TO_OCI_REGION.get(gcp_region, 'us-ashburn-1')
-
-        iac_tool = data.get('iac_tool', 'terraform')
-        files = {
-            'main.tf':          gcp_build_root_main(networks, infras, clusters, oci_dbs, oci_region, iac_tool),
-            'variables.tf':     gcp_build_root_vars(networks, infras, clusters, oci_dbs, oci_region),
-            'terraform.tfvars': gcp_build_root_tfvars(networks, infras, clusters),
-        }
-        # ODB Networks + subnets
-        for net in networks:
-            mn = net['module_name']
-            net_data = {**net, 'odb_network_id': net.get('odb_network_id',''), 'location': net.get('location',''), 'network': net.get('network',''), 'project': net.get('project',''), 'gcp_oracle_zone': net.get('gcp_oracle_zone',''), 'deletion_protection': net.get('deletion_protection', True), 'labels': net.get('labels',{})}
-            files[f'modules/{mn}/main.tf']         = gcp0_main(mn)
-            files[f'modules/{mn}/variables.tf']    = gcp0_vars(mn, net_data)
-            files[f'modules/{mn}/outputs.tf']      = gcp0_outputs(mn)
-            files[f'modules/{mn}/terraform.tfvars']= gcp0_tfvars(mn, net_data)
-            for smn, purpose, sid, scidr in [
-                (net['client_subnet_module'], 'CLIENT_SUBNET', net.get('client_subnet_id',''), net.get('client_cidr','')),
-                (net['backup_subnet_module'], 'BACKUP_SUBNET', net.get('backup_subnet_id',''), net.get('backup_cidr','')),
-            ]:
-                sd = {'odb_subnet_id': sid, 'location': net.get('location',''), 'cidr_range': scidr, 'purpose': purpose, 'project': net.get('project',''), 'deletion_protection': net.get('deletion_protection', True)}
-                files[f'modules/{smn}/main.tf']         = gcp_subnet_main(smn)
-                files[f'modules/{smn}/variables.tf']    = gcp_subnet_vars(smn, sd, mn)
-                files[f'modules/{smn}/outputs.tf']      = gcp_subnet_outputs(smn)
-                files[f'modules/{smn}/terraform.tfvars']= gcp_subnet_tfvars(smn, sd, mn)
-        # Exadata Infras
-        for inf in infras:
-            mn = inf['module_name']
-            files[f'modules/{mn}/main.tf']         = gcp2_main(mn)
-            files[f'modules/{mn}/variables.tf']    = gcp2_vars(mn, inf)
-            files[f'modules/{mn}/outputs.tf']      = gcp2_outputs(mn)
-            files[f'modules/{mn}/terraform.tfvars']= gcp2_tfvars(mn, inf)
-        # VM Clusters
-        for cl in clusters:
-            mn   = cl['module_name']
-            net_mn  = cl['network_ref']
-            clsn_mn = cl['client_subnet_ref']
-            bksn_mn = cl['backup_subnet_ref']
-            inf_mn  = cl['infra_ref']
-            files[f'modules/{mn}/main.tf']         = gcp1_main(mn, cl, net_mn, clsn_mn, bksn_mn, inf_mn)
-            files[f'modules/{mn}/variables.tf']    = gcp1_vars(mn, cl, net_mn, clsn_mn, bksn_mn, inf_mn)
-            files[f'modules/{mn}/outputs.tf']      = gcp1_outputs(mn)
-            files[f'modules/{mn}/terraform.tfvars']= gcp1_tfvars(mn, cl, net_mn, clsn_mn, bksn_mn, inf_mn)
-        # OCI DB Home / CDB / PDB
-        for db in oci_dbs:
-            base = db['module_name']
-            vcr  = db.get('vmcluster_ref', first_cl_name)
-            mn_h = _mn_dbhome(base); mn_c = _mn_cdb(base); mn_p = _mn_pdb(base)
-            files[f'modules/{mn_h}/main.tf']          = oci_dbhome_main(mn_h, db, vcr)
-            files[f'modules/{mn_h}/variables.tf']     = oci_dbhome_vars(mn_h, db, vcr)
-            files[f'modules/{mn_h}/outputs.tf']       = oci_dbhome_outputs(mn_h)
-            files[f'modules/{mn_h}/terraform.tfvars'] = oci_dbhome_tfvars(mn_h, db, vcr)
-            files[f'modules/{mn_c}/main.tf']          = oci_cdb_main(mn_c, db, mn_h)
-            files[f'modules/{mn_c}/variables.tf']     = oci_cdb_vars(mn_c, db, mn_h)
-            files[f'modules/{mn_c}/outputs.tf']       = oci_cdb_outputs(mn_c)
-            files[f'modules/{mn_c}/terraform.tfvars'] = oci_cdb_tfvars(mn_c, db, mn_h)
-            if db.get('create_pdb') and db.get('pdb_name'):
-                files[f'modules/{mn_p}/main.tf']          = oci_pdb_main(mn_p, db, mn_c)
-                files[f'modules/{mn_p}/variables.tf']     = oci_pdb_vars(mn_p, db, mn_c)
-                files[f'modules/{mn_p}/outputs.tf']       = oci_pdb_outputs(mn_p)
-                files[f'modules/{mn_p}/terraform.tfvars'] = oci_pdb_tfvars(mn_p, db, mn_c)
-        return files
-
-    # ── Multi-instance AWS ──────────────────────────────────────────────────
-    raw_nets     = data.get('aws_networks', [])
-    raw_infras   = data.get('aws_infras', [])
-    raw_peerings = data.get('aws_peerings', [])
-    raw_clusters = data.get('aws_clusters', [])
-    raw_avmc     = data.get('aws_avmclusters', [])
-
-    # Backward compatibility: fall back to single-instance module_0/1/2/3
-    if not raw_nets:
-        d0 = data.get('module_0', {})
-        mn0 = data.get('module_names', {}).get('0', 'odb_network')
-        raw_nets = [{**d0, 'module_name': mn0}]
-    if not raw_infras:
-        d1 = data.get('module_1', {})
-        mn1 = data.get('module_names', {}).get('1', 'odb_exadata_infra')
-        raw_infras = [{**d1, 'module_name': mn1}]
-    if not raw_peerings:
-        d2 = data.get('module_2', {})
-        mn2 = data.get('module_names', {}).get('2', 'odb_peering')
-        raw_peerings = [{**d2, 'module_name': mn2}]
-    if not raw_clusters:
-        d3 = data.get('module_3', {})
-        mn3 = data.get('module_names', {}).get('3', 'odb_vm_cluster')
-        raw_clusters = [{**d3, 'module_name': mn3}]
-
-    first_net_name  = raw_nets[0].get('module_name', 'odb_network')
-    first_inf_name  = raw_infras[0].get('module_name', 'odb_exadata_infra')
-    networks    = [_aws_net_defaults(n) for n in raw_nets]
-    infras      = [_aws_infra_defaults(i) for i in raw_infras]
-    peerings    = [_aws_peer_defaults(p, first_net_name) for p in raw_peerings]
-    clusters    = [_aws_cluster_defaults(c, first_net_name, first_inf_name) for c in raw_clusters]
-    avmclusters = [_aws_avmc_defaults(a, first_net_name, first_inf_name) for a in raw_avmc]
-
-    raw_oci_dbs   = data.get('aws_oci_databases', [])
-    first_cl_name = clusters[0]['module_name'] if clusters else (avmclusters[0]['module_name'] if avmclusters else '')
-    oci_dbs = [_oci_db_defaults(db, first_cl_name) for db in raw_oci_dbs]
-
-    iac_tool = data.get('iac_tool', 'terraform')
-
-    files = {
-        'main.tf':          build_root_main(networks, infras, peerings, clusters, avmclusters, oci_dbs, iac_tool),
-        'variables.tf':     build_root_vars(networks, infras, peerings, clusters, avmclusters, oci_dbs),
-        'terraform.tfvars': build_root_tfvars(networks, infras, peerings, clusters, avmclusters),
-    }
-    for net in networks:
-        mn = net['module_name']
-        files[f'modules/{mn}/main.tf']          = mod0_main(mn, net)
-        files[f'modules/{mn}/variables.tf']     = mod0_vars(mn, net)
-        files[f'modules/{mn}/outputs.tf']       = mod0_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod0_tfvars(mn, net)
-    for inf in infras:
-        mn = inf['module_name']
-        files[f'modules/{mn}/main.tf']          = mod1_main(mn)
-        files[f'modules/{mn}/variables.tf']     = mod1_vars(mn, inf)
-        files[f'modules/{mn}/outputs.tf']       = mod1_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod1_tfvars(mn, inf)
-    for peer in peerings:
-        mn  = peer['module_name']
-        mn0 = peer.get('network_ref', first_net_name)
-        files[f'modules/{mn}/main.tf']          = mod2_main(mn)
-        files[f'modules/{mn}/variables.tf']     = mod2_vars(mn, peer, mn0)
-        files[f'modules/{mn}/outputs.tf']       = mod2_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod2_tfvars(mn, peer, mn0)
-    for cl in clusters:
-        mn  = cl['module_name']
-        mn0 = cl.get('network_ref', first_net_name)
-        mn1 = cl.get('infra_ref', first_inf_name)
-        files[f'modules/{mn}/main.tf']          = mod3_main(mn, cl, mn0, mn1)
-        files[f'modules/{mn}/variables.tf']     = mod3_vars(mn, cl, mn0, mn1)
-        files[f'modules/{mn}/outputs.tf']       = mod3_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod3_tfvars(mn, cl, mn0, mn1)
-    for av in avmclusters:
-        mn  = av['module_name']
-        mn0 = av.get('network_ref', first_net_name)
-        mn1 = av.get('infra_ref', first_inf_name)
-        files[f'modules/{mn}/main.tf']          = mod4_main(mn, av, mn0, mn1)
-        files[f'modules/{mn}/variables.tf']     = mod4_vars(mn, av, mn0, mn1)
-        files[f'modules/{mn}/outputs.tf']       = mod4_outputs(mn)
-        files[f'modules/{mn}/terraform.tfvars'] = mod4_tfvars(mn, av, mn0, mn1)
-    for db in oci_dbs:
-        base = db['module_name']
-        vcr  = db.get('vmcluster_ref', first_cl_name)
-        mn_h = _mn_dbhome(base); mn_c = _mn_cdb(base); mn_p = _mn_pdb(base)
-        files[f'modules/{mn_h}/main.tf']          = oci_dbhome_main(mn_h, db, vcr)
-        files[f'modules/{mn_h}/variables.tf']     = oci_dbhome_vars(mn_h, db, vcr)
-        files[f'modules/{mn_h}/outputs.tf']       = oci_dbhome_outputs(mn_h)
-        files[f'modules/{mn_h}/terraform.tfvars'] = oci_dbhome_tfvars(mn_h, db, vcr)
-        files[f'modules/{mn_c}/main.tf']          = oci_cdb_main(mn_c, db, mn_h)
-        files[f'modules/{mn_c}/variables.tf']     = oci_cdb_vars(mn_c, db, mn_h)
-        files[f'modules/{mn_c}/outputs.tf']       = oci_cdb_outputs(mn_c)
-        files[f'modules/{mn_c}/terraform.tfvars'] = oci_cdb_tfvars(mn_c, db, mn_h)
-        if db.get('create_pdb') and db.get('pdb_name'):
-            files[f'modules/{mn_p}/main.tf']          = oci_pdb_main(mn_p, db, mn_c)
-            files[f'modules/{mn_p}/variables.tf']     = oci_pdb_vars(mn_p, db, mn_c)
-            files[f'modules/{mn_p}/outputs.tf']       = oci_pdb_outputs(mn_p)
-            files[f'modules/{mn_p}/terraform.tfvars'] = oci_pdb_tfvars(mn_p, db, mn_c)
-    return files
-
+        return generate_gcp_tf(data)
+    if cloud == 'dg':
+        return generate_oci_dg_tf(data)
+    return generate_aws_tf(data)
 
 # ─────────────────────────────────────────────
 #  ROUTES
@@ -1034,24 +127,435 @@ def api_llm_fill():
     if not prompt:
         return jsonify({'error': 'prompt is required'}), 400
     system_msg = """You are a Terraform infrastructure assistant for Oracle Database@AWS and DB@GCP.
-Interpret a natural-language infrastructure request and return a valid Terraflow Studio payload JSON.
-The payload schema includes: cloud, aws_networks, aws_infras, aws_peerings, aws_clusters, aws_avmclusters, aws_oci_databases, gcp_networks, gcp_infras, gcp_clusters.
-Key rules: module_name is a unique slug, db_name max 8 chars, aws shapes: Exadata.X9M/X10M/X11M, license_model: LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE.
-Return ONLY a valid JSON object with exactly two keys: {"payload": {...}, "explanation": "..."}
-No markdown, no preamble."""
+Return ONLY a raw JSON object — no markdown, no code fences, no explanation outside the JSON.
+
+Output format (two keys, no others):
+{"payload": { ... }, "explanation": "one sentence"}
+
+Payload keys (use EXACTLY these names, omit unused ones):
+  cloud            "aws" or "gcp"
+  aws_networks     list of ODB Network objects
+  aws_infras       list of Exadata Infrastructure objects
+  aws_peerings     list of Network Peering objects
+  aws_clusters     list of VM Cluster objects
+  aws_avmclusters  list of Autonomous VM Cluster objects
+  aws_oci_databases list of OCI Database objects
+  gcp_networks     list of GCP ODB Network objects
+  gcp_infras       list of GCP Exadata Infrastructure objects
+  gcp_clusters     list of GCP VM Cluster objects
+
+Rules: module_name is a unique snake_case slug. shape: Exadata.X11M (default), X10M, X9M.
+license_model: LICENSE_INCLUDED or BRING_YOUR_OWN_LICENSE. db_name: max 8 alphanumeric chars.
+availability_zone_id examples: use1-az4, use1-az6, use2-az1, usw2-az3.
+
+Example output for "Exadata infra in us-east-1 az4":
+{"payload":{"cloud":"aws","aws_networks":[{"module_name":"odb_network","display_name":"ODB Network","client_subnet_cidr":"10.2.0.0/24","backup_subnet_cidr":"10.2.1.0/24"}],"aws_infras":[{"module_name":"odb_infra","display_name":"Exadata Infra","shape":"Exadata.X11M","compute_count":2,"storage_count":3,"availability_zone_id":"use1-az4","network_ref":"odb_network"}]},"explanation":"Created ODB network and Exadata X11M infra in us-east-1 az4."}"""
+    # Augment with retrieved knowledge
+    rag_context = rag_module.build_context(prompt, k=5)
+    if rag_context:
+        system_msg += f'\n\nRelevant reference documentation:\n{rag_context}'
     user_msg = f"Cloud: {cloud}\nCurrent: {json.dumps(current)[:3000]}\nRequest: {prompt}\nReturn JSON object."
     try:
         reply = llm_module.chat([{'role':'system','content':system_msg},{'role':'user','content':user_msg}])
         clean = reply.strip()
-        if clean.startswith('```'): clean = '\n'.join(clean.split('\n')[1:])
-        if clean.endswith('```'):   clean = '\n'.join(clean.split('\n')[:-1])
-        result = json.loads(clean.strip())
-        return jsonify({'payload': result.get('payload',{}), 'explanation': result.get('explanation','')})
+        # Strip markdown fences anywhere in the response
+        clean = re.sub(r'```[a-z]*\n?', '', clean).strip()
+        # Skip any preamble text before the opening brace
+        start = clean.find('{')
+        if start > 0:
+            clean = clean[start:]
+        # raw_decode parses the first valid JSON object and tolerates trailing text
+        result, _ = json.JSONDecoder().raw_decode(clean)
+        payload = result.get('payload', {})
+        # LLM sometimes puts explanation inside payload — hoist it out
+        explanation = result.get('explanation', '') or payload.pop('explanation', '')
+        return jsonify({'payload': payload, 'explanation': explanation,
+                        'rag_sources': [c['source'] for c in rag_module.retrieve(prompt, k=5)]})
     except json.JSONDecodeError as e:
         return jsonify({'error': f'LLM returned invalid JSON: {e}', 'raw': reply[:500]}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/llm/explain', methods=['POST'])
+def api_llm_explain():
+    body     = request.get_json(force=True)
+    content  = body.get('content', '').strip()
+    filename = body.get('filename', 'terraform file').strip()
+    if not content:
+        return jsonify({'error': 'content is required'}), 400
+    system_msg = (
+        "You are a senior Terraform and Oracle Database infrastructure engineer.\n"
+        "Explain the following Terraform HCL file in clear, concise language.\n\n"
+        "Structure your explanation as:\n"
+        "1. What this file does (1-2 sentences)\n"
+        "2. Key resources or variables defined, with their purpose\n"
+        "3. Notable configuration choices, cross-module dependencies, or gotchas\n\n"
+        "Be concrete and technical. Use the resource/variable names from the code. "
+        "Keep the total response under 320 words. Plain text, no markdown."
+    )
+    rag_query   = (filename + ' ' + content[:400]).strip()
+    rag_context = rag_module.build_context(rag_query, k=3)
+    if rag_context:
+        system_msg += f'\n\nRelevant reference documentation:\n{rag_context}'
+    user_msg = f'File: {filename}\n\n```hcl\n{content[:8000]}\n```'
+    try:
+        reply = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        return jsonify({'explanation': reply.strip()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────
+#  AI TOOLS — PLAN EXPLAINER & ERROR TROUBLESHOOTER
+# ─────────────────────────────────────────────
+
+def _collect_cidrs(data: dict) -> list[tuple[str, str]]:
+    """Return list of (label, cidr_string) from every CIDR field in the payload."""
+    entries = []
+    cloud = data.get('cloud', 'aws')
+
+    if cloud == 'aws':
+        for i, net in enumerate(data.get('aws_networks', [])):
+            name = net.get('module_name') or net.get('display_name') or f'aws_net[{i}]'
+            for field in ('client_subnet_cidr', 'backup_subnet_cidr'):
+                v = net.get(field, '').strip()
+                if v:
+                    entries.append((f'{name}.{field}', v))
+        for i, peer in enumerate(data.get('aws_peerings', [])):
+            pname = peer.get('module_name') or peer.get('display_name') or f'peering[{i}]'
+            for j, cidr in enumerate(peer.get('peer_network_cidrs', [])):
+                if cidr and cidr.strip():
+                    entries.append((f'{pname}.peer_cidrs[{j}]', cidr.strip()))
+    else:
+        for i, net in enumerate(data.get('gcp_networks', [])):
+            nname = net.get('module_name') or net.get('odb_network_id') or f'gcp_net[{i}]'
+            for j, sub in enumerate(net.get('subnets', [])):
+                v = sub.get('cidr_range', '').strip()
+                if v:
+                    label = f'{nname}.subnet[{j}]({sub.get("purpose","")}).cidr_range'
+                    entries.append((label, v))
+    return entries
+
+
+def _check_cidr_overlaps(data: dict) -> list[dict]:
+    """Deterministically check for overlapping CIDRs across all networks. Returns findings list."""
+    import ipaddress
+    findings = []
+    cidrs = _collect_cidrs(data)
+    parsed = []
+    for label, raw in cidrs:
+        try:
+            parsed.append((label, raw, ipaddress.ip_network(raw, strict=False)))
+        except ValueError:
+            findings.append({
+                'severity': 'medium',
+                'category': 'Network Security',
+                'resource': label,
+                'issue': f'Invalid CIDR format: {raw!r}',
+                'recommendation': 'Correct the CIDR notation (e.g. 10.0.0.0/24).',
+                'file': '',
+            })
+
+    # Check every pair for overlap
+    seen = set()
+    for i in range(len(parsed)):
+        for j in range(i + 1, len(parsed)):
+            la, ra, na = parsed[i]
+            lb, rb, nb = parsed[j]
+            key = tuple(sorted([la, lb]))
+            if key in seen:
+                continue
+            if na.overlaps(nb):
+                seen.add(key)
+                findings.append({
+                    'severity': 'high',
+                    'category': 'Network Security',
+                    'resource': f'{la}  ↔  {lb}',
+                    'issue': f'Overlapping CIDRs: {ra} and {rb} share address space.',
+                    'recommendation': (
+                        'Assign non-overlapping CIDR ranges to each subnet. '
+                        'Overlapping ranges will cause routing conflicts and peering failures.'
+                    ),
+                    'file': '',
+                })
+    return findings
+
+
+@app.route('/api/ai/security-review', methods=['POST'])
+def api_ai_security_review():
+    data  = request.get_json(force=True)
+    cloud = data.get('cloud', 'aws')
+
+    # Generate all HCL files from the current payload
+    try:
+        files = generate_all(data)
+    except Exception as e:
+        return jsonify({'error': f'Generation failed: {e}'}), 500
+
+    if not files:
+        return jsonify({'error': 'No files generated — configure at least one resource first.'}), 400
+
+    # Concatenate file contents for review (cap at 12 000 chars)
+    hcl_chunks = []
+    total = 0
+    for path, content in files.items():
+        if path.endswith('.tfvars'):
+            continue  # tfvars hold actual values — skip
+        snippet = f'### {path}\n{content}\n'
+        if total + len(snippet) > 12000:
+            break
+        hcl_chunks.append(snippet)
+        total += len(snippet)
+    hcl_body = '\n'.join(hcl_chunks)
+
+    rag_context = rag_module.build_context(
+        f'security best practices oracle database {cloud} terraform network access encryption backup', k=5)
+
+    _delp_check = (
+        "- deletion_protection disabled on prod-like resources"
+        " (GCP: google_oracle_database_* resources support this field)\n"
+        if cloud == 'gcp' else
+        "- delete_associated_resources enabled on ODB networks"
+        " (AWS: setting this true deletes VPCs/subnets on network destroy — risky for prod)\n"
+    )
+    system_msg = (
+        "You are a cloud security engineer specialising in Oracle Database@AWS and Oracle DB@GCP Terraform configurations.\n"
+        "Review the HCL files provided and respond ONLY with a valid JSON object (no markdown, no code fences) matching exactly:\n"
+        '{"score":<int 0-100>,"grade":"A|B|C|D|F","summary":"<1 sentence>",'
+        '"findings":[{"severity":"critical|high|medium|low|info",'
+        '"category":"Network Security|Access Control|Data Protection|Backup & Recovery|Compliance|Best Practice",'
+        '"resource":"<resource type or module name>",'
+        '"issue":"<concise description of the problem>",'
+        '"recommendation":"<specific actionable fix>",'
+        '"file":"<file path or empty string>"}]}\n\n'
+        "Security checks to perform (check ALL that apply):\n"
+        "- Open or overly broad CIDR ranges (0.0.0.0/0 or /8 or /16 on client/backup subnets)\n"
+        "- Variables containing passwords, keys, or tokens missing sensitive = true\n"
+        "- SSH public keys left as empty list or placeholder\n"
+        "- Auto-backup disabled or recovery window < 7 days\n"
+        "- Customer contacts not configured (maintenance notifications)\n"
+        + _delp_check +
+        "- S3 or Zero-ETL access enabled without clear need (check display names for 'prod'/'prd')\n"
+        "- Maintenance window set to NO_PREFERENCE (recommend CUSTOM_PREFERENCE for prod)\n"
+        "- Missing or empty tags / labels\n"
+        "- License model check (BRING_YOUR_OWN_LICENSE without OCI confirmation)\n"
+        "- Hardcoded non-reference values for cross-module IDs (should use module.x.output)\n"
+        "- score: 100 = no issues. Deduct: critical=-20, high=-10, medium=-5, low=-2, info=-0. Min 0.\n"
+        "- findings: only real issues found in the code. Empty array [] if config is clean.\n"
+        "Return ONLY the JSON object."
+    )
+    if rag_context:
+        system_msg += f'\n\nRelevant ODB security documentation:\n{rag_context}'
+
+    user_msg = f'Cloud: {cloud.upper()}\nFiles reviewed: {len(files)}\n\n{hcl_body}'
+    try:
+        raw = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        raw = re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=re.MULTILINE)
+        raw = re.sub(r'\s*```$', '', raw.strip(), flags=re.MULTILINE)
+        result = json.loads(raw)
+        # Merge deterministic CIDR overlap findings (always run, never hallucinated)
+        cidr_findings = _check_cidr_overlaps(data)
+        if cidr_findings:
+            result.setdefault('findings', [])
+            result['findings'] = cidr_findings + result['findings']
+            # Recompute score: each high finding costs 10 points
+            penalty = sum(10 for f in cidr_findings if f['severity'] == 'high') + \
+                      sum(5  for f in cidr_findings if f['severity'] == 'medium')
+            result['score'] = max(0, result.get('score', 100) - penalty)
+            # Recompute grade
+            s = result['score']
+            result['grade'] = 'A' if s >= 90 else 'B' if s >= 80 else 'C' if s >= 65 else 'D' if s >= 50 else 'F'
+        result['files_reviewed'] = len(files)
+        return jsonify(result)
+    except json.JSONDecodeError:
+        return jsonify({'error': 'LLM returned unexpected format', 'raw': raw[:500]}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/explain-plan', methods=['POST'])
+def api_ai_explain_plan():
+    body      = request.get_json(force=True)
+    plan_text = body.get('plan_text', '').strip()
+    cloud     = body.get('cloud', 'aws')
+    if not plan_text:
+        return jsonify({'error': 'plan_text is required'}), 400
+
+    rag_context = rag_module.build_context(
+        f'terraform plan {cloud} oracle database changes risks', k=4)
+
+    system_msg = (
+        "You are a senior Terraform engineer specialising in Oracle Database@AWS and Oracle DB@GCP.\n"
+        "Analyse the terraform plan output provided by the user and respond ONLY with a valid JSON object "
+        "(no markdown, no code fences) matching exactly this schema:\n"
+        '{"summary":"<1-2 sentence plain-English summary>","stats":{"add":<int>,"change":<int>,"destroy":<int>},'
+        '"changes":[{"action":"add|modify|destroy|replace","resource":"<resource type.name>","note":"<why this matters>"}],'
+        '"risks":[{"severity":"high|medium|low","message":"<concise risk description>"}],'
+        '"recommendations":["<actionable recommendation>"]}\n\n'
+        "Rules:\n"
+        "- risks array must only contain REAL risks (destructive ops, replacements, open CIDRs, force-new). Empty array if none.\n"
+        "- changes array: include every resource action from the plan. Max 20 entries.\n"
+        "- recommendations: practical next steps. 2-4 items.\n"
+        "- Return ONLY the JSON object. No other text."
+    )
+    if rag_context:
+        system_msg += f'\n\nRelevant ODB reference documentation:\n{rag_context}'
+
+    user_msg = f'Cloud: {cloud.upper()}\n\nTerraform plan output:\n```\n{plan_text[:10000]}\n```'
+    try:
+        raw = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        # Strip accidental markdown fences
+        raw = re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=re.MULTILINE)
+        raw = re.sub(r'\s*```$', '', raw.strip(), flags=re.MULTILINE)
+        return jsonify(json.loads(raw))
+    except json.JSONDecodeError:
+        return jsonify({'summary': raw.strip(), 'stats': {}, 'changes': [], 'risks': [], 'recommendations': []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/ai/troubleshoot', methods=['POST'])
+def api_ai_troubleshoot():
+    body       = request.get_json(force=True)
+    error_text = body.get('error_text', '').strip()
+    cloud      = body.get('cloud', 'aws')
+    if not error_text:
+        return jsonify({'error': 'error_text is required'}), 400
+
+    rag_context = rag_module.build_context(
+        f'terraform apply error {cloud} oracle database troubleshoot fix {error_text[:300]}', k=5)
+
+    system_msg = (
+        "You are a senior Terraform engineer specialising in Oracle Database@AWS and Oracle DB@GCP.\n"
+        "Diagnose the terraform error provided by the user and respond ONLY with a valid JSON object "
+        "(no markdown, no code fences) matching exactly this schema:\n"
+        '{"root_cause":"<concise 1-sentence root cause>","explanation":"<2-4 sentence detailed explanation>",'
+        '"fix_steps":["<step 1>","<step 2>"],"prevention":"<how to prevent this in future>",'
+        '"docs_hint":"<relevant doc section or resource type to check, or empty string>"}\n\n'
+        "Rules:\n"
+        "- fix_steps: ordered, concrete, copy-paste-ready where possible. 2-6 steps.\n"
+        "- root_cause: identify the specific Terraform or ODB provider issue, not generic advice.\n"
+        "- Return ONLY the JSON object. No other text."
+    )
+    if rag_context:
+        system_msg += f'\n\nRelevant ODB reference documentation:\n{rag_context}'
+
+    user_msg = f'Cloud: {cloud.upper()}\n\nTerraform error:\n```\n{error_text[:8000]}\n```'
+    try:
+        raw = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': user_msg},
+        ])
+        raw = re.sub(r'^```(?:json)?\s*', '', raw.strip(), flags=re.MULTILINE)
+        raw = re.sub(r'\s*```$', '', raw.strip(), flags=re.MULTILINE)
+        return jsonify(json.loads(raw))
+    except json.JSONDecodeError:
+        return jsonify({'root_cause': 'Could not parse response', 'explanation': raw.strip(),
+                        'fix_steps': [], 'prevention': '', 'docs_hint': ''})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────
+#  RAG ROUTES
+# ─────────────────────────────────────────────
+
+@app.route('/api/rag/stats', methods=['GET'])
+def api_rag_stats():
+    return jsonify(rag_module.index_stats())
+
+@app.route('/api/rag/rebuild', methods=['POST'])
+def api_rag_rebuild():
+    n = rag_module.rebuild()
+    return jsonify({'ok': True, 'chunks_indexed': n, **rag_module.index_stats()})
+
+@app.route('/api/rag/search', methods=['POST'])
+def api_rag_search():
+    body  = request.get_json(force=True)
+    query = body.get('query', '').strip()
+    k     = int(body.get('k', 5))
+    if not query:
+        return jsonify({'error': 'query is required'}), 400
+    chunks = rag_module.retrieve(query, k)
+    return jsonify({'results': [
+        {'id': c['id'], 'source': c['source'],
+         'title': c.get('title', c['source']), 'text': c['text'][:500]}
+        for c in chunks
+    ]})
+
+@app.route('/api/rag/docs', methods=['GET'])
+def api_rag_docs():
+    docs_dir = rag_module.DOCS_DIR
+    docs = []
+    for p in sorted(docs_dir.glob('*.md')) + sorted(docs_dir.glob('*.txt')):
+        stat = p.stat()
+        docs.append({
+            'name':     p.name,
+            'size':     stat.st_size,
+            'modified': int(stat.st_mtime),
+        })
+    return jsonify({'docs': docs, **rag_module.index_stats()})
+
+@app.route('/api/rag/upload', methods=['POST'])
+def api_rag_upload():
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'No file provided'}), 400
+    name = os.path.basename(f.filename or '')
+    if not name:
+        return jsonify({'error': 'Invalid filename'}), 400
+
+    allowed = ('.md', '.txt', '.pptx', '.pdf', '.docx')
+    if not any(name.endswith(ext) for ext in allowed):
+        return jsonify({'error': 'Only .md, .txt, .pdf, .docx, and .pptx files are supported'}), 400
+
+    rag_module.DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+    _converters = {
+        '.pptx': (rag_module.pptx_to_markdown, 5),
+        '.pdf':  (rag_module.pdf_to_markdown,   4),
+        '.docx': (rag_module.docx_to_markdown,  5),
+    }
+    ext = next((e for e in _converters if name.endswith(e)), None)
+
+    if ext:
+        fn, ext_len = _converters[ext]
+        try:
+            md_text = fn(f.read(), name)
+        except RuntimeError as e:
+            return jsonify({'error': str(e)}), 400
+        save_name = name[:-ext_len] + '.md'
+        (rag_module.DOCS_DIR / save_name).write_text(md_text, encoding='utf-8')
+        saved = save_name
+    else:
+        dest = rag_module.DOCS_DIR / name
+        f.save(str(dest))
+        saved = name
+
+    n = rag_module.rebuild()
+    return jsonify({'ok': True, 'saved': saved, 'chunks_indexed': n, **rag_module.index_stats()})
+
+@app.route('/api/rag/docs/<filename>', methods=['DELETE'])
+def api_rag_delete_doc(filename):
+    name = os.path.basename(filename)
+    if not (name.endswith('.md') or name.endswith('.txt')):
+        return jsonify({'error': 'Invalid file type'}), 400
+    target = rag_module.DOCS_DIR / name
+    if not target.exists():
+        return jsonify({'error': 'File not found'}), 404
+    target.unlink()
+    n = rag_module.rebuild()
+    return jsonify({'ok': True, 'deleted': name, 'chunks_indexed': n, **rag_module.index_stats()})
 
 # ─────────────────────────────────────────────
 #  GITHUB ROUTES
@@ -1106,6 +610,83 @@ def gcp_page():
     return resp
 
 
+@app.route('/azure')
+def azure_page():
+    resp = make_response(render_template('azure.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+@app.route('/dg')
+def dg_page():
+    resp = make_response(render_template('dg.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+@app.route('/cidr')
+def cidr_page():
+    resp = make_response(render_template('cidr.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+@app.route('/rag')
+def rag_page():
+    resp = make_response(render_template('rag.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+@app.route('/hub')
+def hub_page():
+    resp = make_response(render_template('hub.html'))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+@app.route('/api/llm/ask', methods=['POST'])
+def api_llm_ask():
+    body     = request.get_json(force=True)
+    question = body.get('question', '').strip()
+    cloud    = body.get('cloud', 'all').lower().strip()
+    if not question:
+        return jsonify({'error': 'question is required'}), 400
+    q_lower = question.lower()
+    cloud_prefix = '' if cloud == 'all' or q_lower.startswith(cloud) else f'{cloud} '
+    query = f'{cloud_prefix}{question}'
+    chunks  = rag_module.retrieve_hybrid(query, k=5)
+    context = '\n\n---\n\n'.join(
+        f'[{c["source"]} — {c.get("title", "")}]\n{c["text"]}' for c in chunks
+    )
+    sources = list(dict.fromkeys(c['source'] for c in chunks))
+    scope   = f' Focus on {cloud.upper()} specifically.' if cloud != 'all' else ''
+    system_msg = (
+        'You are an expert on Oracle Database@AWS, Oracle DB@Azure, and Oracle DB@GCP deployments '
+        'and Terraform/OpenTofu configuration.' + scope + '\n'
+        'Read ALL of the documentation chunks below before composing your answer — '
+        'relevant information may appear in any chunk, not just the first one.\n'
+        'IMPORTANT: Do NOT say a topic is undocumented if any chunk contains relevant content. '
+        'Synthesize across all chunks to give the most complete and accurate answer.\n'
+        'Use plain text with short paragraphs. Keep answers under 400 words unless detail is essential.\n\n'
+        'Reference documentation:\n' + context
+    )
+    try:
+        answer = llm_module.chat([
+            {'role': 'system', 'content': system_msg},
+            {'role': 'user',   'content': question},
+        ])
+        return jsonify({
+            'answer':       answer.strip(),
+            'sources':      sources,
+            'source_links': rag_module.source_links(chunks),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/generate', methods=['POST'])
 def api_generate():
     data = request.get_json(force=True)
@@ -1124,7 +705,18 @@ def api_generate():
 def api_download():
     data = request.get_json(force=True)
     cloud = data.get('cloud', 'aws')
-    zip_name = 'terraflow-studio-gcp' if cloud == 'gcp' else 'terraflow-studio-aws'
+    if data.get('iac_tool') == 'cloudformation':
+        content = generate_cfn(data)
+        buf = io.BytesIO(content.encode('utf-8'))
+        return send_file(buf, mimetype='text/yaml', as_attachment=True, download_name='odb-stack.yaml')
+    if cloud == 'gcp':
+        zip_name = 'terraflow-studio-gcp'
+    elif cloud == 'azure':
+        zip_name = 'terraflow-studio-azure'
+    elif cloud == 'dg':
+        zip_name = 'terraflow-studio-dg'
+    else:
+        zip_name = 'terraflow-studio-aws'
     files = _fmt_files(generate_all(data), data.get('iac_tool', 'terraform'))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -1155,16 +747,10 @@ def api_load_zip():
         return jsonify({'error': str(e)})
 
 
-@app.route('/api/validate', methods=['POST'])
-def api_validate():
-    data   = request.get_json(force=True)
-    tab    = data.get('tab', 0)
-    errors = {}   # {module_name: {field: message}}
+def _validate_aws(data, errors):
+    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
+    tab = data.get('tab', 0)
 
-    def _err(module_name, field, msg):
-        errors.setdefault(module_name, {})[field] = msg
-
-    # ── AWS tabs ──────────────────────────────────────────────────────────────
     if tab == 0:   # ODB Networks
         for net in data.get('aws_networks', [data.get('module_0', {})]):
             mn = net.get('module_name', 'odb_network')
@@ -1208,13 +794,16 @@ def api_validate():
             if int(av.get('memory_per_oracle_compute_unit_in_gbs', 0) or 0) < 1: _err(mn, 'memory_per_oracle_compute_unit_in_gbs', 'Required, minimum 1')
             if int(av.get('total_container_databases', 0) or 0) < 1:            _err(mn, 'total_container_databases', 'Required, minimum 1')
 
-    # ── GCP tabs ──────────────────────────────────────────────────────────────
-    elif tab == 10:  # GCP Networks
+
+def _validate_gcp(data, errors):
+    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
+    tab = data.get('tab', 0)
+
+    if tab == 10:  # GCP Networks
         for net in data.get('gcp_networks', [data.get('gcp_module_0', {})]):
             mn = net.get('module_name', 'gcp_network')
             if not net.get('odb_network_id'): _err(mn, 'odb_network_id', 'Required')
             if not net.get('location'):        _err(mn, 'location',       'Required')
-            if not net.get('network'):         _err(mn, 'network',        'Required')
             if not net.get('client_cidr') and not net.get('client_subnet_cidr'):
                 _err(mn, 'client_cidr', 'Required')
             if not net.get('backup_cidr') and not net.get('backup_subnet_cidr'):
@@ -1232,15 +821,11 @@ def api_validate():
     elif tab == 13:  # GCP VM Clusters
         for cl in data.get('gcp_clusters', [data.get('gcp_module_4', {})]):
             mn = cl.get('module_name', 'gcp_cluster')
-            if not cl.get('exadb_vm_cluster_id'): _err(mn, 'exadb_vm_cluster_id', 'Required')
-            if not cl.get('display_name'):         _err(mn, 'display_name',        'Required')
+            if not cl.get('cloud_vm_cluster_id'):  _err(mn, 'cloud_vm_cluster_id', 'Required')
             if not cl.get('location'):             _err(mn, 'location',            'Required')
-            if not cl.get('gi_version'):           _err(mn, 'gi_version',          'Required')
             if not cl.get('hostname_prefix'):      _err(mn, 'hostname_prefix',     'Required')
-            if int(cl.get('node_count', 0) or 0) < 2:
-                _err(mn, 'node_count', 'Minimum 2')
-            if int(cl.get('enabled_ecpu_count_per_node', 0) or 0) < 8:
-                _err(mn, 'enabled_ecpu_count_per_node', 'Minimum 8 (multiples of 4)')
+            if int(cl.get('cpu_core_count', 0) or 0) < 2:
+                _err(mn, 'cpu_core_count', 'Minimum 2')
             if not cl.get('ssh_public_keys'):
                 _err(mn, 'ssh_public_keys', 'At least one SSH key required')
 
@@ -1251,6 +836,63 @@ def api_validate():
             if not db.get('db_version'):    _err(mn, 'db_version',    'Required')
             if not db.get('db_name'):       _err(mn, 'db_name',       'Required')
 
+
+def _validate_azure(data, errors):
+    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
+    tab = data.get('tab', 0)
+
+    if tab == 20:  # Azure VNet + Subnet
+        for vnet in data.get('azure_vnets', []):
+            mn = vnet.get('module_name', 'azure_vnet')
+            if not vnet.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
+            if not vnet.get('location'):             _err(mn, 'location',            'Required')
+            if not vnet.get('vnet_name'):            _err(mn, 'vnet_name',           'Required')
+            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', vnet.get('address_space', '')):
+                _err(mn, 'address_space', 'Valid CIDR required')
+            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', vnet.get('subnet_address_prefix', '')):
+                _err(mn, 'subnet_address_prefix', 'Valid CIDR required')
+
+    elif tab == 21:  # Azure Exadata Infrastructure
+        for inf in data.get('azure_infras', []):
+            mn = inf.get('module_name', 'azure_exainfra')
+            if not inf.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
+            if not inf.get('location'):             _err(mn, 'location',            'Required')
+            if not inf.get('name'):                 _err(mn, 'name',                'Required')
+            if not inf.get('display_name'):         _err(mn, 'display_name',        'Required')
+            if not inf.get('shape'):                _err(mn, 'shape',               'Required')
+            if int(inf.get('compute_count', 0) or 0) < 2: _err(mn, 'compute_count', 'Minimum 2')
+            if int(inf.get('storage_count', 0) or 0) < 3: _err(mn, 'storage_count', 'Minimum 3')
+
+    elif tab == 22:  # Azure VM Cluster
+        for cl in data.get('azure_clusters', []):
+            mn = cl.get('module_name', 'azure_vmcluster')
+            if not cl.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
+            if not cl.get('location'):             _err(mn, 'location',            'Required')
+            if not cl.get('name'):                 _err(mn, 'name',                'Required')
+            if not cl.get('display_name'):         _err(mn, 'display_name',        'Required')
+            if not cl.get('hostname'):             _err(mn, 'hostname',            'Required')
+            if not cl.get('gi_version'):           _err(mn, 'gi_version',          'Required')
+            if int(cl.get('cpu_core_count', 0) or 0) < 2:
+                _err(mn, 'cpu_core_count', 'Minimum 2')
+            if float(cl.get('data_storage_size_in_tbs', 0) or 0) < 2:
+                _err(mn, 'data_storage_size_in_tbs', 'Minimum 2 TiB')
+            if not cl.get('ssh_public_keys'):
+                _err(mn, 'ssh_public_keys', 'At least one SSH key required')
+
+
+@app.route('/api/validate', methods=['POST'])
+def api_validate():
+    data   = request.get_json(force=True)
+    cloud  = data.get('cloud', 'aws')
+    errors = {}
+    if cloud == 'gcp':
+        _validate_gcp(data, errors)
+    elif cloud == 'azure':
+        _validate_azure(data, errors)
+    elif cloud == 'dg':
+        pass  # DG has no server-side required fields
+    else:
+        _validate_aws(data, errors)
     flat_errors = {}
     for mn_errors in errors.values():
         flat_errors.update(mn_errors)
@@ -1359,6 +1001,16 @@ def api_test():
         first_inf  = infras[0]['module_name'] if infras else 'odb_exaInfra'
         peerings = [_aws_peer_defaults(p, first_net)         for p in raw_peerings]
         clusters = [_aws_cluster_defaults(c, first_net, first_inf) for c in raw_clusters]
+    elif cloud == 'azure':
+        raw_nets     = payload.get('azure_vnets') or []
+        raw_infras   = payload.get('azure_infras') or []
+        raw_clusters = payload.get('azure_clusters') or []
+        nets     = [_azure_vnet_defaults(n) for n in raw_nets]
+        infras   = [_azure_infra_defaults(i) for i in raw_infras]
+        first_vnet = nets[0]['module_name']    if nets   else 'azure_vnet'
+        first_inf  = infras[0]['module_name']  if infras else 'azure_exainfra'
+        clusters = [_azure_cluster_defaults(c, first_vnet, first_inf) for c in raw_clusters]
+        peerings = []
     else:
         raw_nets     = payload.get('gcp_networks') or []
         raw_infras   = payload.get('gcp_infras') or []
@@ -1415,6 +1067,33 @@ def api_test():
             run_test(grp, f'Cluster "{mn}": hostname_prefix present',
                      lambda c=cl: (_ for _ in ()).throw(AssertionError('hostname_prefix missing'))
                      if not c.get('hostname_prefix') else None)
+    elif cloud == 'azure':
+        for net in raw_nets:
+            mn = net.get('module_name','?')
+            run_test(grp, f'VNet "{mn}": resource_group_name present',
+                     lambda n=net: (_ for _ in ()).throw(AssertionError('resource_group_name missing')) if not n.get('resource_group_name') else None)
+            run_test(grp, f'VNet "{mn}": address_space valid CIDR',
+                     lambda n=net: (_ for _ in ()).throw(AssertionError(f'Invalid CIDR: {n.get("address_space")}'))
+                     if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', n.get('address_space','')) else None)
+            run_test(grp, f'VNet "{mn}": subnet_address_prefix valid CIDR',
+                     lambda n=net: (_ for _ in ()).throw(AssertionError(f'Invalid CIDR: {n.get("subnet_address_prefix")}'))
+                     if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', n.get('subnet_address_prefix','')) else None)
+        for inf in raw_infras:
+            mn = inf.get('module_name','?')
+            run_test(grp, f'Infra "{mn}": compute_count >= 2',
+                     lambda i=inf: (_ for _ in ()).throw(AssertionError(f'compute_count={i.get("compute_count")} < 2'))
+                     if int(i.get('compute_count',0) or 0) < 2 else None)
+            run_test(grp, f'Infra "{mn}": storage_count >= 3',
+                     lambda i=inf: (_ for _ in ()).throw(AssertionError(f'storage_count={i.get("storage_count")} < 3'))
+                     if int(i.get('storage_count',0) or 0) < 3 else None)
+        for cl in raw_clusters:
+            mn = cl.get('module_name','?')
+            run_test(grp, f'Cluster "{mn}": ssh_public_keys not empty',
+                     lambda c=cl: (_ for _ in ()).throw(AssertionError('No SSH keys'))
+                     if not c.get('ssh_public_keys') else None)
+            run_test(grp, f'Cluster "{mn}": hostname present',
+                     lambda c=cl: (_ for _ in ()).throw(AssertionError('hostname missing'))
+                     if not c.get('hostname') else None)
     else:
         for net in raw_nets:
             mn = net.get('module_name','?')
@@ -1432,21 +1111,21 @@ def api_test():
             run_test(grp, f'Cluster "{mn}": ssh_public_keys not empty',
                      lambda c=cl: (_ for _ in ()).throw(AssertionError('No SSH keys'))
                      if not c.get('ssh_public_keys') else None)
-            run_test(grp, f'Cluster "{mn}": gi_version present',
-                     lambda c=cl: (_ for _ in ()).throw(AssertionError('gi_version missing'))
-                     if not c.get('gi_version') else None)
 
     # ── TEST GROUP 2: Module file generation ───────────────────────────────
     grp = 'Module Generation'
     try:
         all_files = generate_all({**payload, 'cloud': cloud,
-                                  'aws_networks': nets if cloud=='aws' else [],
-                                  'aws_infras': infras if cloud=='aws' else [],
-                                  'aws_peerings': peerings if cloud=='aws' else [],
-                                  'aws_clusters': clusters if cloud=='aws' else [],
-                                  'gcp_networks': nets if cloud=='gcp' else [],
-                                  'gcp_infras': infras if cloud=='gcp' else [],
-                                  'gcp_clusters': clusters if cloud=='gcp' else []})
+                                  'aws_networks':   nets     if cloud=='aws'   else [],
+                                  'aws_infras':     infras   if cloud=='aws'   else [],
+                                  'aws_peerings':   peerings if cloud=='aws'   else [],
+                                  'aws_clusters':   clusters if cloud=='aws'   else [],
+                                  'azure_vnets':    nets     if cloud=='azure' else [],
+                                  'azure_infras':   infras   if cloud=='azure' else [],
+                                  'azure_clusters': clusters if cloud=='azure' else [],
+                                  'gcp_networks':   nets     if cloud=='gcp'   else [],
+                                  'gcp_infras':     infras   if cloud=='gcp'   else [],
+                                  'gcp_clusters':   clusters if cloud=='gcp'   else []})
         run_test(grp, 'generate_all() succeeds without error', lambda: None)
     except Exception as e:
         results.append({'group': grp, 'name': 'generate_all() succeeds without error',
@@ -1455,27 +1134,33 @@ def api_test():
 
     run_test(grp, 'root main.tf generated',
              lambda: (_ for _ in ()).throw(AssertionError('main.tf missing')) if 'main.tf' not in all_files else None)
-    run_test(grp, 'root terraform.tfvars generated',
-             lambda: (_ for _ in ()).throw(AssertionError('terraform.tfvars missing')) if 'terraform.tfvars' not in all_files else None)
+    run_test(grp, 'root terraform.auto.tfvars generated',
+             lambda: (_ for _ in ()).throw(AssertionError('terraform.auto.tfvars missing')) if 'terraform.auto.tfvars' not in all_files else None)
     run_test(grp, 'All generated files are non-empty',
              lambda: [(_ for _ in ()).throw(AssertionError(f'{p} is empty')) for p, c in all_files.items() if not c.strip()])
 
     # Per-module file checks
     if cloud == 'aws':
-        for mn in ([n['module_name'] for n in nets] + [i['module_name'] for i in infras] +
-                   [p['module_name'] for p in peerings] + [c['module_name'] for c in clusters]):
-            for ftype in ['main.tf','variables.tf','outputs.tf','terraform.tfvars']:
+        # AWS uses shared for_each modules — check shared module directories exist
+        for mod_dir in ['aws-odb-network', 'aws-exadata-infra', 'aws-peering', 'aws-vm-cluster']:
+            for ftype in ['main.tf', 'variables.tf', 'outputs.tf']:
+                key = f'modules/{mod_dir}/{ftype}'
+                run_test(grp, f'{key} generated',
+                         lambda k=key: (_ for _ in ()).throw(AssertionError(f'{k} missing')) if k not in all_files else None)
+    elif cloud == 'azure':
+        module_names = ([n['module_name'] for n in nets] +
+                        [i['module_name'] for i in infras] +
+                        [c['module_name'] for c in clusters])
+        for mn in filter(None, module_names):
+            for ftype in ['main.tf','variables.tf','outputs.tf']:
                 key = f'modules/{mn}/{ftype}'
                 run_test(grp, f'{key} generated',
                          lambda k=key: (_ for _ in ()).throw(AssertionError(f'{k} missing')) if k not in all_files else None)
     else:
-        module_names = []
-        for n in nets:
-            module_names += [n['module_name'], n.get('client_subnet_module',''), n.get('backup_subnet_module','')]
-        module_names += [i['module_name'] for i in infras] + [c['module_name'] for c in clusters]
-        for mn in filter(None, module_names):
-            for ftype in ['main.tf','variables.tf','outputs.tf','terraform.tfvars']:
-                key = f'modules/{mn}/{ftype}'
+        # GCP uses shared for_each modules — check shared module directories exist
+        for mod_dir in [_GCP_MOD_NET, _GCP_MOD_INFRA, _GCP_MOD_CLUSTER]:
+            for ftype in ['main.tf', 'variables.tf', 'outputs.tf']:
+                key = f'modules/{mod_dir}/{ftype}'
                 run_test(grp, f'{key} generated',
                          lambda k=key: (_ for _ in ()).throw(AssertionError(f'{k} missing')) if k not in all_files else None)
 
@@ -1485,43 +1170,75 @@ def api_test():
     if cloud == 'aws':
         run_test(grp, 'root main.tf contains AWS provider',
                  lambda: (_ for _ in ()).throw(AssertionError('hashicorp/aws missing')) if 'hashicorp/aws' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on aws_networks',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on aws_networks missing'))
+                 if 'for_each = var.aws_networks' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on aws_clusters',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on aws_clusters missing'))
+                 if 'for_each = var.aws_clusters' not in root else None)
+        run_test(grp, 'root main.tf wires infra_id to vm clusters',
+                 lambda: (_ for _ in ()).throw(AssertionError('module.aws_exadata_infra infra_id missing'))
+                 if 'module.aws_exadata_infra' not in root or 'infra_id' not in root else None)
+        tfvars = all_files.get('terraform.auto.tfvars', '')
         for n in nets:
             mn = n['module_name']
-            run_test(grp, f'root main.tf references module "{mn}"',
-                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'module "{m}" not in root')) if f'module "{m}"' not in root else None)
+            run_test(grp, f'network "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
         for cl in clusters:
-            mn, ir, nr = cl['module_name'], cl.get('infra_ref',''), cl.get('network_ref','')
+            mn, ir, nr = cl['module_name'], cl.get('infra_ref', ''), cl.get('network_ref', '')
+            run_test(grp, f'cluster "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
             if ir:
                 run_test(grp, f'Cluster "{mn}" wired to infra "{ir}"',
-                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError(f'infra ref missing'))
-                         if f'module.{i}.infra_id' not in root else None)
+                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError(f'infra_ref "{i}" missing in tfvars'))
+                         if f'"{i}"' not in tfvars else None)
             if nr:
                 run_test(grp, f'Cluster "{mn}" wired to network "{nr}"',
-                         lambda m=mn, n2=nr: (_ for _ in ()).throw(AssertionError(f'network ref missing'))
-                         if f'module.{n2}.network_id' not in root else None)
-        for p in peerings:
-            mn, nr = p['module_name'], p.get('network_ref','')
-            if nr:
-                run_test(grp, f'Peering "{mn}" wired to network "{nr}"',
-                         lambda m=mn, n2=nr: (_ for _ in ()).throw(AssertionError(f'network ref missing'))
-                         if f'module.{n2}.network_id' not in root else None)
-    else:
-        run_test(grp, 'root main.tf contains GCP provider',
-                 lambda: (_ for _ in ()).throw(AssertionError('hashicorp/google missing')) if 'hashicorp/google' not in root else None)
+                         lambda m=mn, n2=nr: (_ for _ in ()).throw(AssertionError(f'network_ref "{n2}" missing in tfvars'))
+                         if f'"{n2}"' not in tfvars else None)
+    elif cloud == 'azure':
+        run_test(grp, 'root main.tf contains Azure provider',
+                 lambda: (_ for _ in ()).throw(AssertionError('hashicorp/azurerm missing')) if 'hashicorp/azurerm' not in root else None)
         for n in nets:
             mn = n['module_name']
-            run_test(grp, f'root main.tf references network "{mn}"',
+            run_test(grp, f'root main.tf references VNet "{mn}"',
                      lambda m=mn: (_ for _ in ()).throw(AssertionError(f'module "{m}" not in root')) if f'module "{m}"' not in root else None)
-            csm = n.get('client_subnet_module','')
-            if csm:
-                run_test(grp, f'root main.tf references client subnet "{csm}"',
-                         lambda m=csm: (_ for _ in ()).throw(AssertionError(f'subnet "{m}" not in root')) if f'module "{m}"' not in root else None)
         for cl in clusters:
-            mn, ir, nr = cl['module_name'], cl.get('infra_ref',''), cl.get('network_ref','')
+            mn, ir, vr = cl['module_name'], cl.get('infra_ref',''), cl.get('vnet_ref','')
             if ir:
                 run_test(grp, f'Cluster "{mn}" wired to infra "{ir}"',
-                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError('infra ref missing'))
-                         if f'module.{i}.infra_name' not in root else None)
+                         lambda m=mn, i=ir: (_ for _ in ()).throw(AssertionError('infra_id ref missing'))
+                         if f'module.{i}.infra_id' not in root else None)
+            if vr:
+                run_test(grp, f'Cluster "{mn}" wired to VNet "{vr}"',
+                         lambda m=mn, v=vr: (_ for _ in ()).throw(AssertionError('subnet_id ref missing'))
+                         if f'module.{v}.subnet_id' not in root else None)
+    else:
+        # GCP uses for_each modules — check structural patterns in root main.tf
+        run_test(grp, 'root main.tf contains GCP provider',
+                 lambda: (_ for _ in ()).throw(AssertionError('hashicorp/google missing')) if 'hashicorp/google' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on GCP networks',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on gcp_odb_networks missing'))
+                 if 'for_each = var.gcp_odb_networks' not in root else None)
+        run_test(grp, 'root main.tf uses for_each on GCP clusters',
+                 lambda: (_ for _ in ()).throw(AssertionError('for_each on gcp_vm_clusters missing'))
+                 if 'for_each = var.gcp_vm_clusters' not in root else None)
+        run_test(grp, 'root main.tf exposes client_subnet_name',
+                 lambda: (_ for _ in ()).throw(AssertionError('client_subnet_name missing in root'))
+                 if 'client_subnet_name' not in root else None)
+        tfvars = all_files.get('terraform.auto.tfvars', '')
+        for n in nets:
+            mn = n['module_name']
+            run_test(grp, f'network "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
+        for cl in clusters:
+            mn = cl['module_name']
+            run_test(grp, f'cluster "{mn}" entry in tfvars',
+                     lambda m=mn: (_ for _ in ()).throw(AssertionError(f'"{m}" not in tfvars'))
+                     if f'"{m}"' not in tfvars else None)
 
     # ── TEST GROUP 4: Uniqueness ─────────────────────────────────────────────
     grp = 'Uniqueness'
@@ -1749,19 +1466,53 @@ def api_tf_cli():
         # ── terraform init -backend=false ─────────────────────────────────────
         init_ok = False
         try:
+            tf_env = {**os.environ}
+            cache_dir = os.path.expanduser('~/.terraform.d/plugin-cache')
+            os.makedirs(cache_dir, exist_ok=True)
+            tf_env['TF_PLUGIN_CACHE_DIR'] = cache_dir
+
+            # Write a minimal CLI config that sets the cache dir.
+            # Do NOT add a provider_installation block — mixing filesystem_mirror
+            # with plugin_cache_dir pointing to the same path causes Terraform to
+            # error with "cannot install provider directory to itself".
+            cache_fwd = cache_dir.replace('\\', '/')
+            rc_path = os.path.join(tmpdir, 'terraform.rc')
+            with open(rc_path, 'w', encoding='utf-8') as _rc:
+                _rc.write(f'plugin_cache_dir = "{cache_fwd}"\n')
+            tf_env['TF_CLI_CONFIG_FILE'] = rc_path
+
             init = subprocess.run(
                 [bin_path, 'init', '-backend=false', '-no-color', '-input=false'],
-                cwd=tmpdir, capture_output=True, text=True, timeout=180
+                cwd=tmpdir, capture_output=True, text=True, timeout=180,
+                env=tf_env
             )
             if init.returncode == 0:
                 results.append({'group': 'terraform init', 'name': 'terraform init -backend=false', 'status': 'pass'})
                 init_ok = True
             else:
-                results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
-                                'status': 'fail', 'error': _strip(init.stderr or init.stdout)})
+                err = _strip(init.stderr or init.stdout)
+                _net_keywords = ('registry.terraform.io', 'could not retrieve', 'failed to query',
+                                 'wsarecv', 'connection refused', 'no such host', 'i/o timeout',
+                                 'dial tcp', 'tls handshake', 'EOF')
+                is_network_err = any(kw in err.lower() for kw in _net_keywords)
+                if is_network_err:
+                    # Network failure ≠ bad generated code — report as warn so the
+                    # overall test result reflects code quality, not connectivity.
+                    results.append({'group': 'terraform init',
+                                    'name': 'terraform init -backend=false',
+                                    'status': 'warn',
+                                    'error': (f'Provider registry unreachable (network/IPv6 issue). '
+                                              f'Providers are cached at {cache_dir} after the first '
+                                              f'successful download. Run terraform init manually once '
+                                              f'with internet access (or via VPN/proxy) to populate '
+                                              f'the cache — TF CLI tests will then work offline.\n\n'
+                                              f'Original error: {err}')})
+                else:
+                    results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
+                                    'status': 'fail', 'error': err})
         except subprocess.TimeoutExpired:
             results.append({'group': 'terraform init', 'name': 'terraform init -backend=false',
-                            'status': 'fail', 'error': 'Timed out after 180s — check internet connectivity or provider registry access'})
+                            'status': 'warn', 'error': 'Timed out after 180s — provider registry unreachable. Providers will be cached after the first successful init.'})
         except Exception as e:
             results.append({'group': 'terraform init', 'name': 'terraform init -backend=false', 'status': 'fail', 'error': str(e)})
 
@@ -1818,5 +1569,162 @@ def api_tf_cli():
     })
 
 
+# ─────────────────────────────────────────────
+#  CONFIGURATION PAGE
+# ─────────────────────────────────────────────
+
+_ENV_PATH = _pl.Path(__file__).parent / '.env'
+
+# Ordered schema used by both GET and POST
+_CONFIG_SCHEMA = [
+    {
+        'id': 'couchdb',
+        'label': 'CouchDB',
+        'fields': [
+            {'key': 'COUCHDB_USER',     'label': 'Username',  'type': 'text',     'placeholder': 'admin'},
+            {'key': 'COUCHDB_PASSWORD', 'label': 'Password',  'type': 'password', 'placeholder': ''},
+            {'key': 'COUCHDB_DB',       'label': 'Database',  'type': 'text',     'placeholder': 'terraflow_studio_configs'},
+        ],
+    },
+    {
+        'id': 'llm',
+        'label': 'LLM Provider',
+        'fields': [
+            {'key': 'LLM_PROVIDER',    'label': 'Provider',     'type': 'select',   'placeholder': '',
+             'options': ['anthropic', 'openai', 'gemini', 'ollama', 'oci_genai']},
+            {'key': 'LLM_API_KEY',     'label': 'API Key',      'type': 'password', 'placeholder': 'sk-...'},
+            {'key': 'LLM_MODEL',       'label': 'Model',        'type': 'text',     'placeholder': 'gpt-4o-mini'},
+            {'key': 'LLM_BASE_URL',    'label': 'Base URL',     'type': 'text',     'placeholder': 'https://api.openai.com/v1'},
+            {'key': 'LLM_MAX_TOKENS',  'label': 'Max Tokens',   'type': 'number',   'placeholder': '2048'},
+            {'key': 'LLM_TEMPERATURE', 'label': 'Temperature',  'type': 'number',   'placeholder': '0.2'},
+            {'key': 'LLM_TIMEOUT',     'label': 'Timeout (s)',  'type': 'number',   'placeholder': '60'},
+        ],
+    },
+    {
+        'id': 'oci_genai',
+        'label': 'OCI GenAI',
+        'fields': [
+            {'key': 'OCI_GENAI_COMPARTMENT_ID', 'label': 'Compartment ID', 'type': 'text',   'placeholder': 'ocid1.compartment...'},
+            {'key': 'OCI_GENAI_REGION',          'label': 'Region',         'type': 'text',   'placeholder': 'us-chicago-1'},
+            {'key': 'OCI_GENAI_AUTH',            'label': 'Auth Method',    'type': 'select', 'placeholder': '',
+             'options': ['config_file', 'instance_principal', 'resource_principal']},
+            {'key': 'OCI_CONFIG_FILE',           'label': 'Config File',    'type': 'text',   'placeholder': '~/.oci/config'},
+            {'key': 'OCI_CONFIG_PROFILE',        'label': 'Profile',        'type': 'text',   'placeholder': 'DEFAULT'},
+        ],
+    },
+    {
+        'id': 'embedding',
+        'label': 'RAG Embeddings',
+        'fields': [
+            {'key': 'EMBEDDING_PROVIDER', 'label': 'Provider',  'type': 'select', 'placeholder': '',
+             'options': ['', 'ollama', 'openai', 'gemini']},
+            {'key': 'EMBEDDING_MODEL',    'label': 'Model',     'type': 'text',   'placeholder': 'nomic-embed-text'},
+            {'key': 'EMBEDDING_BASE_URL', 'label': 'Base URL',  'type': 'text',   'placeholder': 'http://localhost:11434'},
+        ],
+    },
+    {
+        'id': 'tfcli',
+        'label': 'Terraform CLI',
+        'fields': [
+            {'key': 'TERRAFORM_PATH', 'label': 'Terraform Binary', 'type': 'text', 'placeholder': '/usr/local/bin/terraform'},
+            {'key': 'OPENTOFU_PATH',  'label': 'OpenTofu Binary',  'type': 'text', 'placeholder': '/usr/local/bin/tofu'},
+        ],
+    },
+    {
+        'id': 'server',
+        'label': 'Flask Server',
+        'note': 'Changes take effect on next server restart.',
+        'fields': [
+            {'key': 'APP_HOST',  'label': 'Host',       'type': 'text',   'placeholder': '0.0.0.0'},
+            {'key': 'APP_PORT',  'label': 'Port',        'type': 'number', 'placeholder': '8000'},
+            {'key': 'APP_DEBUG', 'label': 'Debug Mode',  'type': 'select', 'placeholder': '',
+             'options': ['true', 'false']},
+        ],
+    },
+    {
+        'id': 'github',
+        'label': 'GitHub Integration',
+        'fields': [
+            {'key': 'GITHUB_TOKEN',     'label': 'Personal Access Token', 'type': 'password', 'placeholder': 'ghp_...'},
+            {'key': 'GITHUB_REPO',      'label': 'Repository',            'type': 'text',     'placeholder': 'owner/repo'},
+            {'key': 'GITHUB_BRANCH',    'label': 'Branch',                'type': 'text',     'placeholder': 'main'},
+            {'key': 'GITHUB_BASE_PATH', 'label': 'Base Path',             'type': 'text',     'placeholder': 'terraform'},
+        ],
+    },
+]
+
+_SENSITIVE_KEYS = {'LLM_API_KEY', 'COUCHDB_PASSWORD', 'GITHUB_TOKEN'}
+
+
+def _read_env_file() -> dict:
+    """Parse .env into {key: value}, ignoring comments and blank lines."""
+    result = {}
+    if not _ENV_PATH.exists():
+        return result
+    for line in _ENV_PATH.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, v = line.split('=', 1)
+        k = k.strip()
+        v = v.strip().strip('"').strip("'")
+        if k:
+            result[k] = v
+    return result
+
+
+def _write_env_file(updates: dict) -> None:
+    """Update .env in-place: replace existing key values, append new ones."""
+    lines = _ENV_PATH.read_text(encoding='utf-8').splitlines() if _ENV_PATH.exists() else []
+    written = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith('#') and '=' in stripped:
+            k = stripped.split('=', 1)[0].strip()
+            if k in updates:
+                new_lines.append(f'{k}={updates[k]}')
+                written.add(k)
+                continue
+        new_lines.append(line)
+    # Append keys not already present in file
+    for k, v in updates.items():
+        if k not in written:
+            new_lines.append(f'{k}={v}')
+    _ENV_PATH.write_text('\n'.join(new_lines) + '\n', encoding='utf-8')
+
+
+@app.route('/config')
+def config_page():
+    return render_template('config.html', schema=_CONFIG_SCHEMA)
+
+
+@app.route('/api/config', methods=['GET'])
+def api_config_get():
+    env = _read_env_file()
+    all_keys = {f['key'] for g in _CONFIG_SCHEMA for f in g['fields']}
+    values = {k: env.get(k, '') for k in all_keys}
+    return jsonify({'values': values, 'schema': _CONFIG_SCHEMA})
+
+
+@app.route('/api/config', methods=['POST'])
+def api_config_post():
+    data = request.get_json(force=True)
+    updates = {k: str(v) for k, v in data.items() if isinstance(k, str)}
+    allowed = {f['key'] for g in _CONFIG_SCHEMA for f in g['fields']}
+    updates = {k: v for k, v in updates.items() if k in allowed}
+    try:
+        _write_env_file(updates)
+        # Reload into running process
+        for k, v in updates.items():
+            os.environ[k] = v
+        return jsonify({'ok': True, 'saved': list(updates.keys())})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    _host  = os.environ.get('APP_HOST',  '0.0.0.0')
+    _port  = int(os.environ.get('APP_PORT',  '8000'))
+    _debug = os.environ.get('APP_DEBUG', 'true').lower() == 'true'
+    app.run(host=_host, debug=_debug, port=_port)

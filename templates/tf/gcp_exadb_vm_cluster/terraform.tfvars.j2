@@ -1,4 +1,3 @@
-# modules/{{ module_name }}/terraform.tfvars
 #
 # NOTE: odb_network, odb_subnet, backup_odb_subnet, and exadata_infrastructure
 # are supplied from root main.tf module outputs — no need to set them here.
@@ -24,7 +23,9 @@ project             = "{{ project }}"
 deletion_protection = {{ deletion_protection }}
 
 # ── properties ────────────────────────────────────────────────────────────────
-gi_version                      = "{{ gi_version }}"
+grid_image_id                   = "{{ grid_image_id }}"
+exascale_db_storage_vault       = "{{ exascale_db_storage_vault }}"
+shape_attribute                 = "{{ shape_attribute }}"
 hostname_prefix                 = "{{ hostname_prefix }}"
 license_type                    = "{{ license_type }}"
 node_count                      = {{ node_count }}
@@ -40,11 +41,6 @@ cluster_name   = "{{ cluster_name }}"
 time_zone      = "{{ time_zone }}"
 {% else %}
 # time_zone      = "UTC"
-{% endif %}
-{% if system_version %}
-system_version = "{{ system_version }}"
-{% else %}
-# system_version = ""
 {% endif %}
 {% if memory_per_node_in_gbs %}
 memory_per_node_in_gbs = {{ memory_per_node_in_gbs }}

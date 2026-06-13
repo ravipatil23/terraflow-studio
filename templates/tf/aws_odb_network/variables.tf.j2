@@ -1,5 +1,3 @@
-# modules/{{ module_name }}/variables.tf
-
 variable "display_name" {
   description = "User-friendly name for the ODB network."
   type        = string
@@ -17,14 +15,14 @@ variable "availability_zone_id" {
 }
 
 variable "client_subnet_cidr" {
-  type = string
+  type    = string
 {% if client_subnet_cidr %}
   default = "{{ client_subnet_cidr }}"
 {% endif %}
 }
 
 variable "backup_subnet_cidr" {
-  type = string
+  type    = string
 {% if backup_subnet_cidr %}
   default = "{{ backup_subnet_cidr }}"
 {% endif %}

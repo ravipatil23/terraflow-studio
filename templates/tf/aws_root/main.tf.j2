@@ -131,21 +131,21 @@ output "{{ db.module_name }}_pdb_id" { value = module.{{ db.module_name }}_pdb.p
 {% endfor %}
 # ── Outputs ────────────────────────────────────────────────────────────────────
 {% for net in networks %}
-output "{{ net.module_name }}_network_id"  { value = module.{{ net.module_name }}.network_id }
+output "{{ net.module_name }}_network_id" { value = module.{{ net.module_name }}.network_id }
 output "{{ net.module_name }}_network_arn" { value = module.{{ net.module_name }}.network_arn }
 {% endfor %}
 {% for inf in infras %}
-output "{{ inf.module_name }}_infra_id"  { value = module.{{ inf.module_name }}.infra_id }
+output "{{ inf.module_name }}_infra_id" { value = module.{{ inf.module_name }}.infra_id }
 output "{{ inf.module_name }}_infra_arn" { value = module.{{ inf.module_name }}.infra_arn }
 {% endfor %}
 {% for peer in peerings %}
 output "{{ peer.module_name }}_peering_id" { value = module.{{ peer.module_name }}.peering_connection_id }
 {% endfor %}
 {% for cl in clusters %}
-output "{{ cl.module_name }}_vm_cluster_id"   { value = module.{{ cl.module_name }}.vm_cluster_id }
+output "{{ cl.module_name }}_vm_cluster_id" { value = module.{{ cl.module_name }}.vm_cluster_id }
 output "{{ cl.module_name }}_vm_cluster_ocid" { value = module.{{ cl.module_name }}.ocid }
 {% endfor %}
 {% for av in avmclusters %}
-output "{{ av.module_name }}_avmc_id"  { value = module.{{ av.module_name }}.avmc_id }
+output "{{ av.module_name }}_avmc_id" { value = module.{{ av.module_name }}.avmc_id }
 output "{{ av.module_name }}_avmc_arn" { value = module.{{ av.module_name }}.avmc_arn }
 {% endfor %}

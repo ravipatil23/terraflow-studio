@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-DATA_DIR = Path(os.environ.get('ODB_DATA_DIR', 'data'))
+DATA_DIR = Path(os.environ.get('ODB_DATA_DIR', '') or Path(__file__).parent / 'data')
 COUCHDB_URL = os.environ.get('COUCHDB_URL', '').rstrip('/')
 COUCHDB_DB  = os.environ.get('COUCHDB_DB', 'terraflow_studio_configs')
 
@@ -73,7 +73,10 @@ class FileStore:
         for d in sorted(DATA_DIR.iterdir()):
             if not d.is_dir():
                 continue
-            clouds = [p.stem for p in sorted(d.glob('*.json'))]
+            clouds = [p.stem for p in sorted(d.glob('*.json'))
+                      if p.stem in ('aws', 'gcp', 'azure')]
+            if not clouds:
+                continue
             # Read customer name from first file
             name = d.name
             for p in d.glob('*.json'):

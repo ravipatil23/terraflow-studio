@@ -1,5 +1,3 @@
-# modules/{{ module_name }}/main.tf
-
 terraform {
   required_providers {
     google = {
@@ -19,9 +17,9 @@ resource "google_oracle_database_cloud_exadata_infrastructure" "this" {
   labels                          = var.labels
 
   properties {
-    shape         = var.shape
-    compute_count = var.compute_count
-    storage_count = var.storage_count
+    shape                 = var.shape
+    compute_count         = var.compute_count
+    storage_count         = var.storage_count
     total_storage_size_gb = var.total_storage_size_gb != 0 ? var.total_storage_size_gb : null
 
     # customer_contacts uses repeated nested block syntax (not dynamic)
@@ -40,8 +38,8 @@ resource "google_oracle_database_cloud_exadata_infrastructure" "this" {
       lead_time_week                   = var.mw_lead_time_week
 
       # days_of_week, months — plain string lists e.g. ["MONDAY", "TUESDAY"]
-      days_of_week  = length(var.mw_days_of_week) > 0 ? var.mw_days_of_week : null
-      months        = length(var.mw_months) > 0 ? var.mw_months : null
+      days_of_week = length(var.mw_days_of_week) > 0 ? var.mw_days_of_week : null
+      months       = length(var.mw_months) > 0 ? var.mw_months : null
 
       # hours_of_day, weeks_of_month — plain number lists
       hours_of_day   = length(var.mw_hours_of_day) > 0 ? var.mw_hours_of_day : null

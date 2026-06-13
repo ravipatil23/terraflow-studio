@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Oracle Database@Azure — fill in your values here. This is the ONLY file you
+# normally need to edit. Add more entries to any map to create more resources.
+# The resource group must already exist.
+# ─────────────────────────────────────────────────────────────────────────────
+
+subscription_id     = "00000000-0000-0000-0000-000000000000"
+resource_group_name = "rg-oracle-prod"
+location            = "eastus"
+
+tags = {
+  Environment = "dev"
+  ManagedBy   = "Terraform"
+}
+
+# ── VNets (+ Oracle-delegated subnet) ─────────────────────────────────────────
+azure_vnets = {
+  vnet1 = {
+    vnet_name             = "vnet-oracle-eastus"
+    address_space         = "10.20.0.0/16"
+    subnet_name           = "snet-oracle-delegated"
+    subnet_address_prefix = "10.20.1.0/24"
+  }
+}
+
+# ── Exadata Infrastructures ───────────────────────────────────────────────────
+azure_infras = {
+  infra1 = {
+    name          = "exa-prod-eastus"
+    display_name  = "Exadata Prod EastUS"
+    shape         = "Exadata.X11M"
+    compute_count = 2
+    storage_count = 3
+    zone          = "2"
+  }
+}
+
+# ── VM Clusters ───────────────────────────────────────────────────────────────
+# infra_ref / vnet_ref must match keys above.
+azure_clusters = {
+  vmc1 = {
+    name           = "vmc-prod-eastus"
+    display_name   = "VM Cluster Prod"
+    hostname       = "exadb"
+    infra_ref      = "infra1"
+    vnet_ref       = "vnet1"
+    cpu_core_count = 4
+    gi_version     = "23.0.0.0"
+    license_model  = "LicenseIncluded"
+    ssh_public_keys = [
+      "ssh-rsa AAAAB3Nza... replace-with-your-key",
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+output "odb_network_id" { value = google_oracle_database_odb_network.this.odb_network_id }
+output "odb_network_name" { value = google_oracle_database_odb_network.this.name }
+output "state" { value = google_oracle_database_odb_network.this.state }
+
+output "client_subnet_name" { value = google_oracle_database_odb_subnet.client.name }
+output "client_subnet_id" { value = google_oracle_database_odb_subnet.client.odb_subnet_id }
+output "backup_subnet_name" { value = google_oracle_database_odb_subnet.backup.name }
+output "backup_subnet_id" { value = google_oracle_database_odb_subnet.backup.odb_subnet_id }

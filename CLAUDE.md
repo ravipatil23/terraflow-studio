@@ -128,3 +128,17 @@ All 220 tests must pass before committing.
 - GCP card prefix: `gn` = GCP net, `gi` = GCP infra, `gc` = GCP cluster
 - `tf_bool(v)` converts Python bool to `true`/`false` string for HCL templates
 - Never hardcode sensitive values in Jinja2 templates — use `sensitive = true` in variables
+
+
+## RAG layer
+- `rag.py` — dual-backend RAG engine; auto-selects ChromaDB or BM25 at runtime
+  - **ChromaDB** (semantic): used when `chromadb` is installed AND `EMBEDDING_PROVIDER` is set
+  - **BM25** (lexical): pure-Python fallback, no extra deps required
+- `rag_docs/*.md` — knowledge base (git-tracked, 8 markdown files)
+- `data/chroma/` — ChromaDB persistent store (runtime, not in git)
+- `data/rag_index.json` — BM25 index (runtime, not in git)
+- `/api/rag/stats` — index statistics (includes `backend: 'chroma'|'bm25'`)
+- `/api/rag/rebuild` — force re-index of rag_docs/
+- `/api/rag/search` — search (POST `{query, k}`)
+- `/api/llm/fill` augments the LLM system prompt with top-5 retrieved chunks via `rag.build_context()`
+- Embedding vars: `EMBEDDING_PROVIDER` (ollama|openai|gemini), `EMBEDDING_MODEL`, `EMBEDDING_BASE_URL`
