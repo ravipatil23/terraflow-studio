@@ -38,6 +38,7 @@ jobs:
           - db-at-aws
           - db-at-azure
           - db-at-gcp
+          - cross-region-dataguard
     defaults:
       run:
         working-directory: blueprints/${{ matrix.dir }}
