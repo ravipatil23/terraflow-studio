@@ -33,7 +33,7 @@ Terraflow Studio is a Python/Flask single-page application that generates produc
 ```
 Browser
   │
-  │  GET /                → index.html (SPA, no-cache)
+  │  GET /                → home.html (product chooser); /aws /gcp /azure … split templates
   │  POST /api/generate   → { content: "..." }
   │  POST /api/validate   → { valid, errors, errors_by_module }
   │  POST /api/download   → application/zip stream
@@ -69,12 +69,14 @@ Flask (app.py)
 
 ### 3.1 Structure
 
-`templates/index.html` is a single file (~2,041 lines) containing:
-- All CSS in a `<style>` block
-- All HTML (nav bars, tab panels, modals)
-- All JavaScript in a single `<script>` block (~1,350 lines, 123 functions)
+The frontend is split into per-product templates served directly by Flask:
+- `home.html` — product chooser landing page (standalone, no base)
+- `base.html` — shared Jinja2 base: header, customer/LLM bars, output panel, shared JS
+- `aws.html`, `gcp.html`, `azure.html` — product pages
+- shared CSS lives in `static/app.css` (extracted from the old inline `<style>` blocks)
 
-No build step, no bundler, no external JS framework. The Flask `render_template` call serves it directly; `Cache-Control: no-store` prevents stale caching.
+No build step, no bundler, no external JS framework. `Cache-Control: no-store` prevents stale caching.
+(The legacy monolithic `index.html` SPA has been removed.)
 
 ### 3.2 State Model
 

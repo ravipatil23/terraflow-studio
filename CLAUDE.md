@@ -29,7 +29,6 @@ A Flask web app that generates modular Terraform/OpenTofu for Oracle Database@AW
 | `templates/base.html` | Shared Jinja2 base — CSS, header, customer bar, LLM bar, output panel, shared JS |
 | `templates/aws.html` | ODB@AWS product page (extends base) |
 | `templates/gcp.html` | DB@GCP product page (extends base) |
-| `templates/index.html` | Legacy monolithic template (kept for reference, not served) |
 | `templates/tf/` | Jinja2 templates for every HCL file |
 | `.env` | Config — LLM key, GitHub token, CouchDB |
 
