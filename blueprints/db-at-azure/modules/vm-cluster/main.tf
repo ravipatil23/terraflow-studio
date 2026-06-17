@@ -53,7 +53,8 @@ resource "azurerm_oracle_cloud_vm_cluster" "this" {
   tags = var.tags
 
   timeouts {
-    create = "3h"
-    delete = "1h"
+    create = "12h"
+    update = "2h"
+    delete = "8h"
   }
 }
