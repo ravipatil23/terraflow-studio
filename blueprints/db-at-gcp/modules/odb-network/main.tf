@@ -15,6 +15,12 @@ resource "google_oracle_database_odb_network" "this" {
   gcp_oracle_zone     = var.gcp_oracle_zone != null && var.gcp_oracle_zone != "" ? var.gcp_oracle_zone : null
   deletion_protection = var.deletion_protection
   labels              = var.labels
+
+  timeouts {
+    create = "12h"
+    update = "2h"
+    delete = "8h"
+  }
 }
 
 resource "google_oracle_database_odb_subnet" "client" {

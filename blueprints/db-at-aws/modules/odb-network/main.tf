@@ -22,4 +22,10 @@ resource "aws_odb_network" "this" {
   delete_associated_resources = var.delete_associated_resources
 
   tags = var.tags
+
+  timeouts {
+    create = "12h"
+    update = "2h"
+    delete = "8h"
+  }
 }

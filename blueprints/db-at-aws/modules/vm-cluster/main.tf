@@ -35,4 +35,10 @@ resource "aws_odb_cloud_vm_cluster" "this" {
   is_sparse_diskgroup_enabled = var.is_sparse_diskgroup_enabled
 
   tags = var.tags
+
+  timeouts {
+    create = "12h"
+    update = "2h"
+    delete = "8h"
+  }
 }
