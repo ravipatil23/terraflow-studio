@@ -39,6 +39,8 @@ jobs:
           - db-at-azure
           - db-at-gcp
           - cross-region-dataguard
+          - oci-database
+          - multi-az-dataguard
     defaults:
       run:
         working-directory: blueprints/${{ matrix.dir }}
