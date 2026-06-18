@@ -106,41 +106,17 @@ resource "oci_core_network_security_group_security_rule" "standby_ssh_ingress" {
   }
 }
 
-# ── Cluster VCN default route tables — managed only when manage_route_table=true ─
+# ── Cluster VCN routes — NOT managed by Terraform (add manually after apply) ─────
 #
-# The cluster VCNs already exist, so their DEFAULT route tables already exist. To add
-# the Data Guard route, Terraform adopts them via `manage_default_resource_id`, which
-# REQUIRES importing before the first apply or apply will overwrite existing routes:
+# Like the cross-region Data Guard blueprint's manual mode, this configuration does
+# NOT touch the existing VM cluster VCN route tables — adopting a pre-existing default
+# route table risks wiping its current routes. After `terraform apply`, add one Data
+# Guard route to EACH cluster VCN's default route table:
 #
-#   terraform import 'oci_core_default_route_table.primary_rt[0]' <primary-default-rt-ocid>
-#   terraform import 'oci_core_default_route_table.standby_rt[0]' <standby-default-rt-ocid>
+#   Primary VCN  -> destination = standby client CIDR, target = primary LPG
+#                   (terraform output primary_lpg_id)
+#   Standby VCN  -> destination = primary client CIDR, target = standby LPG
+#                   (terraform output standby_lpg_id)
 #
-# Prefer to add the route by hand? Set manage_route_table=false (see README) and these
-# resources are skipped; add one LPG route per VCN after apply.
-resource "oci_core_default_route_table" "primary_rt" {
-  count                      = var.manage_route_table ? 1 : 0
-  manage_default_resource_id = var.primary_route_table_id
-
-  route_rules {
-    network_entity_id = oci_core_local_peering_gateway.primary_lpg.id
-    destination       = var.standby_client_cidr
-    destination_type  = "CIDR_BLOCK"
-    description       = "Data Guard: route to standby subnet via LPG"
-  }
-
-  # After importing, copy each PRE-EXISTING rule here (terraform state show ...) so it isn't dropped.
-}
-
-resource "oci_core_default_route_table" "standby_rt" {
-  count                      = var.manage_route_table ? 1 : 0
-  manage_default_resource_id = var.standby_route_table_id
-
-  route_rules {
-    network_entity_id = oci_core_local_peering_gateway.standby_lpg.id
-    destination       = var.primary_client_cidr
-    destination_type  = "CIDR_BLOCK"
-    description       = "Data Guard: route to primary subnet via LPG"
-  }
-
-  # After importing, copy each PRE-EXISTING rule here (terraform state show ...) so it isn't dropped.
-}
+# OCI Console: Networking -> VCN -> Route Tables -> Default Route Table -> Add Route
+#   Rule -> Target Type: Local Peering Gateway. See the README for OCI CLI commands.

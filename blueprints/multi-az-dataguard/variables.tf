@@ -33,12 +33,6 @@ variable "primary_client_cidr" {
   type        = string
 }
 
-variable "primary_route_table_id" {
-  description = "OCID of the primary VCN default route table. Required (and must be imported) when manage_route_table = true."
-  type        = string
-  default     = ""
-}
-
 # ── Standby (the other Availability Domain) ───────────────────────────────────
 variable "standby_vcn_id" {
   description = "OCID of the standby VM Cluster VCN."
@@ -55,19 +49,7 @@ variable "standby_client_cidr" {
   type        = string
 }
 
-variable "standby_route_table_id" {
-  description = "OCID of the standby VCN default route table. Required (and must be imported) when manage_route_table = true."
-  type        = string
-  default     = ""
-}
-
 # ── Toggles ───────────────────────────────────────────────────────────────────
-variable "manage_route_table" {
-  description = "If true, Terraform manages both cluster VCN default route tables (you must import both first — see README). If false, add the DG route manually after apply."
-  type        = bool
-  default     = true
-}
-
 variable "add_ssh" {
   description = "Also open TCP 22 (SSH) between the two subnets in the cluster NSGs."
   type        = bool
