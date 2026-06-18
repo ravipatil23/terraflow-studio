@@ -1,24 +1,20 @@
 output "db_home_id" {
-  description = "OCID of the Database Home."
+  description = "OCID of the single Database Home."
   value       = module.db_home.db_home_id
 }
 
-output "cdb_id" {
-  description = "OCID of the Container Database."
-  value       = module.cdb.cdb_id
+output "cdbs" {
+  description = "Container Databases keyed by their cdbs map key."
+  value = { for k, v in module.cdb : k => {
+    cdb_id  = v.cdb_id
+    db_name = v.db_name
+  } }
 }
 
-output "db_name" {
-  description = "Name of the Container Database."
-  value       = module.cdb.db_name
-}
-
-output "pdb_id" {
-  description = "OCID of the Pluggable Database (null when create_pdb = false)."
-  value       = var.create_pdb ? module.pdb[0].pdb_id : null
-}
-
-output "pdb_name" {
-  description = "Name of the Pluggable Database (null when create_pdb = false)."
-  value       = var.create_pdb ? module.pdb[0].pdb_name : null
+output "pdbs" {
+  description = "Pluggable Databases keyed by \"<cdbKey>.<pdbKey>\"."
+  value = { for k, v in module.pdb : k => {
+    pdb_id   = v.pdb_id
+    pdb_name = v.pdb_name
+  } }
 }

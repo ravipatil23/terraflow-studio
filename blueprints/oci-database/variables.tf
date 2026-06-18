@@ -1,4 +1,4 @@
-# Variable definitions. Real values go in terraform.tfvars (passwords via env).
+# Variable definitions. Real values go in terraform.tfvars; passwords via env vars.
 
 variable "oci_region" {
   description = "OCI region of the VM cluster, e.g. us-ashburn-1."
@@ -10,7 +10,7 @@ variable "vm_cluster_ocid" {
   type        = string
 }
 
-# ── DB Home ───────────────────────────────────────────────────────────────────
+# ── The single DB Home (all CDBs below live in this one home) ─────────────────
 variable "db_home_display_name" {
   description = "Display name for the Database Home."
   type        = string
@@ -23,76 +23,39 @@ variable "db_version" {
   default     = "19.0.0.0"
 }
 
-# ── CDB ─────────────────────────────────────────────────────────────────────--
-variable "db_name" {
-  description = "CDB name — max 8 alphanumeric chars."
-  type        = string
-  default     = "ORCL"
+# ── CDBs (and their PDBs) ─────────────────────────────────────────────────────
+# Add a CDB by adding a map entry; add a PDB by adding to that CDB's nested pdbs map.
+variable "cdbs" {
+  description = "Map of Container Databases keyed by a short name. Each CDB hosts the PDBs in its nested `pdbs` map."
+  type = map(object({
+    db_name                 = string
+    character_set           = optional(string, "AL32UTF8")
+    ncharacter_set          = optional(string, "AL16UTF16")
+    db_unique_name          = optional(string, "")
+    sid_prefix              = optional(string, "")
+    auto_backup_enabled     = optional(bool, false)
+    auto_backup_window      = optional(string, "SLOT_TWO")
+    recovery_window_in_days = optional(number, 30)
+    pdbs = optional(map(object({
+      pdb_name = string
+    })), {})
+  }))
+  default = {}
 }
 
-variable "admin_password" {
-  description = "CDB admin (SYS) password. Set via: export TF_VAR_admin_password=..."
-  type        = string
+# ── Passwords (keep out of tfvars — supply as JSON via environment variables) ──
+# export TF_VAR_cdb_admin_passwords='{"sales":"...","hr":"..."}'
+variable "cdb_admin_passwords" {
+  description = "CDB admin (SYS) passwords keyed by the cdbs map key."
+  type        = map(string)
+  default     = {}
   sensitive   = true
 }
 
-variable "character_set" {
-  type    = string
-  default = "AL32UTF8"
-}
-
-variable "ncharacter_set" {
-  type    = string
-  default = "AL16UTF16"
-}
-
-variable "initial_pdb_name" {
-  description = "Optional initial PDB created with the CDB. Leave blank for a CDB-only create."
-  type        = string
-  default     = ""
-}
-
-variable "db_unique_name" {
-  type    = string
-  default = ""
-}
-
-variable "sid_prefix" {
-  type    = string
-  default = ""
-}
-
-variable "auto_backup_enabled" {
-  type    = bool
-  default = false
-}
-
-variable "auto_backup_window" {
-  type    = string
-  default = "SLOT_TWO"
-}
-
-variable "recovery_window_in_days" {
-  type    = number
-  default = 30
-}
-
-# ── PDB ─────────────────────────────────────────────────────────────────────--
-variable "create_pdb" {
-  description = "Create a Pluggable Database after the CDB."
-  type        = bool
-  default     = true
-}
-
-variable "pdb_name" {
-  description = "PDB name — max 30 chars, must differ from db_name."
-  type        = string
-  default     = "PDB1"
-}
-
-variable "pdb_admin_password" {
-  description = "PDB admin password (also TDE wallet password). Set via: export TF_VAR_pdb_admin_password=..."
-  type        = string
+# export TF_VAR_pdb_admin_passwords='{"sales.app":"...","hr.emp":"..."}'  (key = "<cdbKey>.<pdbKey>")
+variable "pdb_admin_passwords" {
+  description = "PDB admin passwords keyed by \"<cdbKey>.<pdbKey>\" (also used as the TDE wallet password)."
+  type        = map(string)
+  default     = {}
   sensitive   = true
-  default     = ""
 }
