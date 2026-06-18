@@ -39,16 +39,14 @@ module "primary" {
     oci = oci.primary
   }
 
-  prefix                 = "${var.prefix}-primary"
-  compartment_id         = var.compartment_id
-  hub_cidr               = var.primary_hub_cidr
-  cluster_vcn_id         = var.primary_vcn_id
-  cluster_nsg_id         = var.primary_nsg_id
-  cluster_route_table_id = var.primary_route_table_id
-  local_client_cidr      = var.primary_client_cidr
-  remote_client_cidr     = var.dr_client_cidr
-  manage_route_table     = var.manage_route_table
-  add_ssh                = var.add_ssh
+  prefix             = "${var.prefix}-primary"
+  compartment_id     = var.compartment_id
+  hub_cidr           = var.primary_hub_cidr
+  cluster_vcn_id     = var.primary_vcn_id
+  cluster_nsg_id     = var.primary_nsg_id
+  local_client_cidr  = var.primary_client_cidr
+  remote_client_cidr = var.dr_client_cidr
+  add_ssh            = var.add_ssh
 }
 
 # ── DR region ─────────────────────────────────────────────────────────────────
@@ -58,16 +56,14 @@ module "dr" {
     oci = oci.dr
   }
 
-  prefix                 = "${var.prefix}-dr"
-  compartment_id         = var.compartment_id
-  hub_cidr               = var.dr_hub_cidr
-  cluster_vcn_id         = var.dr_vcn_id
-  cluster_nsg_id         = var.dr_nsg_id
-  cluster_route_table_id = var.dr_route_table_id
-  local_client_cidr      = var.dr_client_cidr
-  remote_client_cidr     = var.primary_client_cidr
-  manage_route_table     = var.manage_route_table
-  add_ssh                = var.add_ssh
+  prefix             = "${var.prefix}-dr"
+  compartment_id     = var.compartment_id
+  hub_cidr           = var.dr_hub_cidr
+  cluster_vcn_id     = var.dr_vcn_id
+  cluster_nsg_id     = var.dr_nsg_id
+  local_client_cidr  = var.dr_client_cidr
+  remote_client_cidr = var.primary_client_cidr
+  add_ssh            = var.add_ssh
 }
 
 # ── Cross-region DRG peering ───────────────────────────────────────────────────

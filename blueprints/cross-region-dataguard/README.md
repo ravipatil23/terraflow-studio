@@ -40,9 +40,13 @@ Per region (built twice — primary and DR — from one reusable `region` module
 | Hub (transit) VCN | `oci_core_vcn` | Carries cross-region traffic |
 | Hub LPG + Cluster LPG | `oci_core_local_peering_gateway` ×2 | Peers the hub VCN with the existing cluster VCN |
 | DRG + attachment | `oci_core_drg`, `oci_core_drg_attachment` | Cross-region transit endpoint |
-| Transit route tables | `oci_core_route_table` ×2 | Steer traffic hub↔cluster↔DRG |
-| Cluster DG route | `oci_core_default_route_table` | Route to the remote region (optional — see §7) |
+| Transit route tables | `oci_core_route_table` ×2 | Steer traffic hub↔cluster↔DRG (on the new Hub VCN) |
 | NSG ingress rule(s) | `oci_core_network_security_group_security_rule` | Allow TCP 1521 (and optionally 22) from the peer region |
+
+> **The existing cluster VCN route tables are intentionally not managed by Terraform** —
+> adopting a pre-existing default route table risks wiping its routes. After apply, add the
+> one Data Guard route per cluster VCN by hand (§7). (The transit route tables above are on
+> the *new* Hub VCNs this blueprint creates, so they're safe to manage.)
 
 Then once, across regions (the `peering` module):
 
@@ -86,8 +90,7 @@ route-table rule and the destination NSG allows 1521.
 2. For each region, collect:
    - the **cluster VCN OCID**,
    - the **cluster NSG OCID** (the NSG attached to the cluster's client VNICs),
-   - the **client subnet CIDR**,
-   - the **default route table OCID** of the cluster VCN (only if `manage_route_table = true`).
+   - the **client subnet CIDR**.
 3. **Non-overlapping CIDRs** — the two client CIDRs and the two hub CIDRs must all be
    distinct and non-overlapping (Data Guard needs end-to-end routable addresses).
 4. **IAM**: permission to manage `virtual-network-family` and `drg`/`remote-peering` in
@@ -145,46 +148,49 @@ cd blueprints/cross-region-dataguard
 # 2. edit terraform.tfvars — regions, compartment, both VCN/NSG/CIDR sets
 
 terraform init
-
-# 3. IF manage_route_table = true, import both default route tables FIRST (see §7):
-terraform import 'module.primary.oci_core_default_route_table.cluster_rt[0]' <primary-default-rt-ocid>
-terraform import 'module.dr.oci_core_default_route_table.cluster_rt[0]'      <dr-default-rt-ocid>
-
 terraform plan
 terraform apply
+
+# 3. add the Data Guard route to each cluster VCN by hand (see §7)
 ```
 
 ---
 
-## 7. The route-table decision (read this)
+## 7. Adding the Data Guard routes (manual)
 
-The cluster VCNs already exist, so their **default route tables already exist**. To add
-the Data Guard route, Terraform has to adopt an existing object via
-`manage_default_resource_id` — and if you `apply` without importing it first, Terraform
-assumes it owns an empty table and **will remove your existing routes** (internet/NAT
-gateways, etc.). You have two safe options:
-
-**Option A — `manage_route_table = true` (default): import, then apply.**
-1. `terraform init`
-2. Import both default route tables (commands in §6).
-3. **Preserve existing rules:** `terraform state show 'module.primary.oci_core_default_route_table.cluster_rt[0]'`, then copy each pre-existing `route_rules` block into `modules/region/main.tf` (there's a commented template there). Repeat for DR.
-4. `terraform plan` — confirm it only **adds** the DG route, removes nothing.
-5. `terraform apply`.
-
-**Option B — `manage_route_table = false`: add the route by hand.**
-Terraform skips the default route table entirely. After `apply`, add one route to each
-cluster VCN's default route table — target = the cluster LPG, destination = the *remote*
-client CIDR:
+This blueprint does not touch the existing cluster VCN route tables (adopting a pre-existing
+default route table risks wiping its routes). After `apply`, add **one route to each cluster
+VCN's default route table** — target = that region's cluster LPG, destination = the *remote*
+region's client CIDR. Get the LPG OCIDs from the outputs:
 
 ```bash
-terraform output primary_cluster_lpg_id    # target for the PRIMARY route (dest = dr_client_cidr)
-terraform output dr_cluster_lpg_id         # target for the DR route      (dest = primary_client_cidr)
+terraform output primary_cluster_lpg_id    # target for the PRIMARY VCN route (dest = dr_client_cidr)
+terraform output dr_cluster_lpg_id         # target for the DR VCN route      (dest = primary_client_cidr)
 ```
-Then via OCI Console (VCN → Route Tables → Default → Add Route Rule, Target Type = Local
-Peering Gateway) or `oci network route-table update`.
 
-> If you're unsure, **Option B is the lower-risk choice** — it never touches your
-> existing routes. Option A gives you full IaC ownership but requires the import dance.
+**OCI Console:** Networking → Virtual Cloud Networks → *cluster VCN* → Route Tables → Default
+Route Table → **Add Route Rules** → Target Type: **Local Peering Gateway** → pick the LPG →
+Destination CIDR: the remote region's client CIDR.
+
+**OCI CLI** (reads existing rules first so you *append*, never overwrite):
+
+```bash
+# Primary cluster VCN -> DR client subnet (run against the primary region)
+EXISTING=$(oci network route-table get --rt-id <primary-default-rt-ocid> \
+  --query 'data."route-rules"' --raw-output)
+oci network route-table update --rt-id <primary-default-rt-ocid> --force \
+  --route-rules "$(echo "$EXISTING" | jq '. + [{
+    "destination":"<dr-client-cidr>","destinationType":"CIDR_BLOCK",
+    "networkEntityId":"<primary-cluster-lpg-ocid>","description":"Data Guard: to DR via Hub LPG"}]')"
+
+# DR cluster VCN -> primary client subnet (repeat with DR RT, DR cluster LPG, primary CIDR)
+```
+
+> **Never pass only the new rule** to `route-table update` — the OCI API replaces the entire
+> rule array, so you must include the existing rules. The `jq` append above does this.
+>
+> The Hub-VCN transit route tables this blueprint *does* manage are brand-new (created here),
+> so they carry no pre-existing routes to worry about.
 
 ---
 
@@ -199,8 +205,6 @@ Peering Gateway) or `oci network route-table update`.
 | `primary_nsg_id` / `dr_nsg_id` | string | ✅ | OCIDs of the cluster NSGs (where 1521 is opened). |
 | `primary_client_cidr` / `dr_client_cidr` | string | ✅ | Client subnet CIDRs — must not overlap. |
 | `primary_hub_cidr` / `dr_hub_cidr` | string | ✅ | CIDRs for the NEW transit VCNs — must not overlap anything. |
-| `primary_route_table_id` / `dr_route_table_id` | string | ⚠️ | Default RT OCIDs. Required (and must be imported) when `manage_route_table = true`. |
-| `manage_route_table` | bool | — | `true` (default): Terraform manages cluster default RTs (import first). `false`: add the DG route manually. See §7. |
 | `add_ssh` | bool | — | `false` (default). `true` also opens TCP 22 between regions in the NSGs. |
 
 ---
@@ -213,7 +217,7 @@ Peering Gateway) or `oci network route-table update`.
 | `primary_drg_id` / `dr_drg_id` | The two DRGs. |
 | `primary_rpc_id` / `dr_rpc_id` | The two Remote Peering Connections. |
 | `primary_hub_vcn_id` / `dr_hub_vcn_id` | The transit VCNs. |
-| `primary_cluster_lpg_id` / `dr_cluster_lpg_id` | Cluster-side LPGs — the route targets if you chose Option B. |
+| `primary_cluster_lpg_id` / `dr_cluster_lpg_id` | Cluster-side LPGs — the route targets for the manual step (§7). |
 
 ```bash
 terraform output peering_status      # expect: "PEERED"
@@ -238,11 +242,9 @@ After `apply`:
 terraform destroy
 ```
 
-This removes the transit VCNs, LPGs, DRGs, RPCs, transit route tables, and NSG rules.
-**Note:** if `manage_route_table = true`, the cluster default route tables were *adopted*
-(not created), so `destroy` resets them to the rules currently in your config — make sure
-your config still lists the pre-existing rules (§7) before destroying, or remove the
-resource from state first with `terraform state rm`.
+This removes the transit VCNs, LPGs, DRGs, RPCs, transit route tables, and NSG rules. The
+existing cluster VCN route tables are untouched by Terraform, so any Data Guard route you
+added manually (§7) must also be removed manually.
 
 ---
 
@@ -250,11 +252,10 @@ resource from state first with `terraform state rm`.
 
 | Symptom | Likely cause / fix |
 |---------|--------------------|
-| Existing routes disappeared from a cluster VCN | You applied with `manage_route_table = true` **without importing first**. Re-add the rules (§7) or restore from the console. Import before the next apply. |
 | `peering_status` stuck `PENDING`/`NEW` | RPC peering not completed — re-run `apply`; ensure the same principal is authorized in both regions and `dr_region` is correct. |
 | `NotAuthorizedOrNotFound` on a VCN/NSG | OCID is from the wrong region, or missing IAM in that region. Each OCID must belong to its stated region. |
-| Can't reach standby on 1521 | Check the NSG rule landed, the remote CIDR is correct/non-overlapping, and (Option B) the manual DG route exists on both default RTs. |
-| `manage_default_resource_id` errors / no rules | You set `manage_route_table = true` but didn't supply / import the route table OCID. Provide it and import, or switch to Option B. |
+| Can't reach standby on 1521 | Check the NSG rule landed, the remote CIDR is correct/non-overlapping, and the manual DG route (§7) exists on **both** cluster default route tables. |
+| Manual `route-table update` wiped existing routes | You passed only the new rule — always read + append existing rules (the `jq` snippet in §7). |
 
 Validate before applying:
 
@@ -269,8 +270,8 @@ terraform validate
 
 **Does this work for Oracle Database@AWS and @Azure?**
 Yes — both run Exadata on OCI VCNs, and this builds the OCI-side cross-region path. You
-supply the OCI VCN/NSG/route-table OCIDs that back your ODB@AWS / @Azure clusters. (For
-ODB@GCP, cross-region DR uses a different mechanism and isn't covered here.)
+supply the OCI VCN/NSG OCIDs that back your ODB@AWS / @Azure clusters. (For ODB@GCP,
+cross-region DR uses a different mechanism and isn't covered here.)
 
 **Why a Hub/transit VCN instead of peering the cluster VCNs directly?**
 Cross-region connectivity needs a DRG, and the hub VCN keeps the DRG/transit concerns out

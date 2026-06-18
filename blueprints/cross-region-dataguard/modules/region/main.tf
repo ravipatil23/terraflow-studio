@@ -81,39 +81,17 @@ resource "oci_core_drg_attachment" "hub" {
   }
 }
 
-# ── Cluster VCN default route table — managed only when manage_route_table=true ─
+# ── Cluster VCN route — NOT managed by Terraform (add manually after apply) ──────
 #
-# The cluster VCN already exists, so its DEFAULT route table already exists too.
-# Terraform can only manage it via `manage_default_resource_id`, which REQUIRES an
-# import before the first apply — otherwise apply will overwrite existing routes.
+# This blueprint does not touch the existing cluster VCN's default route table —
+# adopting it risks wiping its current routes. After apply, add one Data Guard route
+# to this region's cluster VCN default route table:
 #
-#   terraform import 'module.primary.oci_core_default_route_table.cluster_rt[0]' <primary-default-rt-ocid>
-#   terraform import 'module.dr.oci_core_default_route_table.cluster_rt[0]'      <dr-default-rt-ocid>
+#   destination = remote region's client CIDR (var.remote_client_cidr)
+#   target      = this region's cluster LPG (output cluster_lpg_id)
 #
-# If you'd rather add the Data Guard route by hand, set manage_route_table=false
-# (see the README) and this resource is skipped entirely.
-resource "oci_core_default_route_table" "cluster_rt" {
-  count                      = var.manage_route_table ? 1 : 0
-  manage_default_resource_id = var.cluster_route_table_id
-
-  # Data Guard route added by this blueprint:
-  route_rules {
-    network_entity_id = oci_core_local_peering_gateway.cluster_lpg.id
-    destination       = var.remote_client_cidr
-    destination_type  = "CIDR_BLOCK"
-    description       = "Data Guard: to remote region via Hub LPG"
-  }
-
-  # After importing, copy each PRE-EXISTING rule here so it isn't dropped. Read them
-  # with: terraform state show 'module.<side>.oci_core_default_route_table.cluster_rt[0]'
-  #
-  # route_rules {
-  #   destination       = "0.0.0.0/0"
-  #   destination_type  = "CIDR_BLOCK"
-  #   network_entity_id = "<internet-or-nat-gateway-ocid>"
-  #   description       = "existing default route"
-  # }
-}
+# OCI Console: VCN -> Route Tables -> Default Route Table -> Add Route Rule ->
+#   Target Type: Local Peering Gateway. See the README for the OCI CLI commands.
 
 # ── NSG: allow Data Guard redo transport (TCP 1521) from the remote region ───
 resource "oci_core_network_security_group_security_rule" "dg_ingress" {

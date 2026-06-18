@@ -37,12 +37,6 @@ variable "primary_client_cidr" {
   type        = string
 }
 
-variable "primary_route_table_id" {
-  description = "OCID of the primary cluster VCN default route table. Required (and must be imported) when manage_route_table = true."
-  type        = string
-  default     = ""
-}
-
 variable "primary_hub_cidr" {
   description = "CIDR for the primary Hub (transit) VCN, e.g. 10.15.0.0/24."
   type        = string
@@ -64,24 +58,12 @@ variable "dr_client_cidr" {
   type        = string
 }
 
-variable "dr_route_table_id" {
-  description = "OCID of the DR cluster VCN default route table. Required (and must be imported) when manage_route_table = true."
-  type        = string
-  default     = ""
-}
-
 variable "dr_hub_cidr" {
   description = "CIDR for the DR Hub (transit) VCN, e.g. 10.16.0.0/24."
   type        = string
 }
 
 # ── Behavior toggles (apply to both regions) ──────────────────────────────────
-variable "manage_route_table" {
-  description = "If true, Terraform manages each cluster VCN default route table (you must import both first — see README). If false, add the DG route manually after apply."
-  type        = bool
-  default     = true
-}
-
 variable "add_ssh" {
   description = "Also open TCP 22 (SSH) between regions in the cluster NSGs."
   type        = bool
