@@ -1,12 +1,14 @@
-# Oracle Database — one DB Home, many CDBs, each with many PDBs
+# Oracle Database — many DB Homes, each with many CDBs, each with many PDBs
 #
-# Principle: a single Database Home hosts multiple Container Databases (CDBs), and
-# each CDB hosts multiple Pluggable Databases (PDBs). A CDB/PDB belongs to exactly
-# ONE DB Home. Scale by adding entries to the `cdbs` map — and each CDB's nested
-# `pdbs` map — in terraform.tfvars. No .tf edits needed.
+# Hierarchy: VM cluster -> DB Homes -> CDBs -> PDBs.
+#   • a DB Home is created on a VM cluster
+#   • each DB Home hosts one or more CDBs
+#   • each CDB hosts one or more PDBs
+#   • a CDB belongs to exactly one Home; a PDB belongs to exactly one CDB
 #
-# Layers on an EXISTING Exadata VM cluster (created by db-at-aws / db-at-gcp /
-# db-at-azure, or native OCI) — you supply its vm_cluster_ocid.
+# Scale by editing terraform.tfvars only: add a home / CDB / PDB by adding a map
+# entry at the matching level. No .tf edits. Layers on EXISTING Exadata VM
+# cluster(s) (created by db-at-aws / db-at-gcp / db-at-azure, or native OCI).
 
 terraform {
   required_version = ">= 1.5.0"
@@ -23,21 +25,56 @@ provider "oci" {
   region = var.oci_region
 }
 
-# ── The single Database Home ──────────────────────────────────────────────────
+# ── DB Homes — one entry per home in var.db_homes ─────────────────────────────
 module "db_home" {
-  source = "./modules/db-home"
+  source   = "./modules/db-home"
+  for_each = var.db_homes
 
-  vm_cluster_ocid = var.vm_cluster_ocid
-  display_name    = var.db_home_display_name
-  db_version      = var.db_version
+  vm_cluster_ocid = each.value.vm_cluster_ocid != "" ? each.value.vm_cluster_ocid : var.vm_cluster_ocid
+  display_name    = each.value.display_name != "" ? each.value.display_name : each.key
+  db_version      = each.value.db_version
 }
 
-# ── Container Databases — one entry per CDB in var.cdbs ────────────────────────
+# ── Flatten homes -> cdbs (key "<homeKey>.<cdbKey>") and homes -> cdbs -> pdbs ─
+locals {
+  cdb_list = flatten([
+    for hk, hv in var.db_homes : [
+      for ck, cv in hv.cdbs : {
+        key                     = "${hk}.${ck}"
+        home_key                = hk
+        db_name                 = cv.db_name
+        character_set           = cv.character_set
+        ncharacter_set          = cv.ncharacter_set
+        db_unique_name          = cv.db_unique_name
+        sid_prefix              = cv.sid_prefix
+        auto_backup_enabled     = cv.auto_backup_enabled
+        auto_backup_window      = cv.auto_backup_window
+        recovery_window_in_days = cv.recovery_window_in_days
+      }
+    ]
+  ])
+  cdb_instances = { for c in local.cdb_list : c.key => c }
+
+  pdb_list = flatten([
+    for hk, hv in var.db_homes : [
+      for ck, cv in hv.cdbs : [
+        for pk, pv in cv.pdbs : {
+          key      = "${hk}.${ck}.${pk}"
+          cdb_key  = "${hk}.${ck}"
+          pdb_name = pv.pdb_name
+        }
+      ]
+    ]
+  ])
+  pdb_instances = { for p in local.pdb_list : p.key => p }
+}
+
+# ── Container Databases — one per "<homeKey>.<cdbKey>" ─────────────────────────
 module "cdb" {
   source   = "./modules/cdb"
-  for_each = var.cdbs
+  for_each = local.cdb_instances
 
-  db_home_id              = module.db_home.db_home_id
+  db_home_id              = module.db_home[each.value.home_key].db_home_id
   db_name                 = each.value.db_name
   admin_password          = var.cdb_admin_passwords[each.key]
   character_set           = each.value.character_set
@@ -51,21 +88,7 @@ module "cdb" {
   depends_on = [module.db_home]
 }
 
-# ── Flatten cdbs -> pdbs into one map keyed "<cdbKey>.<pdbKey>" ────────────────
-locals {
-  pdb_list = flatten([
-    for ck, cv in var.cdbs : [
-      for pk, pv in cv.pdbs : {
-        key      = "${ck}.${pk}"
-        cdb_key  = ck
-        pdb_name = pv.pdb_name
-      }
-    ]
-  ])
-  pdb_instances = { for p in local.pdb_list : p.key => p }
-}
-
-# ── Pluggable Databases — one entry per PDB across all CDBs ────────────────────
+# ── Pluggable Databases — one per "<homeKey>.<cdbKey>.<pdbKey>" ────────────────
 module "pdb" {
   source   = "./modules/pdb"
   for_each = local.pdb_instances
