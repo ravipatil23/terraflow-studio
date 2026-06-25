@@ -2,6 +2,9 @@
 # Oracle Database@Azure — fill in your values here. This is the ONLY file you
 # normally need to edit. Add more entries to any map to create more resources.
 # The resource group must already exist.
+#
+# Commented lines show OPTIONAL parameters with their default/sample values —
+# uncomment and edit any you need. Uncommented lines are required (or recommended).
 # ─────────────────────────────────────────────────────────────────────────────
 
 subscription_id     = "00000000-0000-0000-0000-000000000000"
@@ -20,18 +23,21 @@ azure_vnets = {
     address_space         = "10.20.0.0/16"
     subnet_name           = "snet-oracle-delegated"
     subnet_address_prefix = "10.20.1.0/24"
+    # (no optional fields — all four are required)
   }
 }
 
 # ── Exadata Infrastructures ───────────────────────────────────────────────────
 azure_infras = {
   infra1 = {
-    name          = "exa-prod-eastus"
-    display_name  = "Exadata Prod EastUS"
-    shape         = "Exadata.X11M"
-    compute_count = 2
-    storage_count = 3
-    zone          = "2"
+    name         = "exa-prod-eastus"
+    display_name = "Exadata Prod EastUS"
+    zone         = "2"
+
+    # ── optional (defaults shown) ──
+    # shape         = "Exadata.X11M"
+    # compute_count = 2
+    # storage_count = 3
   }
 }
 
@@ -39,16 +45,26 @@ azure_infras = {
 # infra_ref / vnet_ref must match keys above.
 azure_clusters = {
   vmc1 = {
-    name           = "vmc-prod-eastus"
-    display_name   = "VM Cluster Prod"
-    hostname       = "exadb"
-    infra_ref      = "infra1"
-    vnet_ref       = "vnet1"
-    cpu_core_count = 4
-    gi_version     = "23.0.0.0"
-    license_model  = "LicenseIncluded"
+    name         = "vmc-prod-eastus"
+    display_name = "VM Cluster Prod"
+    hostname     = "exadb"
+    infra_ref    = "infra1"
+    vnet_ref     = "vnet1"
     ssh_public_keys = [
       "ssh-rsa AAAAB3Nza... replace-with-your-key",
     ]
+
+    # ── optional (defaults shown) ──
+    # cpu_core_count              = 4
+    # data_storage_size_in_tbs    = 2
+    # memory_size_in_gbs          = 60
+    # db_node_storage_size_in_gbs = 120
+    # gi_version                  = "23.0.0.0"
+    # license_model               = "LicenseIncluded"  # or BringYourOwnLicense
+    # local_backup_enabled        = false
+    # sparse_diskgroup_enabled    = false
+    # cluster_name                = ""        # optional cluster name
+    # time_zone                   = "UTC"
+    # scan_listener_port_tcp      = 1521
   }
 }

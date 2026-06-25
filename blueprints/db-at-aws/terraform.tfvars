@@ -1,6 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Oracle Database@AWS — fill in your values here. This is the ONLY file you
 # normally need to edit. Add more entries to any map to create more resources.
+#
+# Commented lines show OPTIONAL parameters with their default/sample values —
+# uncomment and edit any you need. Uncommented lines are required (or recommended).
 # ─────────────────────────────────────────────────────────────────────────────
 
 aws_region = "us-east-1"
@@ -19,8 +22,15 @@ aws_networks = {
     availability_zone_id = "use1-az6"
     client_subnet_cidr   = "10.10.0.0/24"
     backup_subnet_cidr   = "10.10.1.0/24"
-    # s3_access          = "ENABLED"
-    # zero_etl_access    = "DISABLED"
+
+    # ── optional (defaults shown) ──
+    # s3_access                   = "ENABLED"   # ENABLED | DISABLED
+    # zero_etl_access             = "DISABLED"  # ENABLED | DISABLED
+    # availability_zone           = ""          # AZ name override (prefer availability_zone_id)
+    # region                      = ""          # region override (defaults to aws_region)
+    # custom_domain_name          = ""          # custom DNS domain (mutually exclusive with default_dns_prefix)
+    # default_dns_prefix          = ""          # DNS prefix (used only when custom_domain_name is blank)
+    # delete_associated_resources = false       # delete associated resources on network deletion
   }
 }
 
@@ -29,10 +39,25 @@ aws_infras = {
   infra1 = {
     display_name         = "exa-prod-use1"
     availability_zone_id = "use1-az6"
-    shape                = "Exadata.X11M"
-    compute_count        = 2
-    storage_count        = 3
-    # customer_contacts  = ["dba@example.com"]
+
+    # ── optional (defaults shown) ──
+    # shape                               = "Exadata.X11M"
+    # compute_count                       = 2
+    # storage_count                       = 3
+    # availability_zone                   = ""               # AZ name override
+    # region                              = ""               # region override
+    # database_server_type                = ""               # e.g. "X11M"
+    # storage_server_type                 = ""               # e.g. "X11M-HC"
+    # customer_contacts                   = ["dba@example.com"]
+    # mw_preference                       = "NO_PREFERENCE"  # NO_PREFERENCE | CUSTOM_PREFERENCE
+    # mw_patching_mode                    = "ROLLING"        # ROLLING | NON_ROLLING
+    # mw_is_custom_action_timeout_enabled = false
+    # mw_custom_action_timeout_in_mins    = 15
+    # mw_lead_time_in_weeks               = 0
+    # mw_days_of_week                     = ["MONDAY"]       # custom-window days
+    # mw_months                           = ["JANUARY"]      # custom-window months
+    # mw_hours_of_day                     = [4]              # 0,4,8,12,16,20 (UTC)
+    # mw_weeks_of_month                   = [1]              # 1-4
   }
 }
 
@@ -45,12 +70,26 @@ aws_clusters = {
     hostname_prefix = "exadb"
     infra_ref       = "infra1"
     network_ref     = "net1"
-    cpu_core_count  = 16
-    license_model   = "LICENSE_INCLUDED"
     ssh_public_keys = [
       "ssh-rsa AAAAB3Nza... replace-with-your-key",
     ]
-    # db_servers_mode = "auto"  # auto-discovers DB servers from infra1
+
+    # ── optional (defaults shown) ──
+    # cpu_core_count                    = 16
+    # license_model                     = "LICENSE_INCLUDED"  # or BRING_YOUR_OWN_LICENSE
+    # db_servers_mode                   = "auto"               # "auto" discovers from infra; "manual" uses db_servers
+    # db_servers                        = ["dbserver-ocid-1"]  # only when db_servers_mode = "manual"
+    # dco_is_diagnostics_events_enabled = true
+    # dco_is_health_monitoring_enabled  = true
+    # dco_is_incident_logs_enabled      = true
+    # cluster_name                      = ""        # optional cluster name
+    # timezone                          = "UTC"
+    # data_storage_size_in_tbs          = 2
+    # db_node_storage_size_in_gbs       = 120
+    # memory_size_in_gbs                = 60
+    # scan_listener_port_tcp            = 1521
+    # is_local_backup_enabled           = false
+    # is_sparse_diskgroup_enabled       = false
   }
 }
 
@@ -61,5 +100,6 @@ aws_clusters = {
 #     display_name    = "peer-to-app-vpc"
 #     network_ref     = "net1"
 #     peer_network_id = "vpc-0123456789abcdef0"
+#     # region        = ""   # optional region override
 #   }
 # }
