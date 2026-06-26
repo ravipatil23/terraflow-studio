@@ -11,6 +11,7 @@ blueprints/
   db-at-aws/                Oracle Database@AWS    (ODB Network → Exadata Infra → VM Cluster, + optional peering)
   db-at-azure/              Oracle Database@Azure  (VNet → Exadata Infra → VM Cluster)
   db-at-gcp/                Oracle Database@GCP    (ODB Network → Exadata Infra → VM Cluster)
+  azure-network-anchor/     Oracle Database@Azure  Network Anchor (Oracle.Database/networkAnchors via azapi)
 
   # ── Layer the database on an existing VM cluster ──
   oci-database/             DB Home → CDB → optional PDB (oracle/oci)
@@ -57,6 +58,7 @@ terraform apply
 | db-at-aws | `hashicorp/aws`     | `>= 6.15.0` |
 | db-at-azure | `hashicorp/azurerm` | `>= 4.9.0`  |
 | db-at-gcp | `hashicorp/google`  | `>= 6.0.0`  |
+| azure-network-anchor | `Azure/azapi` | `>= 2.0.0` |
 | oci-database | `oracle/oci` | `>= 6.0.0` |
 | multi-az-dataguard | `oracle/oci` | `>= 6.0.0` |
 | cross-region-dataguard | `oracle/oci` | `>= 6.0.0` |
