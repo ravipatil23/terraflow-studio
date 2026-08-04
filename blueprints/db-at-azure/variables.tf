@@ -67,6 +67,14 @@ variable "azure_clusters" {
     cluster_name                = optional(string, "")
     time_zone                   = optional(string, "UTC")
     scan_listener_port_tcp      = optional(number, 1521)
+    # Oracle carves the backup range inside the VNet, per cluster. Several
+    # clusters share one delegated subnet by design, but they cannot share a
+    # backup range — give each its own when more than one uses a vnet_ref.
+    # Do NOT leave this empty. The attribute is ForceNew and not Computed, so an
+    # empty config lets the service write its own default into state and every
+    # later plan proposes replacing the cluster. The default below is the range
+    # the service would have picked anyway, stated explicitly.
+    backup_subnet_cidr = optional(string, "192.168.252.0/22")
   }))
   default = {}
 }

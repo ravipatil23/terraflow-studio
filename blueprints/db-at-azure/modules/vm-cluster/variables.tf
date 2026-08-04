@@ -79,8 +79,14 @@ variable "domain" {
 }
 
 variable "backup_subnet_cidr" {
-  type    = string
-  default = ""
+  type        = string
+  description = "Backup subnet CIDR. Changing this replaces the VM cluster. Must not overlap the VNet address space."
+  default     = "192.168.252.0/22"
+
+  validation {
+    condition     = can(cidrhost(var.backup_subnet_cidr, 0))
+    error_message = "backup_subnet_cidr must be a valid CIDR block, e.g. 192.168.252.0/22."
+  }
 }
 
 variable "data_storage_percentage" {

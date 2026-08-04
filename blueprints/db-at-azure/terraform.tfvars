@@ -66,5 +66,25 @@ azure_clusters = {
     # cluster_name                = ""        # optional cluster name
     # time_zone                   = "UTC"
     # scan_listener_port_tcp      = 1521
+    # backup_subnet_cidr          = "192.168.252.0/22"  # see the note below
   }
+
+  # ── Adding a second cluster on the SAME delegated subnet ──────────────────
+  # Reuse the subnet by pointing at the same vnet_ref. The delegated subnet is
+  # shared by design; the backup range is not — Oracle carves it inside the VNet
+  # per cluster, so give each cluster its own non-overlapping range once more
+  # than one cluster shares a vnet_ref. Both clusters default to the same
+  # 192.168.252.0/22, so the second one MUST be given a different range or the
+  # apply fails on a collision. Never set it to "" — an empty value makes every
+  # later plan propose replacing the cluster.
+  #
+  # vmc2 = {
+  #   name               = "vmc-reporting-eastus"
+  #   display_name       = "VM Cluster Reporting"
+  #   hostname           = "rpt"
+  #   infra_ref          = "infra1"
+  #   vnet_ref           = "vnet1"          # same delegated subnet as vmc1
+  #   backup_subnet_cidr = "10.0.11.0/24"   # vmc1's must differ, e.g. 10.0.10.0/24
+  #   ssh_public_keys    = ["ssh-rsa AAAAB3Nza... replace-with-your-key"]
+  # }
 }

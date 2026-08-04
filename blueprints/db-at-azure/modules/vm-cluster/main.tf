@@ -21,9 +21,13 @@ resource "azurerm_oracle_cloud_vm_cluster" "this" {
   gi_version                      = var.gi_version
   license_model                   = var.license_model
 
-  cluster_name               = var.cluster_name != "" ? var.cluster_name : null
-  domain                     = var.domain != "" ? var.domain : null
-  backup_subnet_cidr         = var.backup_subnet_cidr != "" ? var.backup_subnet_cidr : null
+  cluster_name = var.cluster_name != "" ? var.cluster_name : null
+  domain       = var.domain != "" ? var.domain : null
+  # backup_subnet_cidr is Optional + ForceNew but NOT Computed. Passing null
+  # leaves config empty while the service writes its own default into state, so
+  # the next plan sees null -> "192.168.252.0/22" and replaces the whole cluster.
+  # Always send an explicit value so config and state agree.
+  backup_subnet_cidr         = var.backup_subnet_cidr
   data_storage_percentage    = var.data_storage_percentage
   time_zone                  = var.time_zone != "" ? var.time_zone : null
   scan_listener_port_tcp     = var.scan_listener_port_tcp
@@ -56,5 +60,38 @@ resource "azurerm_oracle_cloud_vm_cluster" "this" {
     create = "12h"
     update = "2h"
     delete = "8h"
+  }
+
+  lifecycle {
+    # Almost every argument on this resource is ForceNew, and Update() handles
+    # only tags and file_system_configuration — so any value that changes
+    # outside Terraform proposes destroying the cluster rather than correcting
+    # it. To change one deliberately, edit it and run
+    # terraform apply -replace='module.vm_cluster["<key>"].azurerm_oracle_cloud_vm_cluster.this'
+    #
+    # The active entries below are ForceNew *and* not Computed, so an empty or
+    # selector value would diff against whatever the service reports. The
+    # Computed optional arguments (cluster_name, domain, time_zone,
+    # system_version, zone_id, ...) adopt the state value when config omits
+    # them, so they need no guard while left blank.
+    ignore_changes = [
+      # Not Computed, so a blank config diffs against the range Azure assigns.
+      backup_subnet_cidr,
+      # A major-version selector (19.0.0.0) that Oracle resolves to the running
+      # release (19.32.0.0.0), and moves again with each quarterly GI patch.
+      gi_version,
+      # Passed as null unless a port is set, so it would diff against any port
+      # the service assigns.
+      scan_listener_port_tcp_ssl,
+
+      # Uncomment whichever of these your operations change outside Terraform.
+      # Each is ForceNew, so drift on it proposes a full cluster rebuild.
+      # system_version,              # Exadata image patching
+      # cpu_core_count,              # online OCPU scaling from the console
+      # ssh_public_keys,             # key rotation on the nodes
+      # data_storage_size_in_tbs,    # storage scaling
+      # memory_size_in_gbs,          # memory scaling
+      # db_node_storage_size_in_gbs, # local storage scaling
+    ]
   }
 }

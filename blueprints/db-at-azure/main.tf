@@ -73,6 +73,7 @@ module "vm_cluster" {
   cluster_name                    = each.value.cluster_name
   time_zone                       = each.value.time_zone
   scan_listener_port_tcp          = each.value.scan_listener_port_tcp
+  backup_subnet_cidr              = each.value.backup_subnet_cidr
   cloud_exadata_infrastructure_id = module.exadata_infra[each.value.infra_ref].infra_id
   subnet_id                       = module.vnet[each.value.vnet_ref].subnet_id
   virtual_network_id              = module.vnet[each.value.vnet_ref].vnet_id

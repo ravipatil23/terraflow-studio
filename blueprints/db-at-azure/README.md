@@ -214,7 +214,7 @@ Map of VM clusters. `infra_ref` and `vnet_ref` must match keys in `azure_infras`
 | `data_storage_size_in_tbs` | number | `2` | Data storage (TB). |
 | `memory_size_in_gbs` | number | `60` | Memory (GB). |
 | `db_node_storage_size_in_gbs` | number | `120` | Local node storage (GB). |
-| `gi_version` | string | `23.0.0.0` | Grid Infrastructure version. |
+| `gi_version` | string | `23.0.0.0` | Grid Infrastructure **major-version selector**. Oracle resolves it to the running release (`19.0.0.0` → `19.32.0.0.0`) and stores that in state, so config and state never match — see [9](#9-scaling-adding-more-resources). Covered by the module's `ignore_changes` guard. |
 | `license_model` | string | `LicenseIncluded` | or `BringYourOwnLicense` (Azure-style casing). |
 | `ssh_public_keys` | list(string) | `[]` | SSH keys for node access (set this!). |
 | `local_backup_enabled` | bool | `false` | Enable local backups. |
@@ -222,8 +222,9 @@ Map of VM clusters. `infra_ref` and `vnet_ref` must match keys in `azure_infras`
 | `cluster_name` | string | `""` | Optional cluster name. |
 | `time_zone` | string | `UTC` | e.g. `America/New_York`. |
 | `scan_listener_port_tcp` | number | `1521` | SCAN listener port. |
+| `backup_subnet_cidr` | string | `192.168.252.0/22` | Backup range Oracle carves inside the VNet, e.g. `10.0.11.0/24`. Must differ per cluster when several share a `vnet_ref` — see [9](#9-scaling-adding-more-resources). **Never set it to `""`**: the attribute is `ForceNew` and not `Computed`, so an empty config makes every later plan propose replacing the cluster. |
 
-> The underlying module supports more advanced fields (`domain`, `backup_subnet_cidr`,
+> The underlying module supports further fields that this root does not expose yet (`domain`,
 > `data_storage_percentage`, `scan_listener_port_tcp_ssl`, `system_version`, `zone_id`, `db_servers`,
 > `file_system_configuration`, and the `dco_*` toggles). Add them to the `azure_clusters` object type
 > in `variables.tf` and wire them in `main.tf` if you need them.
@@ -249,21 +250,98 @@ That's why the only thing you set in tfvars is the **key** (`infra_ref = "infra1
 
 ## 9. Scaling: adding more resources
 
-**Add a second VM cluster on the same infra/VNet** — just add a map entry:
+**Add a second VM cluster on the same infra/VNet** — just add a map entry. Pointing at the same
+`vnet_ref` reuses the existing delegated subnet; no second subnet is created.
+
+The one field you must not reuse is `backup_subnet_cidr`. The delegated subnet is shared by design,
+but Oracle carves the backup range inside the VNet **per cluster** — so once more than one cluster
+shares a `vnet_ref`, give each its own non-overlapping range:
 
 ```hcl
 azure_clusters = {
-  vmc1 = { name = "vmc-prod", display_name = "VM Cluster Prod", hostname = "exadb", infra_ref = "infra1", vnet_ref = "vnet1", ... }
+  vmc1 = {
+    name = "vmc-prod", display_name = "VM Cluster Prod", hostname = "exadb"
+    infra_ref = "infra1", vnet_ref = "vnet1"
+    backup_subnet_cidr = "10.0.10.0/24"      # ← add one to the existing cluster too
+    ...
+  }
   vmc2 = {                                   # ← new
-    name            = "vmc-reporting"
-    display_name    = "VM Cluster Reporting"
-    hostname        = "rpt"
-    infra_ref       = "infra1"
-    vnet_ref        = "vnet1"
-    cpu_core_count  = 8
-    ssh_public_keys = ["ssh-rsa AAAA... your-key"]
+    name               = "vmc-reporting"
+    display_name       = "VM Cluster Reporting"
+    hostname           = "rpt"
+    infra_ref          = "infra1"
+    vnet_ref           = "vnet1"             # same delegated subnet as vmc1
+    backup_subnet_cidr = "10.0.11.0/24"      # must not overlap vmc1's
+    cpu_core_count     = 8
+    ssh_public_keys    = ["ssh-rsa AAAA... your-key"]
   }
 }
+```
+
+Pick ranges inside the VNet `address_space` that do not overlap each other or the delegated
+`subnet_address_prefix`. Terraform does not check this for you — a collision surfaces as an Azure
+error during apply. Both clusters default to the same `192.168.252.0/22`, so the second one must be
+given its own range.
+
+**Never set `backup_subnet_cidr` to `""`.** The attribute is `ForceNew` and not `Computed`, and the
+provider reads the API's value back into state. An empty config therefore compares `null` against
+the range the service assigned, and every later `terraform plan` proposes **destroying and
+recreating the cluster** — a multi-hour rebuild. Always state the range explicitly; the default
+`192.168.252.0/22` is the range the service would have picked anyway.
+
+### Why the module has an `ignore_changes` guard
+
+On `azurerm_oracle_cloud_vm_cluster` almost every argument is `ForceNew`, and the provider's
+`Update()` handles only `tags` and `file_system_configuration`. **Anything else that changes outside
+Terraform proposes destroying the cluster rather than correcting it** — a multi-hour rebuild.
+
+Three optional arguments are `ForceNew` *without* being `Computed`, which makes them the ones that
+diff against an empty config. They are guarded by default:
+
+| Guarded | Why |
+|---|---|
+| `backup_subnet_cidr` | Not `Computed`, so a blank config diffs against the range the service assigns. |
+| `gi_version` | A **major-version selector** — Oracle resolves `19.0.0.0` to the running release (`19.32.0.0.0`) and stores that. It moves again with every quarterly GI patch, so pinning the resolved release only delays the diff. |
+| `scan_listener_port_tcp_ssl` | Passed as `null` unless you set a port, so it diffs against any port the service assigns. |
+
+The other optional arguments — `cluster_name`, `domain`, `time_zone`, `system_version`, `zone_id`,
+`data_storage_percentage`, `local_backup_enabled`, `sparse_diskgroup_enabled` — **are** `Computed`.
+Terraform adopts the state value when config omits them, so they need no guard while left blank and
+guarding them would cost you real drift detection.
+
+### Attributes changed outside Terraform
+
+If your operations team patches or scales the cluster through the OCI console or Azure portal,
+Terraform sees that as drift on a `ForceNew` attribute and proposes a rebuild. The module ships
+these commented out in `modules/vm-cluster/main.tf` — uncomment the ones that apply to you:
+
+```hcl
+# system_version,              # Exadata image patching
+# cpu_core_count,              # online OCPU scaling from the console
+# ssh_public_keys,             # key rotation on the nodes
+# data_storage_size_in_tbs,    # storage scaling
+# memory_size_in_gbs,          # memory scaling
+# db_node_storage_size_in_gbs, # local storage scaling
+```
+
+`cpu_core_count` deserves particular attention: Oracle supports **online** OCPU scaling, so an
+operator resizing the cluster from the console leaves Terraform proposing to destroy it.
+
+Each entry you add is drift Terraform will no longer report, so add them deliberately rather than
+pre-emptively.
+
+To change a guarded value deliberately, edit it and force the replacement yourself:
+
+```bash
+terraform apply -replace='module.vm_cluster["vmc1"].azurerm_oracle_cloud_vm_cluster.this'
+```
+
+One consequence worth knowing: with that guard in place Terraform will no longer report drift on
+this field, so the cluster silently keeps whatever range Azure actually assigned. Confirm it once
+after the first apply:
+
+```bash
+terraform state show 'module.vm_cluster["vmc1"].azurerm_oracle_cloud_vm_cluster.this' | grep backup_subnet_cidr
 ```
 
 **Add a whole second stack** in another region: add a `vnet2` to `azure_vnets`, an `infra2` to
