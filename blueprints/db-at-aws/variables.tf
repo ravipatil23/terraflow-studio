@@ -12,6 +12,28 @@ variable "tags" {
   default     = {}
 }
 
+# ── Existing (externally provisioned) resources ───────────────────────────────
+# Point the blueprint at an ODB Network or Exadata Infrastructure that already
+# exists — provisioned by hand, by another stack, or by a different team. An
+# entry here is referenced by ID and never created, updated or destroyed.
+#
+# Key these maps exactly the way aws_clusters / aws_peerings already reference
+# them (network_ref / infra_ref), and leave the matching aws_networks /
+# aws_infras entry out. Managed and existing resources share one keyspace, so
+# you can mix both in a single configuration.
+
+variable "existing_odb_network_ids" {
+  description = "IDs of ODB Networks that already exist, keyed by the name used in aws_clusters.network_ref / aws_peerings.network_ref."
+  type        = map(string)
+  default     = {}
+}
+
+variable "existing_infra_ids" {
+  description = "IDs of Exadata Infrastructures that already exist, keyed by the name used in aws_clusters.infra_ref."
+  type        = map(string)
+  default     = {}
+}
+
 # ── ODB Networks ──────────────────────────────────────────────────────────────
 variable "aws_networks" {
   description = "Map of ODB Networks, keyed by a short name you choose. The key is referenced by aws_clusters.network_ref and aws_peerings.network_ref."

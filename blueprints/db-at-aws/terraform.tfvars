@@ -14,8 +14,34 @@ tags = {
   Owner       = "platform-team"
 }
 
+# ── Existing resources (brownfield) ───────────────────────────────────────────
+# Already have an ODB Network or Exadata Infrastructure — provisioned by hand,
+# by another stack, or by another team? List its ID here instead of describing
+# it in the aws_networks / aws_infras maps below. Entries here are referenced
+# only: Terraform never creates, changes or destroys them.
+#
+# Use the same key your clusters and peerings already reference, and leave the
+# matching aws_networks / aws_infras entry out. Mixing is fine — create one
+# network here and reuse an existing infra, or any other combination.
+#
+#   existing_odb_network_ids = {
+#     net1 = "odb-net-0a1b2c3d4e5f67890"
+#   }
+#
+#   existing_infra_ids = {
+#     infra1 = "odb-exa-0a1b2c3d4e5f67890"
+#   }
+#
+#   aws_networks = {}          # net1 is not created — it already exists
+#   aws_infras   = {}          # infra1 is not created — it already exists
+#
+#   aws_clusters = {
+#     vmc1 = { network_ref = "net1", infra_ref = "infra1", ... }   # unchanged
+#   }
+
 # ── ODB Networks ──────────────────────────────────────────────────────────────
 # Key ("net1") is an internal reference used by clusters/peerings below.
+# Omit an entry here if you listed it in existing_odb_network_ids above.
 aws_networks = {
   net1 = {
     display_name         = "odbnet-prod-use1"

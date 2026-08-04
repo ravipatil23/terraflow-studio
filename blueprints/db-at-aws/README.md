@@ -21,6 +21,7 @@ the `.tf` files are reusable as-is.
    - [`aws_clusters`](#74-aws_clusters)
    - [`aws_peerings`](#75-aws_peerings)
 8. [How resources are wired](#8-how-resources-are-wired)
+   - [Using an existing network or infrastructure](#81-using-an-existing-network-or-infrastructure)
 9. [Scaling: adding more resources](#9-scaling-adding-more-resources)
 10. [Outputs](#10-outputs)
 11. [Day-2 operations](#11-day-2-operations)
@@ -168,6 +169,8 @@ terraform apply
 |----------|------|----------|-------------|
 | `aws_region` | string | ✅ | Default AWS region for the deployment. Overridable per map entry via `region`. |
 | `tags` | map(string) | — | Tags applied to all resources. Default `{}`. |
+| `existing_odb_network_ids` | map(string) | — | IDs of ODB networks that already exist, keyed the way `network_ref` references them. Referenced only, never created. See [8.1](#81-using-an-existing-network-or-infrastructure). |
+| `existing_infra_ids` | map(string) | — | IDs of Exadata infrastructures that already exist, keyed the way `infra_ref` references them. Referenced only, never created. See [8.1](#81-using-an-existing-network-or-infrastructure). |
 
 ### 7.2 `aws_networks`
 
@@ -256,18 +259,68 @@ Optional. Map of ODB network peering connections. `network_ref` must match a key
 You never paste a network ID, infra ID, or DB-server ID. The root `main.tf` resolves them:
 
 ```hcl
-# cluster → infra ID and network ID (from module outputs)
-cloud_exadata_infrastructure_id = module.exadata_infra[each.value.infra_ref].infra_id
-odb_network_id                  = module.odb_network[each.value.network_ref].network_id
+# one keyspace for what this blueprint creates and what already exists
+locals {
+  odb_network_ids = merge({ for k, m in module.odb_network : k => m.network_id }, var.existing_odb_network_ids)
+  infra_ids       = merge({ for k, m in module.exadata_infra : k => m.infra_id }, var.existing_infra_ids)
+}
+
+# cluster → infra ID and network ID
+cloud_exadata_infrastructure_id = local.infra_ids[each.value.infra_ref]
+odb_network_id                  = local.odb_network_ids[each.value.network_ref]
 
 # cluster → DB server IDs (auto-discovered when db_servers_mode = "auto")
 db_servers = each.value.db_servers_mode == "auto" ? data.aws_odb_db_servers.this[each.key].db_servers[*].id : each.value.db_servers
 
-# peering → source ODB network ID (from module output)
-odb_network_id = module.odb_network[each.value.network_ref].network_id
+# peering → source ODB network ID
+odb_network_id = local.odb_network_ids[each.value.network_ref]
 ```
 
 That's why the only thing you set in tfvars is the **key** (`infra_ref = "infra1"`).
+
+### 8.1 Using an existing network or infrastructure
+
+If the ODB network or Exadata infrastructure was provisioned outside this blueprint — by hand, by
+another stack, or by another team — give its **ID** under the same key your clusters already
+reference, and leave the matching `aws_networks` / `aws_infras` entry out:
+
+```hcl
+existing_infra_ids = {
+  infra1 = "odb-exa-0a1b2c3d4e5f67890"
+}
+
+aws_infras = {}                 # infra1 already exists — nothing to create
+
+aws_clusters = {
+  vmc1 = {
+    display_name    = "vmc-prod-use1"
+    gi_version      = "23.0.0.0"
+    hostname_prefix = "exadb"
+    infra_ref       = "infra1"  # unchanged — now resolves to the existing infra
+    network_ref     = "net1"
+    ssh_public_keys = ["ssh-rsa AAAA... your-key"]
+  }
+}
+```
+
+`existing_odb_network_ids` works the same way for `network_ref`, and peerings pick it up too.
+
+Managed and existing resources share one keyspace, so you can mix them freely — create the network
+here and reuse an existing infrastructure, or the reverse. Terraform never creates, changes or
+destroys anything listed in an `existing_*` map; it only reads the ID.
+
+Two things to know:
+
+- Pass the **ID** (`odb-exa-…`, `odb-net-…`), not the ARN.
+- Keep each resource in **one** map. Listing the same key in `aws_infras` *and*
+  `existing_infra_ids` would create a new infrastructure and still wire the clusters to the
+  existing one; a `check` block flags that at plan time.
+- `db_servers_mode = "auto"` still works against an existing infrastructure — the
+  `aws_odb_db_servers` data source queries it by ID like any other.
+
+If you would rather Terraform *adopt* the resource and manage it from now on, use an `import` block
+against the module address instead, fill in the matching `aws_infras` entry to match reality, and
+confirm `terraform plan` reports no changes before applying.
 
 ---
 
