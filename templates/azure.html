@@ -185,16 +185,14 @@
 <div class="output-panel">
   <div class="out-layout">
     <div class="file-tree" id="file-tree">
-      <div class="ft-section">Root</div>
-      <div class="ft-root-file active" id="ft-root-main" onclick="selFile('root-main')"><span>📄</span>main.tf</div>
-      <div class="ft-root-file" id="ft-root-tfvars" onclick="selFile('root-tfvars')"><span>📄</span>terraform.tfvars</div>
-      <div id="ft-modules-section"></div>
+      <div id="ft-body"></div>
     </div>
     <div class="editor-pane">
       <div class="editor-header">
         <div class="editor-filepath"><span class="live-dot"></span><span id="ep-path">main.tf</span></div>
         <div class="editor-actions">
           <button class="icon-btn green" id="btn-dl" onclick="dlZip()">⬇ Download ZIP</button>
+          <button class="icon-btn" onclick="dlDrawio()" title="Download an editable draw.io architecture diagram of this configuration">⬇ Diagram</button>
           <button class="icon-btn" onclick="loadZip()" title="Load a previously downloaded Terraflow ZIP to restore its configuration">⬆ Load ZIP</button>
           <input type="file" id="load-zip-input" accept=".zip" style="display:none" onchange="onLoadZipFile(this)">
           <button class="icon-btn muted" id="gh-push-btn" onclick="pushToGithub()" title="Set GITHUB_TOKEN and GITHUB_REPO in .env to enable Git push">⬆ Push to Git</button>
@@ -375,7 +373,8 @@ function defAzureCluster(i) {
     license_model:                  'LicenseIncluded',
     cluster_name:                   '',
     domain:                         '',
-    backup_subnet_cidr:             '',
+    // Must stay non-empty — see backup_subnet_cidr note in azure_gen.py.
+    backup_subnet_cidr:             '192.168.252.0/22',
     data_storage_percentage:        80,
     local_backup_enabled:           false,
     sparse_diskgroup_enabled:       false,
@@ -689,7 +688,7 @@ function azureClusterCardHTML(d, i) {
         <div class="field"><div class="field-lbl">domain</div><div class="field-hint">Fully-qualified domain name for the cluster</div><input type="text" id="${p}dom" value="${d.domain||''}" placeholder="example.com" oninput="readAzureCluster(${i});refresh()"></div>
       </div>
       <div class="g2">
-        <div class="field"><div class="field-lbl">backup_subnet_cidr</div><div class="field-hint">CIDR for the backup client network</div><input type="text" id="${p}bsc" value="${d.backup_subnet_cidr||''}" placeholder="192.168.252.0/22" oninput="readAzureCluster(${i});refresh()"></div>
+        <div class="field"><div class="field-lbl">backup_subnet_cidr</div><div class="field-hint">CIDR for the backup client network — changing it replaces the cluster; blank falls back to 192.168.252.0/22</div><input type="text" id="${p}bsc" value="${d.backup_subnet_cidr||''}" placeholder="192.168.252.0/22" oninput="readAzureCluster(${i});refresh()"></div>
         <div class="field"><div class="field-lbl">time_zone</div><div class="field-hint">IANA time zone e.g. UTC, America/New_York</div><input type="text" id="${p}tz" value="${d.time_zone||''}" placeholder="UTC" oninput="readAzureCluster(${i});refresh()"></div>
       </div>
       <div class="g3">
@@ -730,7 +729,7 @@ function renderAzureVnets() {
   const cl = document.getElementById('azure-vnet-count');
   if (cl) cl.textContent = `${azureVnets.length} vnet${azureVnets.length !== 1 ? 's' : ''}`;
   updateTree(); injectTooltips();
-  _renderAzureClusterDropdowns();
+  syncRefDropdowns();
 }
 
 function renderAzureInfras() {
@@ -738,7 +737,7 @@ function renderAzureInfras() {
   const cl = document.getElementById('azure-infra-count');
   if (cl) cl.textContent = `${azureInfras.length} infra${azureInfras.length !== 1 ? 's' : ''}`;
   updateTree(); injectTooltips();
-  _renderAzureClusterDropdowns();
+  syncRefDropdowns();
 }
 
 function renderAzureClusters() {
@@ -751,17 +750,62 @@ function renderAzureClusters() {
 
 
 
+// Rebuild from the state arrays, never from the <select>'s current value: once
+// the option list changes, a stale DOM value silently resolves to whatever ends
+// up first, leaving *_ref in state pointing somewhere else entirely.
+function _setRefSelect(id, html, empty) {
+  const sel = document.getElementById(id);
+  if (sel) sel.innerHTML = html || `<option value="">${empty}</option>`;
+}
 function _renderAzureClusterDropdowns() {
   azureClusters.forEach((d, i) => {
-    const infSel  = document.getElementById(`ac${i}_infra_ref`);
-    const vnetSel = document.getElementById(`ac${i}_vnet_ref`);
-    if (infSel)  { const cur = infSel.value;  infSel.innerHTML  = azureInfraOptions(cur)  || '<option value="">— add infra first —</option>'; }
-    if (vnetSel) { const cur = vnetSel.value; vnetSel.innerHTML = azureVnetOptions(cur)   || '<option value="">— add VNet first —</option>'; }
+    _setRefSelect(`ac${i}_infra_ref`, azureInfraOptions(d.infra_ref), '— add infra first —');
+    _setRefSelect(`ac${i}_vnet_ref`,  azureVnetOptions(d.vnet_ref),   '— add VNet first —');
   });
 }
 
+// Reference dropdowns are built from the current VNet / infra module names, so
+// adding, removing, renaming or reordering one has to rebuild every dependent
+// <select> — otherwise it keeps stale options and *_ref names a module that no
+// longer exists, which fails at apply time with an unknown module reference.
+let _refVnets = [], _refInfras = [];
+
+// Equal lengths means a rename rather than an add/remove, so refs can follow the
+// module by position and keep pointing at what the user actually picked.
+function _refRenameMap(before, after) {
+  const map = {};
+  if (before.length === after.length) {
+    before.forEach((b, i) => { if (after[i] !== b) map[b] = after[i]; });
+  }
+  return map;
+}
+function _retargetRefs(rows, key, renames, valid) {
+  let changed = false;
+  rows.forEach(r => {
+    if (renames[r[key]]) { r[key] = renames[r[key]]; changed = true; }
+    if (valid.length && valid.indexOf(r[key]) < 0) { r[key] = valid[0]; changed = true; }
+  });
+  return changed;
+}
+function syncRefDropdowns() {
+  if (typeof azureVnets === 'undefined' || typeof azureInfras === 'undefined') return;
+  const vnets  = azureVnets.map(n => n.module_name);
+  const infras = azureInfras.map(n => n.module_name);
+  const listsChanged = vnets.join(',')  !== _refVnets.join(',')
+                    || infras.join(',') !== _refInfras.join(',');
+  const vnetMap  = _refRenameMap(_refVnets, vnets);
+  const infraMap = _refRenameMap(_refInfras, infras);
+  _refVnets = vnets; _refInfras = infras;
+
+  let retargeted = false;
+  if (_retargetRefs(azureClusters, 'vnet_ref',  vnetMap,  vnets))  retargeted = true;
+  if (_retargetRefs(azureClusters, 'infra_ref', infraMap, infras)) retargeted = true;
+
+  if (listsChanged || retargeted) _renderAzureClusterDropdowns();
+}
+
 function renderRefDropdowns() {
-  _renderAzureClusterDropdowns();
+  syncRefDropdowns();
 }
 
 
@@ -814,8 +858,8 @@ function switchTab(i) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const pg = document.getElementById('azure-page-' + i);
   if (pg) pg.classList.add('active');
-  activeFile = 'root-main';
-  updateTree(); renderEditor();
+  activeFile = 'main.tf';
+  refreshOutput();
 }
 
 function buildPayload() {
@@ -984,6 +1028,21 @@ function addCidrToPeer(i) {
   renderAwsPeerings(); refresh();
 }
 
+// Server-side validation reports Terraform field names (resource_group_name,
+// address_space, ...) but the form inputs use short ids (rg, as, ...). Without
+// this map the "highlight the offending field" lookup below silently matches
+// nothing, so errors show in the card banner but no field turns red.
+const VALIDATION_FIELD_INPUT = {
+  av: {resource_group_name:'rg', location:'loc', vnet_name:'vn',
+       address_space:'as', subnet_address_prefix:'sp'},
+  ai: {resource_group_name:'rg', location:'loc', name:'name', display_name:'dn',
+       shape:'shape', compute_count:'cc', storage_count:'sc'},
+  ac: {resource_group_name:'rg', location:'loc', name:'name', display_name:'dn',
+       hostname:'host', gi_version:'gi', cpu_core_count:'cpu',
+       backup_subnet_cidr:'bsc',
+       data_storage_size_in_tbs:'dstb', ssh_public_keys:'sshin'},
+};
+
 // ── Validate & Generate ───────────────────────────────────────────────────────
 async function vgen(tab, isGcp){
   const p=buildPayload(); p.tab=tab;
@@ -1010,8 +1069,16 @@ async function vgen(tab, isGcp){
               banner.innerHTML = '⚠ ' + Object.entries(errs).map(([k,v])=>`<strong>${k}</strong>: ${v}`).join(' &nbsp;·&nbsp; ');
               body.insertBefore(banner, body.firstChild);
             }
+            // Card id prefix + index come from the module-name input (e.g. "ai2_mn").
+            const idm = (mnInput.id || '').match(/^([a-z]+)(\d+)_mn$/i);
             for(const field of Object.keys(errs)){
-              const inp = card.querySelector(`input[id*="${field}"], select[id*="${field}"], textarea[id*="${field}"]`);
+              let inp = null;
+              if(idm){
+                const suffix = (VALIDATION_FIELD_INPUT[idm[1]] || {})[field];
+                if(suffix) inp = document.getElementById(`${idm[1]}${idm[2]}_${suffix}`);
+              }
+              // Fall back to the old guess for anything not in the map.
+              if(!inp) inp = card.querySelector(`input[id*="${field}"], select[id*="${field}"], textarea[id*="${field}"]`);
               if(inp){
                 const fieldDiv = inp.closest('.field');
                 if(fieldDiv) fieldDiv.classList.add('invalid');
@@ -1030,8 +1097,8 @@ async function vgen(tab, isGcp){
     showToast('Error: '+e.message, true);
     return;
   }
-  activeFile='root-main';
-  updateTree(); renderEditor();
+  activeFile='main.tf';
+  refreshOutput();
 }
 
 function copyFile(){const text=document.getElementById('code-out').innerText;navigator.clipboard.writeText(text).then(()=>{const btn=document.getElementById('copybtn');btn.classList.add('copied');btn.textContent='✓ Copied!';setTimeout(()=>{btn.classList.remove('copied');btn.textContent='⎘ Copy';},2000);});}
@@ -1045,57 +1112,85 @@ function switchTool(t) {
   if(cfnBtn) cfnBtn.className = 'tsw-btn cfn-btn' + (t==='cloudformation' ? ' sel-cfn' : '');
   const dlBtn = document.getElementById('btn-dl');
   if(dlBtn) dlBtn.textContent = (t==='cloudformation') ? '⬇ Download YAML' : '⬇ Download ZIP';
-  if(t==='cloudformation') { activeFile='cfn-main'; }
+  if(t==='cloudformation') { activeFile='cfn'; }
+  else if(activeFile==='cfn')  { activeFile='main.tf'; }
   refresh();
 }
 
 // ── File key helpers ──────────────────────────────────────────────────────────
-function fkToPath(k){
-  if(k==='root-main')return'<span class="ep-file">main.tf</span>';
-  if(k==='root-tfvars')return'<span class="ep-file">terraform.tfvars</span>';
-  if(k==='cfn-main')return'<span class="ep-file">odb-stack.yaml</span>';
-  const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'<span class="ep-dir">modules/'+m2[1]+'/</span><span class="ep-file">'+f+'</span>';}
-  const m3=k.match(/^dg_maz:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m3){const f=m3[2]==='tfvars'?'terraform.tfvars':m3[2]+'.tf';return'<span class="ep-dir">dg_multi_az_'+m3[1]+'/</span><span class="ep-file">'+f+'</span>';}
-  const m4=k.match(/^dg_cr:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m4){const f=m4[2]==='tfvars'?'terraform.tfvars':m4[2]+'.tf';return'<span class="ep-dir">dg_cross_region_'+m4[1]+'/</span><span class="ep-file">'+f+'</span>';}
-  return k;
-}
-function fkToApiPath(k){
-  if(k==='root-main')return'main.tf';
-  if(k==='root-tfvars')return'terraform.tfvars';
-  if(k==='cfn-main')return'cfn';
-  const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'modules/'+m2[1]+'/'+f;}
-  const m3=k.match(/^dg_maz:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m3){const f=m3[2]==='tfvars'?'terraform.tfvars':m3[2]+'.tf';return'dg_multi_az_'+m3[1]+'/'+f;}
-  const m4=k.match(/^dg_cr:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m4){const f=m4[2]==='tfvars'?'terraform.tfvars':m4[2]+'.tf';return'dg_cross_region_'+m4[1]+'/'+f;}
-  return k;
-}
+// A file key IS the generated file's path (e.g. 'main.tf',
+// 'modules/<module>/variables.tf'), exactly as /api/files reports it and
+// /api/generate expects it. 'cfn' is the single CloudFormation pseudo-path.
+const FT_ICONS={'main.tf':'📄','variables.tf':'📋','outputs.tf':'📤','README.md':'📖'};
+function ftIcon(f){return FT_ICONS[f]||(/\.tfvars$/.test(f)?'⚙':'📄');}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-function updateTree(){
-  const sec=document.getElementById('ft-modules-section');
-  if(!sec) return;
+function fkToPath(k){
+  if(k==='cfn')return'<span class="ep-file">odb-stack.yaml</span>';
+  const i=k.lastIndexOf('/');
+  if(i<0)return'<span class="ep-file">'+esc(k)+'</span>';
+  return'<span class="ep-dir">'+esc(k.slice(0,i+1))+'</span><span class="ep-file">'+esc(k.slice(i+1))+'</span>';
+}
+function fkToApiPath(k){return k;}
+
+// Real generated paths, refreshed from the server by updateTree().
+let fileList=[];
+
+function renderTree(){
+  const body=document.getElementById('ft-body');
+  if(!body) return;
   if(iacTool==='cloudformation'){
-    sec.innerHTML='<div class="ft-section" style="margin-top:8px">CloudFormation</div>'
-      +'<div class="ft-file'+(activeFile==='cfn-main'?' active':'')+'" onclick="selFile(\'cfn-main\')"><span>📄</span>odb-stack.yaml</div>';
-    ['root-main','root-tfvars'].forEach(k=>{const el=document.getElementById('ft-'+k);if(el)el.className='ft-root-file';});
+    body.innerHTML='<div class="ft-section">CloudFormation</div>'
+      +'<div class="ft-root-file'+(activeFile==='cfn'?' active':'')+'" onclick="selFile(\'cfn\')"><span>📄</span>odb-stack.yaml</div>';
     return;
   }
-  const names=getAllModuleNames();
-  let h='<div class="ft-section" style="margin-top:8px">Modules</div>';
-  names.forEach(n=>{
-    h+='<div class="ft-dir">'+n+'/</div>';
-    [['main','main.tf','📄'],['variables','variables.tf','📋'],['outputs','outputs.tf','📤'],['tfvars','terraform.tfvars','⚙']].forEach(([kt,f,ic])=>{
-      const fk='mod:'+n+':'+kt;
-      const sid='ft-mod-'+n.replace(/[^a-z0-9]/gi,'_')+'-'+kt;
-      h+='<div class="ft-file '+(activeFile===fk?'active':'')+'" id="'+sid+'" onclick="selFile(\''+fk+'\')"><span>'+ic+'</span>'+f+'</div>';
-    });
+  const roots=fileList.filter(f=>f.indexOf('/')<0);
+  const dirs={};
+  fileList.filter(f=>f.indexOf('/')>=0).forEach(f=>{
+    const i=f.lastIndexOf('/');
+    (dirs[f.slice(0,i)]=dirs[f.slice(0,i)]||[]).push(f.slice(i+1));
   });
-  sec.innerHTML=h;
-  ['root-main','root-tfvars'].forEach(k=>{const el=document.getElementById('ft-'+k);if(el)el.className='ft-root-file'+(activeFile===k?' active':'');});
+  let h='';
+  if(roots.length){
+    h+='<div class="ft-section">Root</div>';
+    roots.forEach(f=>{
+      h+='<div class="ft-root-file'+(activeFile===f?' active':'')+'" onclick="selFile(\''+f+'\')"><span>'+ftIcon(f)+'</span>'+esc(f)+'</div>';
+    });
+  }
+  const dirNames=Object.keys(dirs);
+  if(dirNames.length){
+    h+='<div class="ft-section" style="margin-top:8px">Modules</div>';
+    dirNames.forEach(d=>{
+      h+='<div class="ft-dir">'+esc(d)+'/</div>';
+      dirs[d].forEach(f=>{
+        const fk=d+'/'+f;
+        h+='<div class="ft-file '+(activeFile===fk?'active':'')+'" onclick="selFile(\''+fk+'\')"><span>'+ftIcon(f)+'</span>'+esc(f)+'</div>';
+      });
+    });
+  }
+  body.innerHTML=h||'<div class="ft-section">No files yet</div>';
+}
+
+async function updateTree(){
+  if(iacTool==='cloudformation'){
+    fileList=['cfn'];
+    if(activeFile!=='cfn') activeFile='cfn';
+    renderTree();
+    return;
+  }
+  let p; try{p=buildPayload();}catch(e){p=null;}
+  if(p){
+    try{
+      const r=await fetch('/api/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+      const d=await r.json();
+      if(Array.isArray(d.files)) fileList=d.files;
+    }catch(e){/* keep the previous list on a transient failure */}
+  }
+  // The active file may have vanished (module removed, cloud switched).
+  if(fileList.length && fileList.indexOf(activeFile)<0){
+    activeFile=fileList.indexOf('main.tf')>=0?'main.tf':fileList[0];
+  }
+  renderTree();
 }
 
 async function fetchFile(fk){
@@ -1110,37 +1205,51 @@ async function renderEditor(){
   const c=await fetchFile(fkToApiPath(activeFile));
   document.getElementById('code-out').innerHTML=hl(c);
 }
-function selFile(k){activeFile=k;updateTree();renderEditor();}
+// Selecting a file does not change the payload, so repaint from the cached list.
+function selFile(k){activeFile=k;renderTree();renderEditor();}
+// Re-list then re-render: updateTree() may retarget activeFile if it disappeared.
+async function refreshOutput(){await updateTree();renderEditor();}
 function refresh(){
+  syncRefDropdowns();
   document.querySelectorAll('.inst-body .field.invalid').forEach(f=>f.classList.remove('invalid'));
   document.querySelectorAll('.card-err-banner').forEach(b=>b.remove());
-  clearTimeout(rtimer);rtimer=setTimeout(()=>{updateTree();renderEditor();},300);
+  clearTimeout(rtimer);rtimer=setTimeout(refreshOutput,300);
+}
+
+// Highlight spans are emitted as sentinel markers (\x01class\x02 … \x03) and only
+// turned into real <span> tags at the very end. Emitting the tags inline made
+// later rules match their own markup — e.g. class="hcmt" matched the string rule
+// and printed literal `hcmt"` into the output.
+const _HS = '\u0001', _HE = '\u0002', _HC = '\u0003';
+function _mk(cls, txt){ return _HS + cls + _HE + txt + _HC; }
+function _spans(s){
+  return s.replace(/\u0001([a-z]+)\u0002/g, '<span class="$1">').replace(/\u0003/g, '</span>');
 }
 
 function hl(code){
   let s=code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   if(iacTool==='cloudformation'){
-    return s
-      .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
-      .replace(/^(\s*)(AWSTemplateFormatVersion|Description|Resources|Outputs|Parameters|Conditions|Mappings|Transform):/gm,'$1<span class="hkw">$2</span>:')
-      .replace(/^(\s*)(Type|Properties|DependsOn|Value|Export|Name):/gm,'$1<span class="hkw">$2</span>:')
-      .replace(/(AWS::ODB::[A-Za-z]+)/g,'<span class="hres">$1</span>')
-      .replace(/(!GetAtt|!Sub|!Ref|!Join|!Select|!If)\b/g,'<span class="href">$1</span>')
-      .replace(/:\s*'([^'<>]*)'/g,': <span class="hstr">\'$1\'</span>')
-      .replace(/:\s*(true|false)\b/g,': <span class="hbol">$1</span>')
-      .replace(/:\s*(-?\d+\.?\d*)(\s|$)/gm,': <span class="hnum">$1</span>$2');
+    return _spans(s
+      .replace(/^(#[^\n]*)/gm,(m,c)=>_mk('hcmt',c))
+      .replace(/^(\s*)(AWSTemplateFormatVersion|Description|Resources|Outputs|Parameters|Conditions|Mappings|Transform):/gm,(m,i,k)=>i+_mk('hkw',k)+':')
+      .replace(/^(\s*)(Type|Properties|DependsOn|Value|Export|Name):/gm,(m,i,k)=>i+_mk('hkw',k)+':')
+      .replace(/(AWS::ODB::[A-Za-z]+)/g,(m,r)=>_mk('hres',r))
+      .replace(/(!GetAtt|!Sub|!Ref|!Join|!Select|!If)\b/g,(m,f)=>_mk('href',f))
+      .replace(/:\s*'([^'\u0001-\u0003]*)'/g,(m,v)=>': '+_mk('hstr',"'"+v+"'"))
+      .replace(/:\s*(true|false)\b/g,(m,b)=>': '+_mk('hbol',b))
+      .replace(/:\s*(-?\d+\.?\d*)(\s|$)/gm,(m,n,t)=>': '+_mk('hnum',n)+t));
   }
-  return s
-    .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
-    .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|validation|condition|error_message|description|type|default|value|properties)\b(?=[^(])/g,'<span class="hkw">$1</span>')
-    .replace(/"(aws_odb_[a-z_]+)"/g,'"<span class="hres">$1</span>"')
-    .replace(/"(google_oracle_database_[a-z_]+)"/g,'"<span class="hgres">$1</span>"')
-    .replace(/\b(string|number|bool|list|map|any|null)\b/g,'<span class="htype">$1</span>')
-    .replace(/var\.([a-z_][a-z0-9_.]*)/g,'<span class="hvar">var.$1</span>')
-    .replace(/module\.([a-z_][a-z0-9_.]*)/g,'<span class="href">module.$1</span>')
-    .replace(/=\s*"([^"<>]+)"/g,(m,v)=>'= <span class="hstr">"'+v+'"</span>')
-    .replace(/=\s*(true|false)\b/g,'= <span class="hbol">$1</span>')
-    .replace(/=\s*(-?\d+\.?\d*)\b/g,'= <span class="hnum">$1</span>');
+  return _spans(s
+    .replace(/^(#[^\n]*)/gm,(m,c)=>_mk('hcmt',c))
+    .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|validation|condition|error_message|description|type|default|value|properties)\b(?=[^(])/g,(m,k)=>_mk('hkw',k))
+    .replace(/"(aws_odb_[a-z_]+)"/g,(m,r)=>'"'+_mk('hres',r)+'"')
+    .replace(/"(google_oracle_database_[a-z_]+)"/g,(m,r)=>'"'+_mk('hgres',r)+'"')
+    .replace(/\b(string|number|bool|list|map|any|null)\b/g,(m,t)=>_mk('htype',t))
+    .replace(/var\.([a-z_][a-z0-9_.]*)/g,(m,v)=>_mk('hvar','var.'+v))
+    .replace(/module\.([a-z_][a-z0-9_.]*)/g,(m,v)=>_mk('href','module.'+v))
+    .replace(/=\s*"([^"\u0001-\u0003]+)"/g,(m,v)=>'= '+_mk('hstr','"'+v+'"'))
+    .replace(/=\s*(true|false)\b/g,(m,b)=>'= '+_mk('hbol',b))
+    .replace(/=\s*(-?\d+\.?\d*)\b/g,(m,n)=>'= '+_mk('hnum',n)));
 }
 
 // ── Terraform Explain ─────────────────────────────────────────────────────────
@@ -1805,6 +1914,49 @@ async function dlZip(){
   a.click();
 }
 
+async function dlDrawio(){
+  const p=buildPayload();
+  const r=await fetch('/api/diagram/drawio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  if(!r.ok){ let m='Diagram export failed'; try{m=(await r.json()).error||m;}catch(e){} showToast(m,true); return; }
+  const b=await r.blob();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  const cust=getCustName().replace(/[^a-z0-9_-]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  a.download='terraflow-studio-'+cloud+(cust?'-'+cust:'')+'.drawio';
+  a.click();
+}
+
+// ── Spreadsheet import ────────────────────────────────────────────
+async function onImportSpreadsheet(inp) {
+  const file = inp.files[0]; if (!file) return; inp.value = '';
+  const btn   = document.getElementById('import-sheet-btn');
+  const reply = document.getElementById('import-reply');
+  reply.style.display = 'inline';
+  reply.style.color = '#555'; reply.textContent = '⏳ Parsing…';
+  if (btn) btn.disabled = true;
+  const fd = new FormData(); fd.append('file', file); fd.append('cloud', cloud);
+  try {
+    const r = await fetch('/api/import/spreadsheet', { method: 'POST', body: fd });
+    const doc = await r.json();
+    if (doc.error) {
+      reply.style.color = '#c0392b';
+      reply.textContent = '✗ ' + doc.error;
+      return;
+    }
+    const summary = doc._import_summary || 'Imported';
+    delete doc._import_summary;
+    applyConfig(doc);
+    reply.style.color = '#1a7a4a';
+    reply.textContent = '✓ ' + summary;
+    setTimeout(() => { reply.style.display = 'none'; }, 4000);
+  } catch (e) {
+    reply.style.color = '#c0392b';
+    reply.textContent = '✗ ' + e.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function loadZip() { document.getElementById('load-zip-input').click(); }
 async function onLoadZipFile(inp) {
   const file = inp.files[0];
@@ -2135,7 +2287,8 @@ const TOOLTIPS = {
   'display_name':                   'Human-friendly name for this resource. Can be updated after creation. Visible in Azure Portal and OCI Console.',
   'availability_zone_id':           'AWS Availability Zone ID (not name). Example: <code>use1-az6</code>. Find with <code>aws ec2 describe-availability-zones</code>. Cannot be changed after creation.',
   'client_subnet_cidr':             'IPv4 CIDR block for the client subnet inside the ODB Network. Must be a valid RFC1918 range (e.g. <code>10.2.0.0/24</code>). Cannot overlap backup subnet or 192.168.128.0/20.',
-  'backup_subnet_cidr':             'CIDR block for the Oracle backup client network inside the VM Cluster. Defaults to <code>192.168.252.0/22</code> if not set. Must not overlap other subnets in the VNet.',
+  'backup_subnet_cidr':             'CIDR block for the Oracle backup client network inside the VM Cluster. Must not overlap other subnets in the VNet. <b>Changing it forces the VM Cluster to be replaced</b>, so the generated config always writes it explicitly (<code>192.168.252.0/22</code> when left blank) — leaving it out of the config makes every later <code>terraform plan</code> propose a replacement.',
+  'scan_listener_port_tcp_ssl':      'TCPS listener port. Leave blank and the generated config emits <code>null</code> — the attribute is ForceNew and not Computed, so the module adds it to <code>lifecycle.ignore_changes</code> to stop a plan replacing the cluster over a port the service assigned. Set an explicit port and that guard is dropped.',
   's3_access':                       'Allows Oracle Database instances in this network to access Amazon S3 directly. Enable if you plan to use S3 for backups or external tables.',
   'zero_etl_access':                 'Enables Zero-ETL integrations between Oracle Database and AWS analytics services (e.g. Redshift). Enable only if you need this feature.',
   'availability_zone':              'Human-readable AZ name (e.g. <code>us-east-1a</code>). Optional — prefer <em>availability_zone_id</em> for consistency across accounts.',
@@ -2260,13 +2413,12 @@ document.addEventListener('DOMContentLoaded', () => { setTimeout(injectTooltips,
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 let rtimer = null;
-let activeFile = 'root-main';
+let activeFile = 'main.tf';
 let iacTool = 'terraform';
 
 // ── Init on load ─────────────────────────────────────────────────────────────
 initStorage();
-updateTree();
-renderEditor();
+refreshOutput();
 
 // ── Product-specific initial state seed ──────────────────────────────────────
 

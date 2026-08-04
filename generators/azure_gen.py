@@ -59,7 +59,10 @@ def _azure_cluster_defaults(d, first_vnet_name='', first_infra_name=''):
         'license_model':         d.get('license_model') or 'LicenseIncluded',
         'cluster_name':          d.get('cluster_name') or '',
         'domain':                d.get('domain') or '',
-        'backup_subnet_cidr':    d.get('backup_subnet_cidr') or '',
+        # Never leave this blank: the service assigns 192.168.252.0/22 when it is
+        # omitted, and the attribute is ForceNew, so an empty config would make
+        # every subsequent plan replace the VM cluster.
+        'backup_subnet_cidr':    d.get('backup_subnet_cidr') or '192.168.252.0/22',
         'time_zone':             d.get('time_zone') or 'UTC',
         'db_servers':            d.get('db_servers') or [],
         'scan_listener_port_tcp':     int(d.get('scan_listener_port_tcp') or 1521),
@@ -80,6 +83,23 @@ def _azure_cluster_defaults(d, first_vnet_name='', first_infra_name=''):
         'vnet_ref':              d.get('vnet_ref') or first_vnet_name,
         'tags':                  d.get('tags') or {},
     }
+
+
+def _azure_anchor_defaults(d):
+    return {
+        'module_name':         d.get('module_name') or 'azure_resource_anchor',
+        'name':                d.get('name') or '',
+        'resource_group_name': d.get('resource_group_name') or '',
+        'tags':                d.get('tags') or {},
+    }
+
+
+def _azure_anchor_ctx(d):
+    return dict(
+        resource_group_name=d['resource_group_name'],
+        name=d['name'],
+        tags=d['tags'],
+    )
 
 
 def _azure_vnet_ctx(d):
@@ -134,6 +154,23 @@ def _fsc_tf(fsc_list):
     return '[' + ', '.join(items) + ']'
 
 
+def _lifecycle_ignore(d):
+    """ForceNew attributes whose value can differ from what was submitted.
+
+    Only the three optional arguments that are ForceNew *without* being Computed
+    can diff against an empty config; the Computed ones adopt the state value
+    when config omits them, so they are safe and stay out of this list.
+    Attributes that drift because of operator action (scaling, key rotation) are
+    emitted commented-out in the template for the user to enable as needed.
+    """
+    names = ['backup_subnet_cidr', 'gi_version']
+    # Emitted as null when blank, so it would diff against any port the service
+    # assigns. An explicit port round-trips and needs no guard.
+    if not d.get('scan_listener_port_tcp_ssl'):
+        names.append('scan_listener_port_tcp_ssl')
+    return names
+
+
 def _azure_cluster_ctx(d):
     keys = d.get('ssh_public_keys') or []
     ssh_tf = '[' + ', '.join(f'"{k}"' for k in keys) + ']'
@@ -158,6 +195,7 @@ def _azure_cluster_ctx(d):
         cluster_name=d['cluster_name'],
         domain=d['domain'],
         backup_subnet_cidr=d['backup_subnet_cidr'],
+        lifecycle_ignore=_lifecycle_ignore(d),
         data_storage_percentage=d['data_storage_percentage'],
         time_zone=d['time_zone'],
         scan_listener_port_tcp=d['scan_listener_port_tcp'],
@@ -174,6 +212,22 @@ def _azure_cluster_ctx(d):
         db_servers_tf=db_servers_tf,
         tags=d['tags'],
     )
+
+
+def azure_anchor_main(mn, d):
+    return render_tf('azure_resource_anchor/main.tf.j2', module_name=mn, **_azure_anchor_ctx(d))
+
+
+def azure_anchor_vars(mn, d):
+    return render_tf('azure_resource_anchor/variables.tf.j2', module_name=mn, **_azure_anchor_ctx(d))
+
+
+def azure_anchor_outputs(mn):
+    return render_tf('azure_resource_anchor/outputs.tf.j2', module_name=mn)
+
+
+def azure_anchor_tfvars(mn, d):
+    return render_tf('azure_resource_anchor/terraform.tfvars.j2', module_name=mn, **_azure_anchor_ctx(d))
 
 
 def azure_vnet_main(mn, d):
@@ -224,13 +278,14 @@ def azure_cluster_tfvars(mn, d):
     return render_tf('azure_vm_cluster/terraform.tfvars.j2', module_name=mn, **_azure_cluster_ctx(d))
 
 
-def azure_build_root_main(vnets, infras, clusters, iac_tool='terraform'):
-    return render_tf('azure_root/main.tf.j2', vnets=vnets, infras=infras, clusters=clusters, iac_tool=iac_tool)
+def azure_build_root_main(vnets, infras, clusters, anchors=None, iac_tool='terraform'):
+    return render_tf('azure_root/main.tf.j2', vnets=vnets, infras=infras, clusters=clusters,
+                     anchors=anchors or [], iac_tool=iac_tool)
 
 
-def azure_build_root_vars(vnets, infras, clusters, subscription_id='', resource_group_name='', location='eastus', tags=None):
+def azure_build_root_vars(vnets, infras, clusters, subscription_id='', resource_group_name='', location='eastus', tags=None, anchors=None):
     return render_tf('azure_root/variables.tf.j2',
-        vnets=vnets, infras=infras, clusters=clusters,
+        vnets=vnets, infras=infras, clusters=clusters, anchors=anchors or [],
         subscription_id=subscription_id,
         resource_group_name=resource_group_name,
         location=location,
@@ -238,9 +293,9 @@ def azure_build_root_vars(vnets, infras, clusters, subscription_id='', resource_
     )
 
 
-def azure_build_root_tfvars(vnets, infras, clusters, subscription_id='', resource_group_name='', location='eastus', tags=None, iac_tool='terraform'):
+def azure_build_root_tfvars(vnets, infras, clusters, subscription_id='', resource_group_name='', location='eastus', tags=None, iac_tool='terraform', anchors=None):
     return render_tf('azure_root/terraform.tfvars.j2',
-        vnets=vnets, infras=infras, clusters=clusters,
+        vnets=vnets, infras=infras, clusters=clusters, anchors=anchors or [],
         subscription_id=subscription_id,
         resource_group_name=resource_group_name,
         location=location,
@@ -249,6 +304,7 @@ def azure_build_root_tfvars(vnets, infras, clusters, subscription_id='', resourc
 
 
 def generate_azure_tf(data: dict) -> dict:
+    raw_anchors  = data.get('azure_resource_anchors', [])
     raw_vnets    = data.get('azure_vnets', [])
     raw_infras   = data.get('azure_infras', [])
     raw_clusters = data.get('azure_clusters', [])
@@ -256,6 +312,7 @@ def generate_azure_tf(data: dict) -> dict:
     first_vnet_name  = raw_vnets[0].get('module_name', 'azure_vnet') if raw_vnets else 'azure_vnet'
     first_infra_name = raw_infras[0].get('module_name', 'azure_exainfra') if raw_infras else 'azure_exainfra'
 
+    anchors  = [_azure_anchor_defaults(a) for a in raw_anchors]
     vnets    = [_azure_vnet_defaults(n) for n in raw_vnets]
     infras   = [_azure_infra_defaults(i) for i in raw_infras]
     clusters = [_azure_cluster_defaults(c, first_vnet_name, first_infra_name) for c in raw_clusters]
@@ -267,10 +324,15 @@ def generate_azure_tf(data: dict) -> dict:
     iac_tool            = data.get('iac_tool', 'terraform')
 
     files = {
-        'main.tf':          azure_build_root_main(vnets, infras, clusters, iac_tool),
-        'variables.tf':     azure_build_root_vars(vnets, infras, clusters, subscription_id, resource_group_name, location, tags),
-        'terraform.auto.tfvars': azure_build_root_tfvars(vnets, infras, clusters, subscription_id, resource_group_name, location, tags, iac_tool),
+        'main.tf':          azure_build_root_main(vnets, infras, clusters, anchors, iac_tool),
+        'variables.tf':     azure_build_root_vars(vnets, infras, clusters, subscription_id, resource_group_name, location, tags, anchors),
+        'terraform.auto.tfvars': azure_build_root_tfvars(vnets, infras, clusters, subscription_id, resource_group_name, location, tags, iac_tool, anchors),
     }
+    for anc in anchors:
+        mn = anc['module_name']
+        files[f'modules/{mn}/main.tf']      = azure_anchor_main(mn, anc)
+        files[f'modules/{mn}/variables.tf'] = azure_anchor_vars(mn, anc)
+        files[f'modules/{mn}/outputs.tf']   = azure_anchor_outputs(mn)
     for net in vnets:
         mn = net['module_name']
         files[f'modules/{mn}/main.tf']          = azure_vnet_main(mn, net)
