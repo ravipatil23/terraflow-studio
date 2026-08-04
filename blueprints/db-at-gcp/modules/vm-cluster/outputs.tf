@@ -1,3 +1,0 @@
-output "vm_cluster_name" { value = google_oracle_database_cloud_vm_cluster.this.name }
-output "vm_cluster_id" { value = google_oracle_database_cloud_vm_cluster.this.cloud_vm_cluster_id }
-output "ocid" { value = google_oracle_database_cloud_vm_cluster.this.properties[0].ocid }
