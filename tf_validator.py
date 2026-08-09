@@ -19,120 +19,17 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  PROVIDER SCHEMAS  (required + optional args per resource type)
-# ─────────────────────────────────────────────────────────────────────────────
+from clouds.aws.schema import AWS_SCHEMAS, AWS_RESOURCE_OUTPUTS
+from clouds.gcp.schema import GCP_SCHEMAS, GCP_RESOURCE_OUTPUTS
+from clouds.azure.schema import AZURE_SCHEMAS, AZURE_RESOURCE_OUTPUTS
 
-AWS_SCHEMAS = {
-    'aws_odb_network': {
-        'required': ['display_name', 'availability_zone_id', 'client_subnet_cidr',
-                     'backup_subnet_cidr', 's3_access', 'zero_etl_access'],
-        'optional': ['availability_zone', 'region', 'default_dns_prefix',
-                     'delete_associated_resources', 'tags'],
-    },
-    'aws_odb_cloud_exadata_infrastructure': {
-        'required': ['display_name', 'shape', 'compute_count', 'storage_count',
-                     'availability_zone_id', 'maintenance_window'],
-        'optional': ['availability_zone', 'region', 'database_server_type',
-                     'storage_server_type', 'customer_contacts', 'tags'],
-    },
-    'aws_odb_network_peering_connection': {
-        'required': ['display_name'],
-        'optional': ['odb_network_id', 'odb_network_arn', 'peer_network_id',
-                     'peer_network_cidrs', 'region', 'tags'],
-    },
-    'aws_odb_cloud_vm_cluster': {
-        'required': ['display_name', 'cpu_core_count', 'gi_version',
-                     'hostname_prefix', 'license_model', 'ssh_public_keys',
-                     'data_collection_options'],
-        'optional': ['cloud_exadata_infrastructure_id', 'cloud_exadata_infrastructure_arn',
-                     'odb_network_id', 'odb_network_arn', 'db_servers',
-                     'cluster_name', 'timezone', 'data_storage_size_in_tbs',
-                     'db_node_storage_size_in_gbs', 'memory_size_in_gbs',
-                     'scan_listener_port_tcp',
-                     'is_local_backup_enabled', 'is_sparse_diskgroup_enabled',
-                     'region', 'tags'],
-    },
-}
-
-GCP_SCHEMAS = {
-    'google_oracle_database_odb_network': {
-        'required': ['odb_network_id', 'location', 'network'],
-        'optional': ['project', 'gcp_oracle_zone', 'deletion_protection', 'labels'],
-    },
-    'google_oracle_database_odb_subnet': {
-        'required': ['odb_subnet_id', 'location', 'odb_network', 'cidr_range', 'purpose'],
-        'optional': ['project', 'deletion_protection'],
-    },
-    'google_oracle_database_cloud_exadata_infrastructure': {
-        'required': ['cloud_exadata_infrastructure_id', 'location', 'shape',
-                     'compute_count', 'storage_count'],
-        'optional': ['display_name', 'gcp_oracle_zone', 'project',
-                     'total_storage_size_gb', 'maintenance_window',
-                     'customer_contacts', 'deletion_protection', 'labels'],
-    },
-    'google_oracle_database_exadb_vm_cluster': {
-        'required': ['exadb_vm_cluster_id', 'location', 'grid_image_id',
-                     'exascale_db_storage_vault', 'shape_attribute',
-                     'hostname_prefix', 'node_count',
-                     'enabled_ecpu_count_per_node', 'ssh_public_keys',
-                     'odb_network', 'odb_subnet', 'backup_odb_subnet',
-                     'exadata_infrastructure'],
-        'optional': ['display_name', 'gcp_oracle_zone', 'project',
-                     'license_type', 'additional_ecpu_count_per_node',
-                     'vm_file_system_storage_size_gbs', 'cluster_name',
-                     'time_zone', 'memory_per_node_in_gbs',
-                     'db_node_storage_size_per_vm_in_gbs',
-                     'data_storage_size_in_tbs', 'spare_snapshot_space_in_gbs',
-                     'disk_redundancy', 'diagnostics_events_enabled',
-                     'health_monitoring_enabled', 'incident_logs_enabled',
-                     'deletion_protection', 'labels'],
-    },
-}
-
-ALL_SCHEMAS = {**AWS_SCHEMAS, **GCP_SCHEMAS}
-
-# Known outputs per resource type
+# Resource types are globally unique across providers (aws_odb_*, google_*,
+# azurerm_*), so a flat merge is unambiguous. Built here rather than in a shared
+# package so adding a cloud means adding one line in one place, and no cloud
+# package has to know the others exist.
+ALL_SCHEMAS = {**AWS_SCHEMAS, **GCP_SCHEMAS, **AZURE_SCHEMAS}
 RESOURCE_OUTPUTS = {
-    'aws_odb_network': [
-        'id', 'arn', 'oci_network_anchor_id', 'oci_vcn_id', 'display_name',
-        'status', 'status_reason', 'peering_connection_id',
-    ],
-    'aws_odb_cloud_exadata_infrastructure': [
-        'id', 'arn', 'oci_exadata_infrastructure_id', 'display_name',
-        'shape', 'compute_count', 'storage_count', 'status', 'status_reason',
-        'activated_storage_count', 'additional_storage_count',
-        'availability_zone', 'availability_zone_id',
-    ],
-    'aws_odb_network_peering_connection': [
-        'id', 'arn', 'display_name', 'status', 'status_reason',
-        'odb_network_id', 'peer_network_id',
-    ],
-    'aws_odb_cloud_vm_cluster': [
-        'id', 'arn', 'display_name', 'gi_version', 'hostname_prefix',
-        'hostname_prefix_computed', 'license_model', 'cpu_core_count',
-        'cluster_name', 'scan_dns_name', 'scan_ip_ids', 'status', 'status_reason',
-        'lifecycle_state', 'node_count', 'shape', 'storage_size_in_gbs',
-        'data_storage_size_in_tbs', 'db_node_storage_size_in_gbs',
-        'memory_size_in_gbs', 'scan_listener_port_tcp', 'system_version',
-    ],
-    'google_oracle_database_odb_network': [
-        'id', 'name', 'create_time', 'state', 'effective_labels',
-        'terraform_labels',
-    ],
-    'google_oracle_database_odb_subnet': [
-        'id', 'name', 'create_time', 'state',
-    ],
-    'google_oracle_database_cloud_exadata_infrastructure': [
-        'id', 'name', 'create_time', 'state', 'display_name',
-        'shape', 'compute_count', 'storage_count', 'total_storage_size_gb',
-        'available_storage_size_gb', 'effective_labels',
-    ],
-    'google_oracle_database_exadb_vm_cluster': [
-        'id', 'name', 'create_time', 'state', 'display_name',
-        'gi_version', 'node_count', 'hostname_prefix',
-        'scan_dns_name', 'effective_labels',
-    ],
+    **AWS_RESOURCE_OUTPUTS, **GCP_RESOURCE_OUTPUTS, **AZURE_RESOURCE_OUTPUTS,
 }
 
 
@@ -257,13 +154,22 @@ def validate_terraform(files: dict, cloud: str) -> list[CheckResult]:
     def warn(group, name, error, file=None):
         results.append(CheckResult(group, name, 'warn', error=error, file=file))
 
-    schemas = AWS_SCHEMAS if cloud == 'aws' else GCP_SCHEMAS
-    provider_name = 'aws' if cloud == 'aws' else 'google'
-    expected_source = f'hashicorp/{provider_name}'
+    if cloud == 'azure':
+        schemas = AZURE_SCHEMAS
+        provider_name = 'azurerm'
+        expected_source = 'hashicorp/azurerm'
+    elif cloud == 'aws':
+        schemas = AWS_SCHEMAS
+        provider_name = 'aws'
+        expected_source = 'hashicorp/aws'
+    else:
+        schemas = GCP_SCHEMAS
+        provider_name = 'google'
+        expected_source = 'hashicorp/google'
 
     # ── 1. File presence ──────────────────────────────────────────────────────
     grp = 'File Structure'
-    for required in ['main.tf', 'terraform.tfvars']:
+    for required in ['main.tf', 'terraform.auto.tfvars']:
         if required in files:
             ok(grp, f'Root {required} exists', required)
         else:
@@ -277,7 +183,7 @@ def validate_terraform(files: dict, cloud: str) -> list[CheckResult]:
             module_names.add(m.group(1))
 
     for mn in sorted(module_names):
-        for ftype in ['main.tf', 'variables.tf', 'outputs.tf', 'terraform.tfvars']:
+        for ftype in ['main.tf', 'variables.tf', 'outputs.tf']:
             key = f'modules/{mn}/{ftype}'
             if key in files:
                 ok(grp, f'modules/{mn}/{ftype} exists', key)
@@ -440,40 +346,46 @@ def validate_terraform(files: dict, cloud: str) -> list[CheckResult]:
     root_modules = _extract_module_blocks(root_main)
 
     for mod_name, source in root_modules.items():
-        # Source path should be ./modules/<name>
-        expected_source_path = f'./modules/{mod_name}'
-        if source == expected_source_path:
+        # Source path should be under ./modules/ (name may differ from module label, e.g. hyphens)
+        if source.startswith('./modules/'):
             ok(grp, f'module.{mod_name}: source path correct')
+            source_dir = source[len('./'):]  # strip './' → 'modules/gcp-odb-network'
         else:
             fail(grp, f'module.{mod_name}: source path correct',
-                 f'Expected source "{expected_source_path}", got "{source}"')
+                 f'Source must be under "./modules/", got "{source}"')
+            source_dir = f'modules/{mod_name}'  # fallback for directory existence check
 
         # Module directory must exist in generated files
-        mod_exists = any(p.startswith(f'modules/{mod_name}/') for p in files)
+        mod_exists = any(p.startswith(f'{source_dir}/') for p in files)
         if mod_exists:
             ok(grp, f'module.{mod_name}: module directory exists')
         else:
             fail(grp, f'module.{mod_name}: module directory exists',
-                 f'No files generated for modules/{mod_name}/')
+                 f'No files generated for {source_dir}/')
 
-    # Check module output references in root are resolvable
+    # Check module output references in root are resolvable.
+    # Note: for_each modules use module.name[key].attr syntax — _extract_module_output_refs
+    # only finds direct module.name.attr references (no indexing), so for_each modules
+    # produce no refs here — that is expected and correct.
     mod_output_refs = _extract_module_output_refs(root_main)
     for ref_mod, ref_attr in mod_output_refs:
         if ref_mod not in root_modules:
             fail(grp, f'module.{ref_mod}.{ref_attr}: module declared in root',
                  f'module.{ref_mod} referenced but not declared as a module block in root main.tf')
         else:
-            # Check output is declared in that module
-            mod_outputs_content = files.get(f'modules/{ref_mod}/outputs.tf', '')
+            # Resolve actual source directory for this module
+            src = root_modules[ref_mod]
+            source_dir = src[len('./'):] if src.startswith('./') else f'modules/{ref_mod}'
+            mod_outputs_content = files.get(f'{source_dir}/outputs.tf', '')
             declared_outputs = set(_extract_single_blocks(mod_outputs_content, 'output'))
             if ref_attr in declared_outputs:
                 ok(grp, f'module.{ref_mod}.{ref_attr}: output declared')
             else:
                 # Could be a valid output not in our mock — warn instead of fail
                 warn(grp, f'module.{ref_mod}.{ref_attr}: output declared',
-                     f'Output "{ref_attr}" not found in modules/{ref_mod}/outputs.tf '
+                     f'Output "{ref_attr}" not found in {source_dir}/outputs.tf '
                      f'(may be valid — check outputs.tf)',
-                     f'modules/{ref_mod}/outputs.tf')
+                     f'{source_dir}/outputs.tf')
 
     # ── 8. tfvars completeness ─────────────────────────────────────────────────
     grp = 'tfvars Completeness'

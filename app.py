@@ -36,6 +36,19 @@ import llm as llm_module
 import github as github_module
 import rag as rag_module
 import regions
+import clouds.aws.validator as aws_validator
+import clouds.gcp.validator as gcp_validator
+import clouds.azure.validator as azure_validator
+
+# Payload validation lives with each cloud. dg and oci are validated in the
+# browser only, so they map to None rather than to a no-op module.
+_CLOUD_VALIDATORS = {
+    'aws':   aws_validator.validate,
+    'gcp':   gcp_validator.validate,
+    'azure': azure_validator.validate,
+    'dg':    None,
+    'oci':   None,
+}
 
 from core.helpers import render_tf, is_ref, parse_list, tf_bool
 from generators.aws_gen import (
@@ -837,209 +850,15 @@ def api_load_zip():
         return jsonify({'error': str(e)})
 
 
-def _validate_aws(data, errors):
-    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
-    tab = data.get('tab', 0)
-
-    if tab == 0:   # ODB Networks
-        for net in data.get('aws_networks', [data.get('module_0', {})]):
-            mn = net.get('module_name', 'odb_network')
-            # Externally provisioned: nothing is created, so only the ID matters.
-            if net.get('is_existing'):
-                if not net.get('existing_id'):
-                    _err(mn, 'existing_id', 'Required when already provisioned')
-                continue
-            if not net.get('display_name'):            _err(mn, 'display_name',        'Required')
-            if not net.get('availability_zone_id'):    _err(mn, 'availability_zone_id', 'Required')
-            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', net.get('client_subnet_cidr', '')):
-                _err(mn, 'client_subnet_cidr', 'Valid CIDR required')
-            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', net.get('backup_subnet_cidr', '')):
-                _err(mn, 'backup_subnet_cidr', 'Valid CIDR required')
-
-    elif tab == 1:  # Exadata Infras
-        for inf in data.get('aws_infras', [data.get('module_1', {})]):
-            mn = inf.get('module_name', 'odb_exaInfra')
-            # Externally provisioned: nothing is created, so only the ID matters.
-            if inf.get('is_existing'):
-                if not inf.get('existing_id'):
-                    _err(mn, 'existing_id', 'Required when already provisioned')
-                continue
-            if not inf.get('display_name'):             _err(mn, 'display_name',        'Required')
-            if not inf.get('shape'):                    _err(mn, 'shape',               'Required')
-            if not inf.get('availability_zone_id'):     _err(mn, 'availability_zone_id', 'Required')
-            if int(inf.get('compute_count', 0) or 0) < 2: _err(mn, 'compute_count', 'Minimum 2')
-            if int(inf.get('storage_count', 0) or 0) < 3: _err(mn, 'storage_count', 'Minimum 3')
-
-    elif tab == 2:  # Peerings
-        for peer in data.get('aws_peerings', [data.get('module_2', {})]):
-            mn = peer.get('module_name', 'odb_peering')
-            if not peer.get('display_name'):    _err(mn, 'display_name',    'Required')
-            if not peer.get('peer_network_id'): _err(mn, 'peer_network_id', 'Required')
-
-    elif tab == 3:  # VM Clusters
-        for cl in data.get('aws_clusters', [data.get('module_3', {})]):
-            mn = cl.get('module_name', 'odb_vmcluster')
-            if not cl.get('display_name'):                  _err(mn, 'display_name',    'Required')
-            if int(cl.get('cpu_core_count', 0) or 0) < 2:  _err(mn, 'cpu_core_count',  'Minimum 2')
-            if not cl.get('gi_version'):                    _err(mn, 'gi_version',       'Required')
-            if not cl.get('hostname_prefix'):               _err(mn, 'hostname_prefix',  'Required')
-            if not cl.get('ssh_public_keys'):               _err(mn, 'ssh_public_keys',  'At least one SSH key required')
-
-    elif tab == 4:  # Autonomous VM Clusters
-        for av in data.get('aws_avmclusters', []):
-            mn = av.get('module_name', 'odb_avmcluster')
-            if not av.get('display_name'):                                       _err(mn, 'display_name', 'Required')
-            if float(av.get('autonomous_data_storage_size_in_tbs', 0) or 0) <= 0: _err(mn, 'autonomous_data_storage_size_in_tbs', 'Required, must be > 0')
-            if int(av.get('cpu_core_count_per_node', 0) or 0) < 1:              _err(mn, 'cpu_core_count_per_node', 'Required, minimum 1')
-            if int(av.get('memory_per_oracle_compute_unit_in_gbs', 0) or 0) < 1: _err(mn, 'memory_per_oracle_compute_unit_in_gbs', 'Required, minimum 1')
-            if int(av.get('total_container_databases', 0) or 0) < 1:            _err(mn, 'total_container_databases', 'Required, minimum 1')
-
-
-def _validate_gcp(data, errors):
-    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
-    tab = data.get('tab', 0)
-
-    if tab == 10:  # GCP Networks
-        for net in data.get('gcp_networks', [data.get('gcp_module_0', {})]):
-            mn = net.get('module_name', 'gcp_network')
-            if not net.get('odb_network_id'): _err(mn, 'odb_network_id', 'Required')
-            if not net.get('location'):        _err(mn, 'location',       'Required')
-            if not net.get('client_cidr') and not net.get('client_subnet_cidr'):
-                _err(mn, 'client_cidr', 'Required')
-            if not net.get('backup_cidr') and not net.get('backup_subnet_cidr'):
-                _err(mn, 'backup_cidr', 'Required')
-
-    elif tab == 12:  # GCP Infras
-        for inf in data.get('gcp_infras', [data.get('gcp_module_3', {})]):
-            mn = inf.get('module_name', 'gcp_infra')
-            if not inf.get('cloud_exadata_infrastructure_id'): _err(mn, 'cloud_exadata_infrastructure_id', 'Required')
-            if not inf.get('location'):  _err(mn, 'location', 'Required')
-            if not inf.get('shape'):     _err(mn, 'shape',    'Required')
-            if int(inf.get('compute_count', 0) or 0) < 2: _err(mn, 'compute_count', 'Minimum 2')
-            if int(inf.get('storage_count', 0) or 0) < 3: _err(mn, 'storage_count', 'Minimum 3')
-
-    elif tab == 13:  # GCP VM Clusters
-        for cl in data.get('gcp_clusters', [data.get('gcp_module_4', {})]):
-            mn = cl.get('module_name', 'gcp_cluster')
-            if not cl.get('cloud_vm_cluster_id'):  _err(mn, 'cloud_vm_cluster_id', 'Required')
-            if not cl.get('location'):             _err(mn, 'location',            'Required')
-            if not cl.get('hostname_prefix'):      _err(mn, 'hostname_prefix',     'Required')
-            if int(cl.get('cpu_core_count', 0) or 0) < 2:
-                _err(mn, 'cpu_core_count', 'Minimum 2')
-            if not cl.get('ssh_public_keys'):
-                _err(mn, 'ssh_public_keys', 'At least one SSH key required')
-
-    elif tab == 14:  # GCP OCI DB Home / CDB / PDB
-        for db in data.get('gcp_oci_databases', []):
-            mn = db.get('module_name', 'oci_database')
-            if not db.get('vmcluster_ref'): _err(mn, 'vmcluster_ref', 'VM Cluster reference required')
-            if not db.get('db_version'):    _err(mn, 'db_version',    'Required')
-            if not db.get('db_name'):       _err(mn, 'db_name',       'Required')
-
-
-def _validate_azure(data, errors):
-    def _err(mn, f, m): errors.setdefault(mn, {})[f] = m
-    tab = data.get('tab', 0)
-
-    if tab == 20:  # Azure VNet + Subnet
-        for vnet in data.get('azure_vnets', []):
-            mn = vnet.get('module_name', 'azure_vnet')
-            if not vnet.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
-            if not vnet.get('location'):             _err(mn, 'location',            'Required')
-            if not vnet.get('vnet_name'):            _err(mn, 'vnet_name',           'Required')
-            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', vnet.get('address_space', '')):
-                _err(mn, 'address_space', 'Valid CIDR required')
-            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', vnet.get('subnet_address_prefix', '')):
-                _err(mn, 'subnet_address_prefix', 'Valid CIDR required')
-
-    elif tab == 21:  # Azure Exadata Infrastructure
-        for inf in data.get('azure_infras', []):
-            mn = inf.get('module_name', 'azure_exainfra')
-            if not inf.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
-            if not inf.get('location'):             _err(mn, 'location',            'Required')
-            if not inf.get('name'):                 _err(mn, 'name',                'Required')
-            if not inf.get('display_name'):         _err(mn, 'display_name',        'Required')
-            if not inf.get('shape'):                _err(mn, 'shape',               'Required')
-            if int(inf.get('compute_count', 0) or 0) < 2: _err(mn, 'compute_count', 'Minimum 2')
-            if int(inf.get('storage_count', 0) or 0) < 3: _err(mn, 'storage_count', 'Minimum 3')
-
-    elif tab == 22:  # Azure VM Cluster
-        clusters = data.get('azure_clusters', [])
-        # Delegated subnet is shared by design — several VM clusters attach to the
-        # same one. The backup range is not: Oracle carves it inside the VNet per
-        # cluster, so two clusters on one delegated subnet must not collide.
-        vnets_by_name = {v.get('module_name'): v for v in data.get('azure_vnets', [])}
-        sharing = {}
-        for cl in clusters:
-            sharing.setdefault(cl.get('vnet_ref'), []).append(cl)
-        # Backup ranges are carved inside the VNet, so they can only collide
-        # with other clusters on that same VNet.
-        claimed = {}   # vnet_ref -> [(module_name, ip_network)] accepted so far
-
-        for cl in clusters:
-            mn = cl.get('module_name', 'azure_vmcluster')
-            if not cl.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
-            if not cl.get('location'):             _err(mn, 'location',            'Required')
-            if not cl.get('name'):                 _err(mn, 'name',                'Required')
-            if not cl.get('display_name'):         _err(mn, 'display_name',        'Required')
-            if not cl.get('hostname'):             _err(mn, 'hostname',            'Required')
-            if not cl.get('gi_version'):           _err(mn, 'gi_version',          'Required')
-            if int(cl.get('cpu_core_count', 0) or 0) < 2:
-                _err(mn, 'cpu_core_count', 'Minimum 2')
-            if float(cl.get('data_storage_size_in_tbs', 0) or 0) < 2:
-                _err(mn, 'data_storage_size_in_tbs', 'Minimum 2 TiB')
-            if not cl.get('ssh_public_keys'):
-                _err(mn, 'ssh_public_keys', 'At least one SSH key required')
-
-            vnet_ref = cl.get('vnet_ref')
-            backup   = (cl.get('backup_subnet_cidr') or '').strip()
-            if not backup:
-                # Only enforced when the delegated subnet is shared — a lone
-                # cluster can let Oracle pick the default backup range.
-                if len(sharing.get(vnet_ref, [])) > 1:
-                    _err(mn, 'backup_subnet_cidr',
-                         'Required when clusters share a delegated subnet - each needs its own range')
-                continue
-            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', backup):
-                _err(mn, 'backup_subnet_cidr', 'Valid CIDR required')
-                continue
-            try:
-                backup_net = ipaddress.ip_network(backup, strict=False)
-            except ValueError:
-                _err(mn, 'backup_subnet_cidr', 'Valid CIDR required')
-                continue
-            delegated = (vnets_by_name.get(vnet_ref) or {}).get('subnet_address_prefix', '')
-            if delegated:
-                try:
-                    if backup_net.overlaps(ipaddress.ip_network(delegated, strict=False)):
-                        _err(mn, 'backup_subnet_cidr',
-                             f'Overlaps the delegated subnet {delegated}')
-                        continue
-                except ValueError:
-                    pass
-            peers = claimed.setdefault(vnet_ref, [])
-            clash = next((other for other, net in peers if net.overlaps(backup_net)), None)
-            if clash:
-                _err(mn, 'backup_subnet_cidr', f'Overlaps the backup subnet of {clash}')
-                continue
-            peers.append((mn, backup_net))
-
-
 @app.route('/api/validate', methods=['POST'])
 def api_validate():
     data   = request.get_json(force=True)
     cloud  = data.get('cloud', 'aws')
     errors = {}
-    if cloud == 'gcp':
-        _validate_gcp(data, errors)
-    elif cloud == 'azure':
-        _validate_azure(data, errors)
-    elif cloud == 'dg':
-        pass  # DG has no server-side required fields
-    elif cloud == 'oci':
-        pass  # OCI DB validation is client-side only
-    else:
-        _validate_aws(data, errors)
+    # Each cloud owns its own rules; dg and oci validate client-side only.
+    validator = _CLOUD_VALIDATORS.get(cloud, _CLOUD_VALIDATORS['aws'])
+    if validator is not None:
+        validator(data, errors)
     flat_errors = {}
     for mn_errors in errors.values():
         flat_errors.update(mn_errors)

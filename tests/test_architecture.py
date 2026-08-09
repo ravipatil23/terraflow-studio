@@ -133,6 +133,62 @@ class TestCloudsDoNotImportEachOther(unittest.TestCase):
             self.assertNotIn('from oci.dataguard import', src, cloud)
 
 
+class TestCloudPackagesAreIsolated(unittest.TestCase):
+    """clouds/<cloud>/ owns that cloud's validation rules and provider schema."""
+
+    def test_package_exists_per_cloud(self):
+        for cloud in CLOUDS:
+            pkg = ROOT / 'clouds' / cloud
+            self.assertTrue((pkg / 'validator.py').is_file(), f'{cloud}/validator.py')
+            self.assertTrue((pkg / 'schema.py').is_file(), f'{cloud}/schema.py')
+
+    def test_no_cross_cloud_imports(self):
+        for cloud in CLOUDS:
+            for f in _py_files('clouds', cloud):
+                src = f.read_text(encoding='utf-8')
+                for other in CLOUDS:
+                    if other == cloud:
+                        continue
+                    self.assertNotIn(f'clouds.{other}', src,
+                                     f'clouds/{cloud}/{f.name} reaches into {other}')
+
+    def test_cloud_packages_do_not_import_app(self):
+        # Validation used to live in app.py. Importing back into it would
+        # reintroduce the coupling this move removed, and create a cycle.
+        for cloud in CLOUDS:
+            for f in _py_files('clouds', cloud):
+                self.assertNotIn('app', _imports(f), f'clouds/{cloud}/{f.name} imports app')
+
+    def test_validators_expose_a_uniform_entry_point(self):
+        import importlib
+        for cloud in CLOUDS:
+            mod = importlib.import_module(f'clouds.{cloud}.validator')
+            self.assertTrue(callable(getattr(mod, 'validate', None)),
+                            f'clouds/{cloud}/validator.py has no validate()')
+
+    def test_validate_reports_errors_by_module(self):
+        # Contract the /api/validate route depends on: errors is populated as
+        # {module_name: {field: message}} and nothing is returned.
+        import importlib
+        for cloud in CLOUDS:
+            mod = importlib.import_module(f'clouds.{cloud}.validator')
+            errors = {}
+            self.assertIsNone(mod.validate({'tab': -1}, errors), cloud)
+            self.assertEqual(errors, {}, f'{cloud} invented errors for an unknown tab')
+
+    def test_schemas_do_not_collide_across_clouds(self):
+        # tf_validator merges all three into one flat dict, which is only
+        # unambiguous while the resource-type names stay disjoint.
+        from clouds.aws.schema import AWS_SCHEMAS
+        from clouds.gcp.schema import GCP_SCHEMAS
+        from clouds.azure.schema import AZURE_SCHEMAS
+        pairs = (('aws', AWS_SCHEMAS), ('gcp', GCP_SCHEMAS), ('azure', AZURE_SCHEMAS))
+        for i, (a, sa) in enumerate(pairs):
+            for b, sb in pairs[i + 1:]:
+                self.assertEqual(set(sa) & set(sb), set(),
+                                 f'{a} and {b} declare the same resource type')
+
+
 class TestOciPublicSurface(unittest.TestCase):
     """oci/__init__ is the contract the clouds are allowed to depend on."""
 

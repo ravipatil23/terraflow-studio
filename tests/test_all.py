@@ -4,6 +4,7 @@ Covers: helpers, AWS modules, GCP modules, generate_all, all API routes, store b
 Run with:  python -m pytest tests/ -v
 """
 
+import io
 import json
 import os
 import re
@@ -23,15 +24,22 @@ from app import (
     mod2_main, mod2_vars, mod2_outputs, mod2_tfvars,
     mod3_main, mod3_vars, mod3_outputs, mod3_tfvars,
     build_root_main, build_root_tfvars,
-    gcp0_main, gcp0_vars, gcp0_outputs, gcp0_tfvars,
-    gcp_subnet_main, gcp_subnet_vars, gcp_subnet_outputs, gcp_subnet_tfvars,
-    gcp2_main, gcp2_vars, gcp2_outputs, gcp2_tfvars,
-    gcp1_main, gcp1_vars, gcp1_outputs, gcp1_tfvars,
-    gcp_build_root_main, gcp_build_root_tfvars,
     _aws_net_defaults, _aws_infra_defaults, _aws_peer_defaults, _aws_cluster_defaults,
+    azure_vnet_main, azure_vnet_vars, azure_vnet_outputs, azure_vnet_tfvars,
+    azure_infra_main, azure_infra_vars, azure_infra_outputs, azure_infra_tfvars,
+    azure_cluster_main, azure_cluster_vars, azure_cluster_outputs, azure_cluster_tfvars,
+    azure_build_root_main, azure_build_root_vars, azure_build_root_tfvars,
+    _azure_vnet_defaults, _azure_infra_defaults, _azure_cluster_defaults,
+    generate_azure_tf,
+)
+from generators.gcp_gen import (
+    gcp_build_root_main, gcp_build_root_vars, gcp_build_root_tfvars,
     _gcp_net_defaults, _gcp_infra_defaults, _gcp_cluster_defaults,
+    _gcp_shared_module_files, generate_gcp_tf,
+    _GCP_MOD_NET, _GCP_MOD_INFRA, _GCP_MOD_CLUSTER,
 )
 from store import FileStore, _slug
+from tf_validator import validate_terraform, summarise
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -104,8 +112,6 @@ def gcp_net(module_name='gcp_network', **kw):
         'project': 'my-proj',
         'gcp_oracle_zone': 'us-east4-b-r1',
         'deletion_protection': True,
-        'client_subnet_module': f'{module_name}_client',
-        'backup_subnet_module': f'{module_name}_backup',
         'client_subnet_id': 'client-subnet',
         'client_cidr': '10.0.1.0/24',
         'backup_subnet_id': 'backup-subnet',
@@ -131,25 +137,24 @@ def gcp_infra(module_name='gcp_infra', **kw):
     }
 
 def gcp_cluster(module_name='gcp_cluster', net_module='gcp_network', infra_module='gcp_infra', **kw):
-    net = gcp_net(net_module)
     return {
         'module_name': module_name,
-        'exadb_vm_cluster_id': 'my-cluster',
+        'cloud_vm_cluster_id': 'my-cluster',
         'display_name': 'My Cluster',
         'location': 'us-east4',
         'gcp_oracle_zone': 'us-east4-b-r1',
         'project': 'my-proj',
-        'grid_image_id': 'projects/my-proj/locations/us-east4/giVersions/23.0.0.0/dbServerVersions/23.0.0.0.0',
-        'exascale_db_storage_vault': 'projects/my-proj/locations/us-east4/exascaleDbStorageVaults/my-vault',
-        'shape_attribute': 'SMART_STORAGE',
+        'gi_version': '23.0.0.0',
         'hostname_prefix': 'vm',
         'license_type': 'LICENSE_INCLUDED',
-        'node_count': 2,
-        'enabled_ecpu_count_per_node': 8,
+        'cpu_core_count': 16,
+        'memory_size_gb': 60,
+        'db_node_storage_size_gb': 120,
+        'data_storage_size_tb': 4.0,
+        'local_backup_enabled': False,
+        'sparse_diskgroup_enabled': False,
         'ssh_public_keys': ['ssh-rsa AAAAB3Nz test@host'],
         'network_ref': net_module,
-        'client_subnet_ref': net['client_subnet_module'],
-        'backup_subnet_ref': net['backup_subnet_module'],
         'infra_ref': infra_module,
         **kw,
     }
@@ -354,7 +359,8 @@ class TestAwsPeering(unittest.TestCase):
         peerings = [_aws_peer_defaults(aws_peer(self.mn, network_ref=self.mn0), self.mn0)]
         clusters = [_aws_cluster_defaults(aws_cluster())]
         out = build_root_main(nets, infras, peerings, clusters)
-        self.assertIn(f'module.{self.mn0}.network_id', out)
+        self.assertIn('module.aws_odb_network', out)
+        self.assertIn('network_id', out)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -399,8 +405,10 @@ class TestAwsVmCluster(unittest.TestCase):
         peerings = [_aws_peer_defaults(aws_peer())]
         clusters = [_aws_cluster_defaults(aws_cluster(self.mn, infra_ref=self.mn1, network_ref=self.mn0), self.mn0, self.mn1)]
         out = build_root_main(nets, infras, peerings, clusters)
-        self.assertIn(f'module.{self.mn1}.infra_id', out)
-        self.assertIn(f'module.{self.mn0}.network_id', out)
+        self.assertIn('module.aws_exadata_infra', out)
+        self.assertIn('infra_id', out)
+        self.assertIn('module.aws_odb_network', out)
+        self.assertIn('network_id', out)
 
     def test_license_included(self):
         out = mod3_tfvars(self.mn, self.d, self.mn0, self.mn1)
@@ -434,30 +442,28 @@ class TestAwsRoot(unittest.TestCase):
     def test_root_main_has_all_modules(self):
         ns, inf, prs, cls = self._build()
         out = build_root_main(ns, inf, prs, cls)
-        self.assertIn('module "net_0"', out)
-        self.assertIn('module "inf_0"', out)
-        self.assertIn('module "peer_0"', out)
-        self.assertIn('module "cl_0"', out)
+        self.assertIn('module "aws_odb_network"', out)
+        self.assertIn('module "aws_exadata_infra"', out)
+        self.assertIn('module "aws_peering"', out)
+        self.assertIn('module "aws_vm_cluster"', out)
 
     def test_root_main_multi_network(self):
+        # With for_each, extra networks are entries in terraform.auto.tfvars — root main.tf stays the same
         ns, inf, prs, cls = self._build(nets=3)
         out = build_root_main(ns, inf, prs, cls)
-        self.assertIn('module "net_0"', out)
-        self.assertIn('module "net_1"', out)
-        self.assertIn('module "net_2"', out)
+        self.assertIn('for_each = var.aws_networks', out)
 
     def test_root_main_multi_peering(self):
+        # With for_each, extra peerings are entries in terraform.auto.tfvars — root main.tf stays the same
         ns, inf, prs, cls = self._build(peerings=3)
         out = build_root_main(ns, inf, prs, cls)
-        self.assertIn('module "peer_0"', out)
-        self.assertIn('module "peer_1"', out)
-        self.assertIn('module "peer_2"', out)
+        self.assertIn('for_each = var.aws_peerings', out)
 
     def test_root_main_multi_cluster(self):
+        # With for_each, extra clusters are entries in terraform.auto.tfvars — root main.tf stays the same
         ns, inf, prs, cls = self._build(clusters=3)
         out = build_root_main(ns, inf, prs, cls)
-        self.assertIn('module "cl_0"', out)
-        self.assertIn('module "cl_2"', out)
+        self.assertIn('for_each = var.aws_clusters', out)
 
     def test_root_main_outputs(self):
         ns, inf, prs, cls = self._build()
@@ -484,35 +490,35 @@ class TestAwsRoot(unittest.TestCase):
 class TestGcpOdbNetwork(unittest.TestCase):
 
     def setUp(self):
-        self.mn = 'gcp_network'
-        self.d  = _gcp_net_defaults(gcp_net(self.mn))
+        self.d     = _gcp_net_defaults(gcp_net('gcp_network'))
+        self.files = _gcp_shared_module_files()
 
     def test_main_contains_resource(self):
-        out = gcp0_main(self.mn)
+        out = self.files[f'modules/{_GCP_MOD_NET}/main.tf']
         self.assertIn('google_oracle_database_odb_network', out)
 
     def test_vars_contains_odb_network_id(self):
-        out = gcp0_vars(self.mn, self.d)
+        out = self.files[f'modules/{_GCP_MOD_NET}/variables.tf']
         self.assertIn('odb_network_id', out)
 
     def test_vars_contains_location(self):
-        out = gcp0_vars(self.mn, self.d)
+        out = self.files[f'modules/{_GCP_MOD_NET}/variables.tf']
         self.assertIn('location', out)
 
     def test_outputs_contains_odb_network_name(self):
-        out = gcp0_outputs(self.mn)
+        out = self.files[f'modules/{_GCP_MOD_NET}/outputs.tf']
         self.assertIn('odb_network_name', out)
 
     def test_tfvars_contains_network_id_value(self):
-        out = gcp0_tfvars(self.mn, self.d)
+        out = gcp_build_root_tfvars([self.d], [], [])
         self.assertIn('my-odb-net', out)
 
     def test_tfvars_contains_location_value(self):
-        out = gcp0_tfvars(self.mn, self.d)
+        out = gcp_build_root_tfvars([self.d], [], [])
         self.assertIn('us-east4', out)
 
     def test_deletion_protection_true(self):
-        out = gcp0_vars(self.mn, self.d)
+        out = self.files[f'modules/{_GCP_MOD_NET}/variables.tf']
         self.assertIn('deletion_protection', out)
 
 
@@ -523,41 +529,33 @@ class TestGcpOdbNetwork(unittest.TestCase):
 class TestGcpOdbSubnet(unittest.TestCase):
 
     def setUp(self):
-        self.mn  = 'gcp_client_subnet'
-        self.mn0 = 'gcp_network'
-        self.d   = {
-            'odb_subnet_id': 'my-client-subnet',
-            'location': 'us-east4',
-            'cidr_range': '10.0.1.0/24',
-            'purpose': 'CLIENT_SUBNET',
-            'project': 'my-proj',
-            'deletion_protection': True,
-        }
+        self.files = _gcp_shared_module_files()
+        self.net   = _gcp_net_defaults(gcp_net('gcp_network'))
 
     def test_main_contains_resource(self):
-        out = gcp_subnet_main(self.mn)
+        out = self.files[f'modules/{_GCP_MOD_NET}/main.tf']
         self.assertIn('google_oracle_database_odb_subnet', out)
 
     def test_vars_contains_cidr(self):
-        out = gcp_subnet_vars(self.mn, self.d, self.mn0)
-        self.assertIn('cidr_range', out)
+        out = self.files[f'modules/{_GCP_MOD_NET}/variables.tf']
+        self.assertIn('client_cidr_range', out)
 
     def test_vars_contains_purpose(self):
-        out = gcp_subnet_vars(self.mn, self.d, self.mn0)
-        self.assertIn('purpose', out)
+        # Purpose is hardcoded in the module (CLIENT_SUBNET / BACKUP_SUBNET)
+        out = self.files[f'modules/{_GCP_MOD_NET}/main.tf']
+        self.assertIn('CLIENT_SUBNET', out)
 
     def test_outputs_contains_subnet_name(self):
-        out = gcp_subnet_outputs(self.mn)
-        self.assertIn('odb_subnet_name', out)
+        out = self.files[f'modules/{_GCP_MOD_NET}/outputs.tf']
+        self.assertIn('client_subnet_name', out)
 
     def test_tfvars_contains_cidr_value(self):
-        out = gcp_subnet_tfvars(self.mn, self.d, self.mn0)
+        out = gcp_build_root_tfvars([self.net], [], [])
         self.assertIn('10.0.1.0/24', out)
 
     def test_backup_subnet_purpose(self):
-        d = {**self.d, 'purpose': 'BACKUP_SUBNET', 'cidr_range': '10.0.2.0/24'}
-        out = gcp_subnet_tfvars('gcp_backup_subnet', d, self.mn0)
-        self.assertIn('10.0.2.0/24', out)
+        out = self.files[f'modules/{_GCP_MOD_NET}/main.tf']
+        self.assertIn('BACKUP_SUBNET', out)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -567,77 +565,86 @@ class TestGcpOdbSubnet(unittest.TestCase):
 class TestGcpExadataInfra(unittest.TestCase):
 
     def setUp(self):
-        self.mn = 'gcp_infra'
-        self.d  = _gcp_infra_defaults(gcp_infra(self.mn))
+        self.d     = _gcp_infra_defaults(gcp_infra('gcp_infra'))
+        self.files = _gcp_shared_module_files()
 
     def test_main_contains_resource(self):
-        out = gcp2_main(self.mn)
+        out = self.files[f'modules/{_GCP_MOD_INFRA}/main.tf']
         self.assertIn('google_oracle_database_cloud_exadata_infrastructure', out)
 
     def test_vars_contains_shape(self):
-        out = gcp2_vars(self.mn, self.d)
+        out = self.files[f'modules/{_GCP_MOD_INFRA}/variables.tf']
         self.assertIn('shape', out)
 
     def test_vars_contains_counts(self):
-        out = gcp2_vars(self.mn, self.d)
+        out = self.files[f'modules/{_GCP_MOD_INFRA}/variables.tf']
         self.assertIn('compute_count', out)
         self.assertIn('storage_count', out)
 
     def test_outputs_contains_infra_name(self):
-        out = gcp2_outputs(self.mn)
+        out = self.files[f'modules/{_GCP_MOD_INFRA}/outputs.tf']
         self.assertIn('infra_name', out)
 
     def test_tfvars_contains_infra_id(self):
-        out = gcp2_tfvars(self.mn, self.d)
+        out = gcp_build_root_tfvars([], [self.d], [])
         self.assertIn('my-infra', out)
 
     def test_tfvars_contains_shape_value(self):
-        out = gcp2_tfvars(self.mn, self.d)
+        out = gcp_build_root_tfvars([], [self.d], [])
         self.assertIn('Exadata.X9M', out)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  10. GCP MODULE 1 — google_oracle_database_exadb_vm_cluster
+#  10. GCP MODULE 1 — google_oracle_database_cloud_vm_cluster
 # ══════════════════════════════════════════════════════════════════════════════
 
 class TestGcpVmCluster(unittest.TestCase):
 
     def setUp(self):
-        self.mn   = 'gcp_cluster'
-        self.mn0  = 'gcp_network'
-        self.mn1  = f'{self.mn0}_client'
-        self.mn2  = f'{self.mn0}_backup'
-        self.mn3  = 'gcp_infra'
-        self.net  = _gcp_net_defaults(gcp_net(self.mn0))
-        self.d    = _gcp_cluster_defaults(gcp_cluster(self.mn, self.mn0, self.mn3), self.net)
+        self.net   = _gcp_net_defaults(gcp_net('gcp_network'))
+        self.infra = _gcp_infra_defaults(gcp_infra('gcp_infra'))
+        self.d     = _gcp_cluster_defaults(gcp_cluster('gcp_cluster', 'gcp_network', 'gcp_infra'), self.net)
+        self.files = _gcp_shared_module_files()
 
     def test_main_contains_resource(self):
-        out = gcp1_main(self.mn)
-        self.assertIn('google_oracle_database_exadb_vm_cluster', out)
+        out = self.files[f'modules/{_GCP_MOD_CLUSTER}/main.tf']
+        self.assertIn('google_oracle_database_cloud_vm_cluster', out)
 
-    def test_vars_contains_grid_image_id(self):
-        out = gcp1_vars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
-        self.assertIn('grid_image_id', out)
+    def test_root_contains_data_source(self):
+        out = gcp_build_root_main([self.net], [self.infra], [self.d])
+        self.assertIn('google_oracle_database_db_servers', out)
 
-    def test_vars_contains_node_count(self):
-        out = gcp1_vars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
-        self.assertIn('node_count', out)
+    def test_main_contains_lifecycle(self):
+        out = self.files[f'modules/{_GCP_MOD_CLUSTER}/main.tf']
+        self.assertIn('ignore_changes', out)
 
-    def test_vars_contains_ecpu(self):
-        out = gcp1_vars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
-        self.assertIn('enabled_ecpu_count_per_node', out)
+    def test_vars_contains_gi_version(self):
+        out = self.files[f'modules/{_GCP_MOD_CLUSTER}/variables.tf']
+        self.assertIn('gi_version', out)
+
+    def test_vars_contains_cpu_core_count(self):
+        out = self.files[f'modules/{_GCP_MOD_CLUSTER}/variables.tf']
+        self.assertIn('cpu_core_count', out)
+
+    def test_vars_contains_exadata_infrastructure(self):
+        out = self.files[f'modules/{_GCP_MOD_CLUSTER}/variables.tf']
+        self.assertIn('exadata_infrastructure', out)
 
     def test_outputs_contains_cluster_name(self):
-        out = gcp1_outputs(self.mn)
+        out = self.files[f'modules/{_GCP_MOD_CLUSTER}/outputs.tf']
         self.assertIn('vm_cluster_name', out)
 
+    def test_outputs_contains_ocid(self):
+        out = self.files[f'modules/{_GCP_MOD_CLUSTER}/outputs.tf']
+        self.assertIn('ocid', out)
+
     def test_tfvars_contains_cluster_id(self):
-        out = gcp1_tfvars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
+        out = gcp_build_root_tfvars([], [], [self.d])
         self.assertIn('my-cluster', out)
 
-    def test_tfvars_contains_grid_image_id(self):
-        out = gcp1_tfvars(self.mn, self.d, self.mn0, self.mn1, self.mn2, self.mn3)
-        self.assertIn('grid_image_id', out)
+    def test_tfvars_contains_gi_version(self):
+        out = gcp_build_root_tfvars([], [], [self.d])
+        self.assertIn('gi_version', out)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -660,41 +667,45 @@ class TestGcpRoot(unittest.TestCase):
     def test_root_main_has_network_module(self):
         ns, inf, cls = self._build()
         out = gcp_build_root_main(ns, inf, cls)
-        self.assertIn('module "gnet_0"', out)
+        self.assertIn('module "gcp_odb_network"', out)
+        self.assertIn('for_each = var.gcp_odb_networks', out)
 
-    def test_root_main_has_subnet_modules(self):
+    def test_root_main_has_subnet_outputs(self):
         ns, inf, cls = self._build()
         out = gcp_build_root_main(ns, inf, cls)
-        net = _gcp_net_defaults(gcp_net('gnet_0'))
-        self.assertIn(f'module "{net["client_subnet_module"]}"', out)
-        self.assertIn(f'module "{net["backup_subnet_module"]}"', out)
+        self.assertIn('client_subnet_name', out)
+        self.assertIn('backup_subnet_name', out)
 
     def test_root_main_has_infra_module(self):
         ns, inf, cls = self._build()
         out = gcp_build_root_main(ns, inf, cls)
-        self.assertIn('module "ginf_0"', out)
+        self.assertIn('module "gcp_exadata_infra"', out)
+        self.assertIn('for_each = var.gcp_exadata_infras', out)
 
     def test_root_main_has_cluster_module(self):
         ns, inf, cls = self._build()
         out = gcp_build_root_main(ns, inf, cls)
-        self.assertIn('module "gcl_0"', out)
+        self.assertIn('module "gcp_vm_cluster"', out)
+        self.assertIn('for_each = var.gcp_vm_clusters', out)
 
     def test_root_main_cluster_references_subnet(self):
         ns, inf, cls = self._build()
         out = gcp_build_root_main(ns, inf, cls)
-        self.assertIn('odb_subnet_name', out)
+        self.assertIn('client_subnet_name', out)
 
     def test_root_main_multi_network(self):
+        # With for_each, extra networks are added as tfvars entries — root main.tf stays the same
         ns, inf, cls = self._build(net_count=2)
-        out = gcp_build_root_main(ns, inf, cls)
-        self.assertIn('module "gnet_0"', out)
-        self.assertIn('module "gnet_1"', out)
+        out = gcp_build_root_tfvars(ns, inf, cls)
+        self.assertIn('"gnet_0"', out)
+        self.assertIn('"gnet_1"', out)
 
     def test_root_main_multi_cluster(self):
+        # With for_each, extra clusters are added as tfvars entries — root main.tf stays the same
         ns, inf, cls = self._build(cluster_count=2)
-        out = gcp_build_root_main(ns, inf, cls)
-        self.assertIn('module "gcl_0"', out)
-        self.assertIn('module "gcl_1"', out)
+        out = gcp_build_root_tfvars(ns, inf, cls)
+        self.assertIn('"gcl_0"', out)
+        self.assertIn('"gcl_1"', out)
 
     def test_root_tfvars_contains_project(self):
         ns, inf, cls = self._build()
@@ -725,10 +736,11 @@ class TestGenerateAll(unittest.TestCase):
                          'cloud_exadata_infrastructure_id': '',
                          'odb_network_id': ''},
         })
-        self.assertEqual(len(files), 19)
+        # 4 shared modules × 3 files + 3 root + README.md = 16
+        self.assertEqual(len(files), 16)
         self.assertIn('main.tf', files)
         self.assertIn('variables.tf', files)
-        self.assertIn('modules/net/main.tf', files)
+        self.assertIn('modules/aws-odb-network/main.tf', files)
 
     # ── AWS multi-instance ────────────────────────────────────────────────────
     def test_aws_multi_two_networks(self):
@@ -739,10 +751,11 @@ class TestGenerateAll(unittest.TestCase):
             'aws_peerings':  [aws_peer('p1', network_ref='n1')],
             'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
         })
-        # 2 nets + 1 infra + 1 peer + 1 cluster = 5 modules × 4 files + 3 root = 23
-        self.assertEqual(len(files), 23)
-        self.assertIn('modules/n1/main.tf', files)
-        self.assertIn('modules/n2/main.tf', files)
+        # 4 shared modules × 3 files + 3 root + README.md = 16, regardless of instance count
+        self.assertEqual(len(files), 16)
+        self.assertIn('modules/aws-odb-network/main.tf', files)
+        self.assertIn('"n1"', files['terraform.auto.tfvars'])
+        self.assertIn('"n2"', files['terraform.auto.tfvars'])
 
     def test_aws_multi_two_infras(self):
         files = generate_all({
@@ -752,8 +765,9 @@ class TestGenerateAll(unittest.TestCase):
             'aws_peerings':  [aws_peer('p1', network_ref='n1')],
             'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
         })
-        self.assertIn('modules/i1/main.tf', files)
-        self.assertIn('modules/i2/main.tf', files)
+        self.assertIn('modules/aws-exadata-infra/main.tf', files)
+        self.assertIn('"i1"', files['terraform.auto.tfvars'])
+        self.assertIn('"i2"', files['terraform.auto.tfvars'])
 
     def test_aws_multi_two_peerings(self):
         files = generate_all({
@@ -763,11 +777,11 @@ class TestGenerateAll(unittest.TestCase):
             'aws_peerings':  [aws_peer('p1', network_ref='n1'), aws_peer('p2', network_ref='n2')],
             'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
         })
-        root = files['main.tf']
-        self.assertIn('module "p1"', root)
-        self.assertIn('module "p2"', root)
-        self.assertIn('module.n1.network_id', root)
-        self.assertIn('module.n2.network_id', root)
+        # With for_each, extra peerings are map entries in tfvars — root main.tf stays the same
+        tfvars = files['terraform.auto.tfvars']
+        self.assertIn('"p1"', tfvars)
+        self.assertIn('"p2"', tfvars)
+        self.assertIn('for_each = var.aws_peerings', files['main.tf'])
 
     def test_aws_multi_two_clusters(self):
         files = generate_all({
@@ -780,9 +794,10 @@ class TestGenerateAll(unittest.TestCase):
                 aws_cluster('c2', infra_ref='i1', network_ref='n1'),
             ],
         })
-        root = files['main.tf']
-        self.assertIn('module "c1"', root)
-        self.assertIn('module "c2"', root)
+        # With for_each, extra clusters are map entries in tfvars — root main.tf stays the same
+        tfvars = files['terraform.auto.tfvars']
+        self.assertIn('"c1"', tfvars)
+        self.assertIn('"c2"', tfvars)
 
     def test_aws_cluster_cross_wired_to_correct_infra(self):
         files = generate_all({
@@ -795,10 +810,11 @@ class TestGenerateAll(unittest.TestCase):
                 aws_cluster('c_dev',  infra_ref='i_dev',  network_ref='n2'),
             ],
         })
-        root = files['main.tf']
-        self.assertIn('module.i_prod.infra_id', root)
-        self.assertIn('module.i_dev.infra_id', root)
-        self.assertIn('module.n2.network_id', root)
+        # Cross-wiring is expressed as infra_ref/network_ref values in the tfvars map entries
+        tfvars = files['terraform.auto.tfvars']
+        self.assertIn('"i_prod"', tfvars)
+        self.assertIn('"i_dev"', tfvars)
+        self.assertIn('"n2"', tfvars)
 
     # ── GCP single-instance backward-compat ──────────────────────────────────
     def test_gcp_single_backward_compat(self):
@@ -811,7 +827,8 @@ class TestGenerateAll(unittest.TestCase):
             'gcp_module_3': gcp_infra('ginf'),
             'gcp_module_4': {**gcp_cluster('gcl', 'gnet', 'ginf'), 'odb_network': '', 'odb_subnet': '', 'backup_odb_subnet': '', 'exadata_infrastructure': ''},
         })
-        self.assertEqual(len(files), 23)
+        # subnets inline in network module, no per-module tfvars: 1 net + 1 infra + 1 cluster = 3 modules × 3 + 3 root + README.md = 13
+        self.assertEqual(len(files), 13)
         self.assertIn('main.tf', files)
         self.assertIn('variables.tf', files)
 
@@ -825,8 +842,10 @@ class TestGenerateAll(unittest.TestCase):
             'gcp_infras':   [gcp_infra('ginf1')],
             'gcp_clusters': [gcp_cluster('gcl1', 'gnet1', 'ginf1')],
         })
-        # 2 nets × 3 (net+client+backup) + 1 infra + 1 cluster = 8 modules × 4 + 3 root = 35
-        self.assertEqual(len(files), 35)
+        # 3 shared modules (9 files) + 3 root files + README.md = 13, regardless of instance count
+        self.assertEqual(len(files), 13)
+        self.assertIn(f'modules/{_GCP_MOD_NET}/main.tf', files)
+        self.assertIn(f'modules/{_GCP_MOD_INFRA}/main.tf', files)
 
     def test_gcp_multi_cluster_cross_wired(self):
         n1 = _gcp_net_defaults(gcp_net('gnet1'))
@@ -840,9 +859,11 @@ class TestGenerateAll(unittest.TestCase):
                 gcp_cluster('gcl_dev',  'gnet2', 'ginf1'),
             ],
         })
-        root = files['main.tf']
-        self.assertIn(f'module.{n1["client_subnet_module"]}.odb_subnet_name', root)
-        self.assertIn(f'module.{n2["client_subnet_module"]}.odb_subnet_name', root)
+        # Cross-wiring is expressed as network_key in the tfvars map entries
+        tfvars = files['terraform.auto.tfvars']
+        self.assertIn('gnet1', tfvars)
+        self.assertIn('gnet2', tfvars)
+        self.assertIn('for_each = var.gcp_odb_networks', files['main.tf'])
 
     # ── File content quality checks ───────────────────────────────────────────
     def test_all_files_are_non_empty(self):
@@ -902,10 +923,10 @@ class TestDefaultNormalisers(unittest.TestCase):
         self.assertEqual(d['network_ref'], 'my_net')
         self.assertEqual(d['infra_ref'], 'my_inf')
 
-    def test_gcp_net_defaults_auto_subnet_modules(self):
-        d = _gcp_net_defaults({'module_name': 'mynet'})
-        self.assertIn('mynet', d['client_subnet_module'])
-        self.assertIn('mynet', d['backup_subnet_module'])
+    def test_gcp_net_defaults_subnet_id_fallback(self):
+        d = _gcp_net_defaults({})
+        self.assertEqual(d['client_subnet_id'], 'client-subnet')
+        self.assertEqual(d['backup_subnet_id'], 'backup-subnet')
 
     def test_gcp_infra_defaults_shape_fallback(self):
         d = _gcp_infra_defaults({})
@@ -915,8 +936,6 @@ class TestDefaultNormalisers(unittest.TestCase):
         first_net = _gcp_net_defaults({'module_name': 'net1'})
         d = _gcp_cluster_defaults({}, first_net=first_net)
         self.assertEqual(d['network_ref'], 'net1')
-        self.assertIn('net1', d['client_subnet_ref'])
-        self.assertIn('net1', d['backup_subnet_ref'])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -993,11 +1012,11 @@ class TestApiRoutes(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         d = r.get_json()
         self.assertIn('content', d)
-        self.assertIn('module "n1"', d['content'])
+        self.assertIn('for_each = var.aws_networks', d['content'])
 
     def test_generate_aws_root_tfvars(self):
         r = self.client.post('/api/generate',
-            json={**self.base_aws, 'file_key': 'terraform.tfvars'},
+            json={**self.base_aws, 'file_key': 'terraform.auto.tfvars'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('content', d)
@@ -1005,7 +1024,7 @@ class TestApiRoutes(unittest.TestCase):
 
     def test_generate_aws_module_main(self):
         r = self.client.post('/api/generate',
-            json={**self.base_aws, 'file_key': 'modules/n1/main.tf'},
+            json={**self.base_aws, 'file_key': 'modules/aws-odb-network/main.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('content', d)
@@ -1013,35 +1032,35 @@ class TestApiRoutes(unittest.TestCase):
 
     def test_generate_aws_module_variables(self):
         r = self.client.post('/api/generate',
-            json={**self.base_aws, 'file_key': 'modules/n1/variables.tf'},
+            json={**self.base_aws, 'file_key': 'modules/aws-odb-network/variables.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('variable', d['content'])
 
     def test_generate_aws_module_outputs(self):
         r = self.client.post('/api/generate',
-            json={**self.base_aws, 'file_key': 'modules/n1/outputs.tf'},
+            json={**self.base_aws, 'file_key': 'modules/aws-odb-network/outputs.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('output', d['content'])
 
     def test_generate_aws_infra_module(self):
         r = self.client.post('/api/generate',
-            json={**self.base_aws, 'file_key': 'modules/i1/main.tf'},
+            json={**self.base_aws, 'file_key': 'modules/aws-exadata-infra/main.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('aws_odb_cloud_exadata_infrastructure', d['content'])
 
     def test_generate_aws_peering_module(self):
         r = self.client.post('/api/generate',
-            json={**self.base_aws, 'file_key': 'modules/p1/main.tf'},
+            json={**self.base_aws, 'file_key': 'modules/aws-peering/main.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('aws_odb_network_peering_connection', d['content'])
 
     def test_generate_aws_cluster_module(self):
         r = self.client.post('/api/generate',
-            json={**self.base_aws, 'file_key': 'modules/c1/main.tf'},
+            json={**self.base_aws, 'file_key': 'modules/aws-vm-cluster/main.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('aws_odb_cloud_vm_cluster', d['content'])
@@ -1053,6 +1072,37 @@ class TestApiRoutes(unittest.TestCase):
         d = r.get_json()
         self.assertIn('error', d)
 
+    # POST /api/files — the file tree is built from this list, so every path it
+    # returns must be a file_key /api/generate can actually resolve.
+    def test_files_lists_aws_paths(self):
+        r = self.client.post('/api/files', json=self.base_aws,
+                             content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        files = r.get_json()['files']
+        self.assertIn('main.tf', files)
+        self.assertIn('terraform.auto.tfvars', files)
+        self.assertTrue(any(f.startswith('modules/') for f in files))
+
+    def test_every_listed_aws_file_is_generatable(self):
+        files = self.client.post('/api/files', json=self.base_aws,
+                                 content_type='application/json').get_json()['files']
+        self.assertTrue(files)
+        for key in files:
+            d = self.client.post('/api/generate',
+                json={**self.base_aws, 'file_key': key},
+                content_type='application/json').get_json()
+            self.assertIn('content', d, f'{key} listed by /api/files but not generatable')
+
+    def test_every_listed_gcp_file_is_generatable(self):
+        files = self.client.post('/api/files', json=self.base_gcp,
+                                 content_type='application/json').get_json()['files']
+        self.assertTrue(files)
+        for key in files:
+            d = self.client.post('/api/generate',
+                json={**self.base_gcp, 'file_key': key},
+                content_type='application/json').get_json()
+            self.assertIn('content', d, f'{key} listed by /api/files but not generatable')
+
     # POST /api/generate — GCP
     def test_generate_gcp_root_main(self):
         r = self.client.post('/api/generate',
@@ -1060,28 +1110,28 @@ class TestApiRoutes(unittest.TestCase):
             content_type='application/json')
         d = r.get_json()
         self.assertIn('content', d)
-        self.assertIn('module "gnet1"', d['content'])
+        self.assertIn('module "gcp_odb_network"', d['content'])
 
     def test_generate_gcp_network_module(self):
         r = self.client.post('/api/generate',
-            json={**self.base_gcp, 'file_key': 'modules/gnet1/main.tf'},
+            json={**self.base_gcp, 'file_key': f'modules/{_GCP_MOD_NET}/main.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('google_oracle_database_odb_network', d['content'])
 
     def test_generate_gcp_infra_module(self):
         r = self.client.post('/api/generate',
-            json={**self.base_gcp, 'file_key': 'modules/ginf1/main.tf'},
+            json={**self.base_gcp, 'file_key': f'modules/{_GCP_MOD_INFRA}/main.tf'},
             content_type='application/json')
         d = r.get_json()
         self.assertIn('google_oracle_database_cloud_exadata_infrastructure', d['content'])
 
     def test_generate_gcp_cluster_module(self):
         r = self.client.post('/api/generate',
-            json={**self.base_gcp, 'file_key': 'modules/gcl1/main.tf'},
+            json={**self.base_gcp, 'file_key': f'modules/{_GCP_MOD_CLUSTER}/main.tf'},
             content_type='application/json')
         d = r.get_json()
-        self.assertIn('google_oracle_database_exadb_vm_cluster', d['content'])
+        self.assertIn('google_oracle_database_cloud_vm_cluster', d['content'])
 
     # POST /api/download
     def test_download_aws_returns_zip(self):
@@ -1202,7 +1252,7 @@ class TestApiRoutes(unittest.TestCase):
     # POST /api/validate — GCP
     def test_validate_gcp_tab10_pass(self):
         r = self.client.post('/api/validate', json={
-            'tab': 10,
+            'cloud': 'gcp', 'tab': 10,
             'gcp_networks': [{
                 'module_name': 'gcp_network', 'odb_network_id': 'my-net',
                 'location': 'us-east4', 'network': 'projects/p/global/networks/n',
@@ -1213,16 +1263,16 @@ class TestApiRoutes(unittest.TestCase):
         self.assertTrue(d['valid'])
 
     def test_validate_gcp_tab10_missing(self):
-        r = self.client.post('/api/validate', json={'tab': 10, 'gcp_networks': [{'module_name':'gnet'}]})
+        r = self.client.post('/api/validate', json={'cloud': 'gcp', 'tab': 10, 'gcp_networks': [{'module_name':'gnet'}]})
         d = r.get_json()
         self.assertFalse(d['valid'])
         self.assertIn('odb_network_id', d['errors'])
         self.assertIn('location', d['errors'])
-        self.assertIn('network', d['errors'])
+        self.assertNotIn('network', d['errors'])
 
     def test_validate_gcp_tab12_pass(self):
         r = self.client.post('/api/validate', json={
-            'tab': 12,
+            'cloud': 'gcp', 'tab': 12,
             'gcp_module_3': {
                 'cloud_exadata_infrastructure_id': 'inf', 'location': 'us-east4',
                 'shape': 'Exadata.X9M', 'compute_count': 2, 'storage_count': 3,
@@ -1233,7 +1283,7 @@ class TestApiRoutes(unittest.TestCase):
 
     def test_validate_gcp_tab12_low_storage(self):
         r = self.client.post('/api/validate', json={
-            'tab': 12,
+            'cloud': 'gcp', 'tab': 12,
             'gcp_module_3': {
                 'cloud_exadata_infrastructure_id': 'i', 'location': 'us-east4',
                 'shape': 'Exadata.X9M', 'compute_count': 2, 'storage_count': 2,
@@ -1783,7 +1833,7 @@ class TestTFValidator(unittest.TestCase):
     def test_unresolved_var_detected(self):
         files = self._gen_aws()
         # Inject a broken main.tf with an undefined variable
-        files['modules/odb_network/main.tf'] += '\n  undefined_arg = var.does_not_exist\n'
+        files['modules/aws-odb-network/main.tf'] += '\n  undefined_arg = var.does_not_exist\n'
         results = self._validate(files, 'aws')
         var_fails = [r for r in results
                      if r['group'] == 'Variable Resolution' and r['status'] == 'fail'
@@ -1799,15 +1849,17 @@ class TestTFValidator(unittest.TestCase):
         self.assertEqual(xref_fails, [], f'Cross-ref failures: {xref_fails}')
 
     def test_broken_source_path_detected(self):
+        import re as _re
         files = self._gen_aws()
-        # Break the source path for one module
-        files['main.tf'] = files['main.tf'].replace(
-            'source = "./modules/odb_network"',
-            'source = "./modules/wrong_path"')
+        # Break the source path for one module so its directory no longer exists
+        files['main.tf'] = _re.sub(
+            r'source\s*=\s*"./modules/aws-odb-network"',
+            'source = "./modules/wrong_path"',
+            files['main.tf'])
         results = self._validate(files, 'aws')
+        # The validator should detect that modules/wrong_path/ does not exist
         src_fails = [r for r in results
-                     if r['group'] == 'Module Cross-References' and r['status'] == 'fail'
-                     and 'source' in (r.get('name') or '').lower()]
+                     if r['group'] == 'Module Cross-References' and r['status'] == 'fail']
         self.assertGreater(len(src_fails), 0, 'Should detect wrong source path')
 
     # ── Overall: no failures on valid config ──────────────────────────────
@@ -1876,6 +1928,484 @@ class TestTFValidator(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  18b. INLINE EVENT HANDLERS MUST EXIST
+#  Every onclick/onchange/oninput in the markup has to name a function the page
+#  actually defines. A missing one is a silent ReferenceError: the button does
+#  nothing and no error reaches the user.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestInlineHandlersAreDefined(unittest.TestCase):
+
+    PAGES = ('/aws', '/gcp', '/azure', '/dg', '/oci', '/')
+
+    # Browser globals and JS keywords that can legitimately precede a "(".
+    _ALLOWED = {
+        'document', 'window', 'event', 'console', 'Number', 'String', 'Boolean',
+        'parseInt', 'parseFloat', 'JSON', 'Array', 'Object', 'Math', 'Date',
+        'setTimeout', 'clearTimeout', 'setInterval', 'alert', 'confirm', 'prompt',
+        'fetch', 'encodeURIComponent', 'decodeURIComponent', 'isNaN', 'RegExp',
+        'Set', 'Map', 'if', 'for', 'while', 'switch', 'catch', 'return',
+        'typeof', 'function',
+    }
+
+    _SCRIPT_RE = re.compile(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', re.S)
+    _HANDLER_RE = re.compile(
+        r'\bon(?:click|change|input|submit|keydown|keyup|load)\s*=\s*"([^"]*)"')
+    # Leading identifier of a call, skipping method calls such as x.foo().
+    _CALL_RE = re.compile(r'(?<![\w.$])([A-Za-z_$][\w$]*)\s*\(')
+
+    @staticmethod
+    def _is_defined(js, name):
+        return any(pat in js for pat in (
+            'function %s(' % name, 'function %s (' % name,
+            'const %s=' % name, 'const %s =' % name,
+            'let %s=' % name, 'let %s =' % name,
+            'var %s=' % name, 'var %s =' % name,
+        ))
+
+    def setUp(self):
+        self.client = app.test_client()
+
+    def test_every_inline_handler_resolves(self):
+        for route in self.PAGES:
+            with self.subTest(route=route):
+                html = self.client.get(route).get_data(as_text=True)
+                js = '\n'.join(self._SCRIPT_RE.findall(html))
+                called = set()
+                for handler in self._HANDLER_RE.findall(html):
+                    called.update(self._CALL_RE.findall(handler))
+                missing = sorted(n for n in called
+                                 if n not in self._ALLOWED and not self._is_defined(js, n))
+                self.assertEqual(
+                    missing, [],
+                    '%s: handlers referenced in markup but never defined: %s' % (route, missing))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  18c. VALIDATION FIELD -> FORM INPUT MAP
+#  /api/validate reports Terraform field names (display_name, availability_zone_id)
+#  while the form inputs use short ids (dn, az). VALIDATION_FIELD_INPUT bridges
+#  the two; if it drifts, validation still reports the error but no field is
+#  highlighted, which reads to the user as "validation is broken".
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestValidationFieldMap(unittest.TestCase):
+
+    # page -> {validator tab: card id prefix}
+    PAGES = {
+        'aws.html':   {0: 'an', 1: 'ai', 2: 'ap', 3: 'ac', 4: 'av'},
+        'gcp.html':   {10: 'gn', 12: 'gi', 13: 'gc'},
+        'azure.html': {20: 'av', 21: 'ai', 22: 'ac'},
+    }
+    # page -> (cloud package, validator function). Validation moved out of
+    # app.py into clouds/<cloud>/validator.py so each cloud owns its own rules.
+    VALIDATORS = {
+        'aws.html':   ('aws', '_validate_aws'),
+        'gcp.html':   ('gcp', '_validate_gcp'),
+        'azure.html': ('azure', '_validate_azure'),
+    }
+    # page -> {card id prefix: card-rendering function}
+    CARDS = {
+        'aws.html': {'an': 'awsNetCardHTML', 'ai': 'awsInfraCardHTML', 'ap': 'awsPeeringCardHTML',
+                     'ac': 'awsClusterCardHTML', 'av': 'awsAvmcCardHTML'},
+        'gcp.html': {'gn': 'gcpNetCardHTML', 'gi': 'gcpInfraCardHTML', 'gc': 'gcpClusterCardHTML'},
+        'azure.html': {'av': 'azureVnetCardHTML', 'ai': 'azureInfraCardHTML',
+                       'ac': 'azureClusterCardHTML'},
+    }
+
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def _page(self, page):
+        return (self.ROOT / 'templates' / page).read_text(encoding='utf-8')
+
+    def _field_map(self, page):
+        """Parse VALIDATION_FIELD_INPUT out of the page."""
+        src = self._page(page)
+        start = src.find('const VALIDATION_FIELD_INPUT = {')
+        self.assertGreater(start, 0, '%s: VALIDATION_FIELD_INPUT is missing' % page)
+        body = src[start:src.find('\n};', start)]
+        return {
+            prefix: dict(re.findall(r"([a-z_0-9]+)\s*:\s*'([A-Za-z0-9_]+)'", inner))
+            for prefix, inner in re.findall(r'(\w+):\s*\{(.*?)\}', body, re.S)
+        }
+
+    def _validator_fields(self, spec):
+        """{tab: {field names the validator can report}} from the cloud package."""
+        cloud, fn_name = spec
+        path = self.ROOT / 'clouds' / cloud / 'validator.py'
+        src = path.read_text(encoding='utf-8')
+        start = src.find('def %s(' % fn_name)
+        self.assertGreater(start, 0, '%s not found in %s' % (fn_name, path))
+        # The validator is the last function in its module, so it runs to EOF -
+        # there is no trailing @app.route to stop at any more.
+        body = src[start:]
+        out, tab = {}, None
+        for line in body.split('\n'):
+            m = re.search(r'\b(?:el)?if tab == (\d+)', line)
+            if m:
+                tab = int(m.group(1))
+                out.setdefault(tab, set())
+            if tab is not None:
+                out[tab].update(re.findall(r"_err\(mn, '([a-z_]+)'", line))
+        return out
+
+    def _card_input_ids(self, page, card_fn):
+        src = self._page(page)
+        start = src.find('function %s(' % card_fn)
+        self.assertGreater(start, 0, '%s: %s not found' % (page, card_fn))
+        body = src[start:src.find('\nfunction ', start + 10)]
+        return set(re.findall(r'\$\{p\}([A-Za-z0-9_]+)', body))
+
+    def test_every_mapped_input_exists_on_the_card(self):
+        for page, cards in self.CARDS.items():
+            field_map = self._field_map(page)
+            for prefix, fields in field_map.items():
+                ids = self._card_input_ids(page, cards[prefix])
+                for field, suffix in fields.items():
+                    with self.subTest(page=page, prefix=prefix, field=field):
+                        self.assertIn(
+                            suffix, ids,
+                            '%s %s.%s maps to id suffix %r, which no input on the card uses'
+                            % (page, prefix, field, suffix))
+
+    def test_every_validator_field_is_mapped(self):
+        for page, tabs in self.PAGES.items():
+            field_map = self._field_map(page)
+            by_tab = self._validator_fields(self.VALIDATORS[page])
+            for tab, prefix in tabs.items():
+                expected = by_tab.get(tab, set())
+                self.assertTrue(expected, '%s tab %d: validator reports nothing' % (page, tab))
+                unmapped = sorted(expected - set(field_map.get(prefix, {})))
+                with self.subTest(page=page, tab=tab):
+                    self.assertEqual(
+                        unmapped, [],
+                        '%s tab %d (%s): validator can report %s but the map has no entry, '
+                        'so those fields never get highlighted' % (page, tab, prefix, unmapped))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  19. EXTERNALLY PROVISIONED NETWORKS / INFRAS
+#  An entry flagged is_existing must create nothing and instead surface as an
+#  existing_*_ids entry keyed by the same module name the refs already use.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestExternalAwsResources(unittest.TestCase):
+
+    def _gen(self, infra_external=False, net_external=False):
+        net = aws_net('n1')
+        inf = aws_infra('i1')
+        if net_external:
+            net = {**net, 'is_existing': True, 'existing_id': 'odb-net-abc'}
+        if infra_external:
+            inf = {**inf, 'is_existing': True, 'existing_id': 'odb-exa-abc'}
+        return generate_all({
+            'cloud': 'aws',
+            'aws_networks': [net],
+            'aws_infras':   [inf],
+            'aws_peerings': [aws_peer('p1', network_ref='n1')],
+            'aws_clusters': [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+        })
+
+    def test_managed_output_is_unchanged(self):
+        files = self._gen()
+        self.assertNotIn('locals {', files['main.tf'])
+        self.assertNotIn('existing_infra_ids', files['variables.tf'])
+        self.assertNotIn('existing_infra_ids', files['terraform.auto.tfvars'])
+        self.assertIn('module.aws_exadata_infra[each.value.infra_ref].infra_id', files['main.tf'])
+
+    def test_external_infra_is_not_created(self):
+        files = self._gen(infra_external=True)
+        self.assertIn('aws_infras = {}', files['terraform.auto.tfvars'])
+        self.assertIn('"i1" = "odb-exa-abc"', files['terraform.auto.tfvars'])
+        self.assertIn('existing_infra_ids', files['terraform.auto.tfvars'])
+
+    def test_external_infra_rewires_every_reference(self):
+        main = self._gen(infra_external=True)['main.tf']
+        self.assertIn('infra_ids = merge(', main)
+        self.assertNotIn('module.aws_exadata_infra[each.value.infra_ref].infra_id', main)
+        # both the data source and the VM cluster module go through the map
+        self.assertEqual(main.count('local.infra_ids[each.value.infra_ref]'), 2)
+        # the network is still managed, so its wiring is untouched
+        self.assertIn('module.aws_odb_network[each.value.network_ref].network_id', main)
+
+    def test_external_network_rewires_cluster_and_peering(self):
+        main = self._gen(net_external=True)['main.tf']
+        self.assertNotIn('module.aws_odb_network[each.value.network_ref].network_id', main)
+        self.assertEqual(main.count('local.odb_network_ids[each.value.network_ref]'), 2)
+
+    def test_external_declares_its_root_variable(self):
+        variables = self._gen(infra_external=True, net_external=True)['variables.tf']
+        self.assertIn('variable "existing_infra_ids"', variables)
+        self.assertIn('variable "existing_odb_network_ids"', variables)
+        self.assertIn('type        = map(string)', variables)
+
+    def test_missing_id_becomes_a_visible_placeholder(self):
+        files = generate_all({
+            'cloud': 'aws',
+            'aws_networks': [aws_net('n1')],
+            'aws_infras':   [{**aws_infra('i1'), 'is_existing': True}],
+            'aws_clusters': [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+        })
+        self.assertIn('"i1" = "CHANGEME"', files['terraform.auto.tfvars'])
+
+
+class TestExternalAwsValidation(unittest.TestCase):
+
+    def setUp(self):
+        self.client = app.test_client()
+
+    def _validate(self, tab, key, row):
+        return self.client.post('/api/validate',
+            json={'cloud': 'aws', 'tab': tab, key: [row]},
+            content_type='application/json').get_json()
+
+    def test_external_infra_skips_creation_fields(self):
+        d = self._validate(1, 'aws_infras',
+                           {'module_name': 'i1', 'is_existing': True, 'existing_id': 'odb-exa-abc'})
+        self.assertTrue(d['valid'], d['errors'])
+
+    def test_external_infra_requires_an_id(self):
+        d = self._validate(1, 'aws_infras', {'module_name': 'i1', 'is_existing': True})
+        self.assertFalse(d['valid'])
+        self.assertIn('existing_id', d['errors'])
+
+    def test_external_network_skips_creation_fields(self):
+        d = self._validate(0, 'aws_networks',
+                           {'module_name': 'n1', 'is_existing': True, 'existing_id': 'odb-net-abc'})
+        self.assertTrue(d['valid'], d['errors'])
+
+    def test_managed_infra_still_validated(self):
+        d = self._validate(1, 'aws_infras', {'module_name': 'i1'})
+        self.assertFalse(d['valid'])
+        self.assertIn('display_name', d['errors'])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  19a. SPREADSHEET IMPORT
+#  The parsed doc is merged straight into the form's state arrays, so any
+#  comma-separated column has to come back as a real list.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestSpreadsheetImport(unittest.TestCase):
+
+    def setUp(self):
+        self.client = app.test_client()
+
+    def _round_trip(self, cloud):
+        tpl = self.client.get(f'/api/import/template/{cloud}')
+        self.assertEqual(tpl.status_code, 200, f'{cloud} template download failed')
+        r = self.client.post(
+            '/api/import/spreadsheet',
+            data={'file': (io.BytesIO(tpl.data), 't.xlsx'), 'cloud': cloud},
+            content_type='multipart/form-data')
+        doc = r.get_json()
+        self.assertNotIn('error', doc, f'{cloud} import returned an error')
+        return doc
+
+    def test_template_round_trips_for_every_cloud(self):
+        for cloud in ('aws', 'gcp', 'azure'):
+            with self.subTest(cloud=cloud):
+                doc = self._round_trip(cloud)
+                self.assertTrue(doc.get('_import_summary'))
+
+    def test_comma_separated_columns_parse_as_lists(self):
+        doc = self._round_trip('aws')
+        LIST_FIELDS = ('ssh_public_keys', 'customer_contacts',
+                       'peer_network_cidrs', 'db_servers', 'db_server_ocids')
+        seen = 0
+        for rows in doc.values():
+            if not isinstance(rows, list):
+                continue
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                for field in LIST_FIELDS:
+                    if field in row:
+                        seen += 1
+                        self.assertIsInstance(
+                            row[field], list,
+                            f'{field} must be a list, got {row[field]!r}')
+        self.assertTrue(seen, 'no list-valued column present to check')
+
+    def test_ssh_public_keys_splits_on_commas(self):
+        from spreadsheet_importer import _coerce
+        self.assertEqual(_coerce('ssh-rsa AAA, ssh-rsa BBB', 'ssh_public_keys'),
+                         ['ssh-rsa AAA', 'ssh-rsa BBB'])
+        self.assertEqual(_coerce('a@x.com,,b@x.com ', 'customer_contacts'),
+                         ['a@x.com', 'b@x.com'])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  19b. VM CLUSTER OPTIONAL ATTRIBUTES REACH terraform.auto.tfvars
+#  The root variables/module blocks accept these, so dropping them from tfvars
+#  silently reverts the user's form input to the optional() defaults.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestVmClusterOptionalsInTfvars(unittest.TestCase):
+
+    def _aws_tfvars(self, **cluster_kw):
+        return generate_all({
+            'cloud': 'aws',
+            'aws_networks': [aws_net('odb_network')],
+            'aws_infras':   [aws_infra('odb_infra')],
+            'aws_clusters': [aws_cluster('odb_cluster', **cluster_kw)],
+        })['terraform.auto.tfvars']
+
+    def test_aws_optional_strings_and_numbers_are_emitted(self):
+        tfvars = self._aws_tfvars(
+            cluster_name='gic-prod', timezone='UTC',
+            data_storage_size_in_tbs='8.5', db_node_storage_size_in_gbs='120',
+            memory_size_in_gbs='60', scan_listener_port_tcp='1522',
+        )
+        self.assertIn('cluster_name                      = "gic-prod"', tfvars)
+        self.assertIn('timezone                          = "UTC"', tfvars)
+        self.assertIn('data_storage_size_in_tbs          = 8.5', tfvars)
+        self.assertIn('db_node_storage_size_in_gbs       = 120', tfvars)
+        self.assertIn('memory_size_in_gbs                = 60', tfvars)
+        self.assertIn('scan_listener_port_tcp            = 1522', tfvars)
+
+    def test_aws_blank_optionals_are_omitted_not_quoted_empty(self):
+        tfvars = self._aws_tfvars(
+            cluster_name='', timezone='', data_storage_size_in_tbs='',
+            memory_size_in_gbs='', scan_listener_port_tcp='',
+        )
+        self.assertNotIn('cluster_name', tfvars)
+        self.assertNotIn('data_storage_size_in_tbs', tfvars)
+        self.assertNotIn('scan_listener_port_tcp', tfvars)
+
+    def test_aws_optional_booleans_are_always_emitted(self):
+        tfvars = self._aws_tfvars(
+            dco_is_diagnostics_events_enabled=False,
+            dco_is_health_monitoring_enabled=False,
+            dco_is_incident_logs_enabled=True,
+            is_local_backup_enabled=True,
+            is_sparse_diskgroup_enabled=True,
+        )
+        self.assertIn('dco_is_diagnostics_events_enabled = false', tfvars)
+        self.assertIn('dco_is_health_monitoring_enabled  = false', tfvars)
+        self.assertIn('dco_is_incident_logs_enabled      = true', tfvars)
+        self.assertIn('is_local_backup_enabled           = true', tfvars)
+        self.assertIn('is_sparse_diskgroup_enabled       = true', tfvars)
+
+    def _gcp_tfvars(self, **cluster_kw):
+        return generate_all({
+            'cloud': 'gcp',
+            'gcp_networks': [gcp_net('gcp_network')],
+            'gcp_infras':   [gcp_infra('gcp_infra')],
+            'gcp_clusters': [gcp_cluster('gcp_cluster', **cluster_kw)],
+        })['terraform.auto.tfvars']
+
+    def test_gcp_optionals_are_emitted(self):
+        tfvars = self._gcp_tfvars(
+            location='us-east4', project='my-proj', cluster_name='gic',
+            time_zone='America/New_York', scan_listener_port_tcp='1522',
+            dco_diagnostics=False, dco_health=True, dco_incident_logs=False,
+        )
+        self.assertIn('location                 = "us-east4"', tfvars)
+        self.assertIn('project                  = "my-proj"', tfvars)
+        self.assertIn('cluster_name             = "gic"', tfvars)
+        self.assertIn('time_zone                = "America/New_York"', tfvars)
+        self.assertIn('scan_listener_port_tcp   = 1522', tfvars)
+        self.assertIn('dco_diagnostics          = false', tfvars)
+        self.assertIn('dco_incident_logs        = false', tfvars)
+
+    def test_gcp_blank_optionals_are_omitted(self):
+        tfvars = self._gcp_tfvars(cluster_name='', time_zone='', scan_listener_port_tcp='')
+        self.assertNotIn('cluster_name', tfvars)
+        self.assertNotIn('scan_listener_port_tcp', tfvars)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  19c. AZURE BACKUP SUBNET CIDR
+#  Several VM clusters legitimately share one delegated subnet, but Oracle carves
+#  the backup range inside the VNet per cluster — so those ranges must not
+#  collide with each other or with the delegated subnet itself.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestAzureBackupSubnetValidation(unittest.TestCase):
+
+    VNETS = [
+        {'module_name': 'av1', 'subnet_address_prefix': '10.0.1.0/24'},
+        {'module_name': 'av2', 'subnet_address_prefix': '10.1.1.0/24'},
+    ]
+
+    def setUp(self):
+        self.client = app.test_client()
+
+    @staticmethod
+    def _cluster(mn, vnet='av1', **kw):
+        return {
+            'module_name': mn, 'resource_group_name': 'rg', 'location': 'eastus',
+            'name': mn, 'display_name': mn, 'hostname': 'h', 'gi_version': '19.0.0.0',
+            'cpu_core_count': 4, 'data_storage_size_in_tbs': 2,
+            'ssh_public_keys': ['ssh-rsa AAAA'], 'vnet_ref': vnet, **kw,
+        }
+
+    def _validate(self, clusters):
+        return self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 22,
+            'azure_vnets': self.VNETS, 'azure_clusters': clusters,
+        }, content_type='application/json').get_json()
+
+    def _backup_errors(self, clusters):
+        d = self._validate(clusters)
+        return {mn: errs['backup_subnet_cidr']
+                for mn, errs in d['errors_by_module'].items() if 'backup_subnet_cidr' in errs}
+
+    def test_single_cluster_may_omit_the_backup_cidr(self):
+        # Nothing to collide with — Oracle can pick the default range.
+        self.assertTrue(self._validate([self._cluster('ac1')])['valid'])
+
+    def test_clusters_sharing_a_subnet_must_each_declare_one(self):
+        errs = self._backup_errors([self._cluster('ac1'), self._cluster('ac2')])
+        self.assertEqual(sorted(errs), ['ac1', 'ac2'])
+        self.assertIn('share a delegated subnet', errs['ac1'])
+
+    def test_sharing_a_subnet_with_distinct_ranges_is_valid(self):
+        d = self._validate([
+            self._cluster('ac1', backup_subnet_cidr='10.0.10.0/24'),
+            self._cluster('ac2', backup_subnet_cidr='10.0.11.0/24'),
+        ])
+        self.assertTrue(d['valid'], d['errors'])
+
+    def test_identical_backup_ranges_rejected(self):
+        errs = self._backup_errors([
+            self._cluster('ac1', backup_subnet_cidr='10.0.10.0/24'),
+            self._cluster('ac2', backup_subnet_cidr='10.0.10.0/24'),
+        ])
+        self.assertIn('Overlaps the backup subnet of ac1', errs.get('ac2', ''))
+
+    def test_partially_overlapping_backup_ranges_rejected(self):
+        # /22 supernet swallows the /24 — not caught by an equality check.
+        errs = self._backup_errors([
+            self._cluster('ac1', backup_subnet_cidr='10.0.8.0/22'),
+            self._cluster('ac2', backup_subnet_cidr='10.0.10.0/24'),
+        ])
+        self.assertIn('Overlaps the backup subnet of ac1', errs.get('ac2', ''))
+
+    def test_backup_range_may_not_overlap_the_delegated_subnet(self):
+        errs = self._backup_errors([self._cluster('ac1', backup_subnet_cidr='10.0.1.128/25')])
+        self.assertIn('Overlaps the delegated subnet 10.0.1.0/24', errs.get('ac1', ''))
+
+    def test_same_range_on_a_different_vnet_is_fine(self):
+        # Separate VNets are separate address spaces.
+        d = self._validate([
+            self._cluster('ac1', 'av1', backup_subnet_cidr='10.0.10.0/24'),
+            self._cluster('ac2', 'av2', backup_subnet_cidr='10.0.10.0/24'),
+        ])
+        self.assertTrue(d['valid'], d['errors'])
+
+    def test_malformed_cidr_rejected(self):
+        for bad in ('10.0.10.0', 'not-a-cidr', '10.0.10.0/', ''):
+            with self.subTest(value=bad):
+                errs = self._backup_errors([
+                    self._cluster('ac1', backup_subnet_cidr=bad),
+                    self._cluster('ac2', backup_subnet_cidr='10.0.11.0/24'),
+                ])
+                self.assertIn('ac1', errs, '%r should not be accepted' % bad)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  20. TERRAFORM FMT
 #  Requires terraform or tofu in PATH; skipped automatically when absent.
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1894,7 +2424,9 @@ class TestTerraformFmt(unittest.TestCase):
         import subprocess
         with tempfile.TemporaryDirectory() as tmpdir:
             for rel_path, content in files.items():
-                if not rel_path.endswith('.tf'):
+                # .tfvars counts: terraform fmt formats it, and the live preview
+                # shows it unformatted, so drift there is user-visible.
+                if not rel_path.endswith(('.tf', '.tfvars')):
                     continue
                 full = Path(tmpdir) / rel_path
                 full.parent.mkdir(parents=True, exist_ok=True)
@@ -1917,6 +2449,51 @@ class TestTerraformFmt(unittest.TestCase):
             'aws_infras':    [aws_infra('i1')],
             'aws_peerings':  [aws_peer('p1', network_ref='n1')],
             'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+        }))
+
+    def test_aws_avmcluster_files_are_formatted(self):
+        self._assert_fmt_clean(generate_all({
+            'cloud': 'aws',
+            'aws_networks': [aws_net('n1')],
+            'aws_infras':   [aws_infra('i1')],
+            'aws_clusters': [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+            'aws_avmclusters': [{
+                'module_name': 'av1', 'display_name': 'av',
+                'infra_ref': 'i1', 'network_ref': 'n1',
+                'autonomous_data_storage_size_in_tbs': 5,
+            }],
+        }))
+
+    def test_aws_avmcluster_with_schedule_is_formatted(self):
+        self._assert_fmt_clean(generate_all({
+            'cloud': 'aws',
+            'aws_networks': [aws_net('n1')],
+            'aws_infras':   [aws_infra('i1')],
+            'aws_clusters': [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+            'aws_avmclusters': [{
+                'module_name': 'av1', 'display_name': 'av',
+                'infra_ref': 'i1', 'network_ref': 'n1',
+                'autonomous_data_storage_size_in_tbs': 5,
+                'mw_preference': 'CUSTOM_PREFERENCE',
+                'mw_days_of_week': 'MONDAY', 'mw_hours_of_day': '4',
+            }],
+        }))
+
+    def test_aws_external_resources_are_formatted(self):
+        self._assert_fmt_clean(generate_all({
+            'cloud': 'aws',
+            'aws_networks': [{**aws_net('n1'), 'is_existing': True, 'existing_id': 'odb-net-a'}],
+            'aws_infras':   [{**aws_infra('i1'), 'is_existing': True, 'existing_id': 'odb-exa-a'}],
+            'aws_peerings': [aws_peer('p1', network_ref='n1')],
+            'aws_clusters': [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+        }))
+
+    def test_azure_tf_files_are_formatted(self):
+        self._assert_fmt_clean(generate_all({
+            'cloud': 'azure',
+            'azure_vnets':    [{'module_name': 'av1'}],
+            'azure_infras':   [{'module_name': 'ai1'}],
+            'azure_clusters': [{'module_name': 'ac1', 'infra_ref': 'ai1', 'vnet_ref': 'av1'}],
         }))
 
     def test_gcp_tf_files_are_formatted(self):
@@ -1957,7 +2534,9 @@ class TestTerraformValidate(unittest.TestCase):
         import subprocess
         import json as _json
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        # Windows keeps a handle on the downloaded provider .exe after init, so
+        # cleanup can raise PermissionError long after the assertions passed.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             for rel_path, content in files.items():
                 full = Path(tmpdir) / rel_path
                 full.parent.mkdir(parents=True, exist_ok=True)
@@ -2000,6 +2579,31 @@ class TestTerraformValidate(unittest.TestCase):
             'aws_infras':    [aws_infra('i1')],
             'aws_peerings':  [aws_peer('p1', network_ref='n1')],
             'aws_clusters':  [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+        }))
+
+    def test_aws_avmcluster_and_external_resources_validate(self):
+        """Covers three regressions at once, in one init:
+
+        - AVMC maintenance_window carried patching_mode /
+          is_custom_action_timeout_enabled / custom_action_timeout_in_mins,
+          which the provider only accepts on the Exadata Infrastructure.
+        - The AVMC sent both the id pair and the arn pair; the provider rejects
+          that, and a null-valued attribute still counts as present.
+        - db_servers is a required argument and was omitted for a manual,
+          still-empty server list.
+        """
+        self._validate_files(generate_all({
+            'cloud': 'aws',
+            'aws_networks': [{**aws_net('n1'), 'is_existing': True, 'existing_id': 'odb-net-a'}],
+            'aws_infras':   [{**aws_infra('i1'), 'is_existing': True, 'existing_id': 'odb-exa-a'}],
+            'aws_peerings': [aws_peer('p1', network_ref='n1')],
+            'aws_clusters': [aws_cluster('c1', infra_ref='i1', network_ref='n1')],
+            'aws_avmclusters': [{
+                'module_name': 'av1', 'display_name': 'av',
+                'infra_ref': 'i1', 'network_ref': 'n1',
+                'autonomous_data_storage_size_in_tbs': 5,
+                'db_servers_mode': 'manual', 'db_servers': [],
+            }],
         }))
 
     def test_gcp_config_validates(self):
@@ -2262,3 +2866,1334 @@ class TestRagApiRoutes(unittest.TestCase):
                              json={'query': 'network cluster infra', 'k': 2})
         data = r.get_json()
         self.assertLessEqual(len(data['results']), 2)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  AZURE FIXTURES
+# ══════════════════════════════════════════════════════════════════════════════
+
+def azure_vnet(module_name='azure_vnet', **kw):
+    return {
+        'module_name':           module_name,
+        'resource_group_name':   'my-rg',
+        'location':              'eastus',
+        'vnet_name':             'my-vnet',
+        'address_space':         '10.0.0.0/16',
+        'subnet_name':           'oracle-delegated',
+        'subnet_address_prefix': '10.0.1.0/24',
+        'tags': {'env': 'test'},
+        **kw,
+    }
+
+def azure_infra(module_name='azure_exainfra', **kw):
+    return {
+        'module_name':           module_name,
+        'resource_group_name':   'my-rg',
+        'location':              'eastus',
+        'name':                  'my-exainfra',
+        'display_name':          'My Exadata',
+        'shape':                 'Exadata.X11M',
+        'compute_count':         2,
+        'storage_count':         3,
+        'zone':                  '1',
+        'mw_preference':         'NoPreference',
+        'mw_patching_mode':      'Rolling',
+        'mw_lead_time_in_weeks': 0,
+        'mw_days_of_week':       '',
+        'mw_hours_of_day':       '',
+        'mw_weeks_of_month':     '',
+        'mw_months':             '',
+        'customer_contacts':     [],
+        'tags': {},
+        **kw,
+    }
+
+def azure_cluster(module_name='azure_vmcluster', vnet_ref='azure_vnet', infra_ref='azure_exainfra', **kw):
+    return {
+        'module_name':                    module_name,
+        'resource_group_name':            'my-rg',
+        'location':                       'eastus',
+        'name':                           'my-vmcluster',
+        'display_name':                   'My VM Cluster',
+        'cloud_exadata_infrastructure_id': '',
+        'subnet_id':                      '',
+        'vnet_id':                        '',
+        'hostname':                       'myhost',
+        'cpu_core_count':                 4,
+        'data_storage_size_in_tbs':       2.0,
+        'db_node_storage_size_in_gbs':    120,
+        'memory_size_in_gbs':             60,
+        'ssh_public_keys':                ['ssh-rsa AAAAB3Nz test@host'],
+        'gi_version':                     '19.0.0.0',
+        'license_model':                  'LicenseIncluded',
+        'cluster_name':                   '',
+        'domain':                         '',
+        'backup_subnet_cidr':             '',
+        'data_storage_percentage':        80,
+        'local_backup_enabled':           False,
+        'sparse_diskgroup_enabled':       False,
+        'time_zone':                      'UTC',
+        'db_servers':                     [],
+        'scan_listener_port_tcp':         1521,
+        'scan_listener_port_tcp_ssl':     None,
+        'system_version':                 '',
+        'zone_id':                        '',
+        'file_system_configuration':      [],
+        'dco_diagnostics_events_enabled': True,
+        'dco_health_monitoring_enabled':  True,
+        'dco_incident_logs_enabled':      True,
+        'infra_ref':                      infra_ref,
+        'vnet_ref':                       vnet_ref,
+        'tags': {},
+        **kw,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  19. AZURE MODULE — azure_vnet (VNet + Oracle-delegated subnet)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestAzureVnetModule(unittest.TestCase):
+
+    def setUp(self):
+        self.mn = 'azure_vnet'
+        self.d  = _azure_vnet_defaults(azure_vnet(self.mn))
+
+    def test_main_contains_vnet_resource(self):
+        out = azure_vnet_main(self.mn, self.d)
+        self.assertIn('azurerm_virtual_network', out)
+
+    def test_main_contains_subnet_resource(self):
+        out = azure_vnet_main(self.mn, self.d)
+        self.assertIn('azurerm_subnet', out)
+
+    def test_main_contains_oracle_delegation(self):
+        out = azure_vnet_main(self.mn, self.d)
+        self.assertIn('Oracle.Database/networkAttachments', out)
+
+    def test_main_uses_var_vnet_name(self):
+        out = azure_vnet_main(self.mn, self.d)
+        self.assertIn('var.vnet_name', out)
+
+    def test_main_uses_var_address_space(self):
+        out = azure_vnet_main(self.mn, self.d)
+        self.assertIn('var.address_space', out)
+
+    def test_vars_contains_location(self):
+        out = azure_vnet_vars(self.mn, self.d)
+        self.assertIn('location', out)
+
+    def test_vars_contains_subnet_prefix(self):
+        out = azure_vnet_vars(self.mn, self.d)
+        self.assertIn('subnet_address_prefix', out)
+
+    def test_outputs_contains_vnet_id(self):
+        out = azure_vnet_outputs(self.mn)
+        self.assertIn('vnet_id', out)
+
+    def test_outputs_contains_subnet_id(self):
+        out = azure_vnet_outputs(self.mn)
+        self.assertIn('subnet_id', out)
+
+    def test_tfvars_contains_vnet_name_value(self):
+        out = azure_vnet_tfvars(self.mn, self.d)
+        self.assertIn('my-vnet', out)
+
+    def test_tfvars_contains_address_space_value(self):
+        out = azure_vnet_tfvars(self.mn, self.d)
+        self.assertIn('10.0.0.0/16', out)
+
+    def test_tfvars_contains_subnet_prefix_value(self):
+        out = azure_vnet_tfvars(self.mn, self.d)
+        self.assertIn('10.0.1.0/24', out)
+
+    def test_main_has_azurerm_provider(self):
+        out = azure_vnet_main(self.mn, self.d)
+        self.assertIn('hashicorp/azurerm', out)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  20. AZURE MODULE — azure_exadata_infra
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestAzureInfraModule(unittest.TestCase):
+
+    def setUp(self):
+        self.mn = 'azure_exainfra'
+        self.d  = _azure_infra_defaults(azure_infra(self.mn))
+
+    def test_main_contains_correct_resource_type(self):
+        out = azure_infra_main(self.mn, self.d)
+        self.assertIn('azurerm_oracle_exadata_infrastructure', out)
+
+    def test_main_does_not_contain_old_resource_type(self):
+        out = azure_infra_main(self.mn, self.d)
+        self.assertNotIn('azurerm_oracle_cloud_exadata_infrastructure', out)
+
+    def test_main_uses_var_shape(self):
+        out = azure_infra_main(self.mn, self.d)
+        self.assertIn('var.shape', out)
+
+    def test_main_uses_var_compute_count(self):
+        out = azure_infra_main(self.mn, self.d)
+        self.assertIn('var.compute_count', out)
+
+    def test_main_uses_var_storage_count(self):
+        out = azure_infra_main(self.mn, self.d)
+        self.assertIn('var.storage_count', out)
+
+    def test_main_contains_maintenance_window(self):
+        out = azure_infra_main(self.mn, self.d)
+        self.assertIn('maintenance_window', out)
+
+    def test_vars_contains_shape(self):
+        out = azure_infra_vars(self.mn, self.d)
+        self.assertIn('shape', out)
+
+    def test_vars_contains_zone(self):
+        out = azure_infra_vars(self.mn, self.d)
+        self.assertIn('zone', out)
+
+    def test_outputs_contains_infra_id(self):
+        out = azure_infra_outputs(self.mn)
+        self.assertIn('infra_id', out)
+
+    def test_outputs_references_correct_resource(self):
+        out = azure_infra_outputs(self.mn)
+        self.assertIn('azurerm_oracle_exadata_infrastructure.this', out)
+
+    def test_tfvars_contains_shape_value(self):
+        out = azure_infra_tfvars(self.mn, self.d)
+        self.assertIn('Exadata.X11M', out)
+
+    def test_tfvars_contains_name_value(self):
+        out = azure_infra_tfvars(self.mn, self.d)
+        self.assertIn('my-exainfra', out)
+
+    def test_main_has_azurerm_provider(self):
+        out = azure_infra_main(self.mn, self.d)
+        self.assertIn('hashicorp/azurerm', out)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  21. AZURE MODULE — azure_vm_cluster
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestAzureVmClusterModule(unittest.TestCase):
+
+    def setUp(self):
+        self.mn = 'azure_vmcluster'
+        self.d  = _azure_cluster_defaults(azure_cluster(self.mn), 'azure_vnet', 'azure_exainfra')
+
+    def test_main_contains_vm_cluster_resource(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('azurerm_oracle_cloud_vm_cluster', out)
+
+    def test_main_uses_var_hostname(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('var.hostname', out)
+
+    def test_main_uses_var_cpu_core_count(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('var.cpu_core_count', out)
+
+    def test_main_uses_var_gi_version(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('var.gi_version', out)
+
+    def test_main_uses_var_ssh_public_keys(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('var.ssh_public_keys', out)
+
+    def test_main_uses_var_subnet_id(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('var.subnet_id', out)
+
+    def test_main_uses_var_virtual_network_id(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('var.virtual_network_id', out)
+
+    def test_main_uses_var_infra_id(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('var.cloud_exadata_infrastructure_id', out)
+
+    def test_main_contains_data_collection_options(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('data_collection_options', out)
+
+    def test_vars_contains_license_model(self):
+        out = azure_cluster_vars(self.mn, self.d)
+        self.assertIn('license_model', out)
+
+    def test_vars_contains_data_storage_size(self):
+        out = azure_cluster_vars(self.mn, self.d)
+        self.assertIn('data_storage_size_in_tbs', out)
+
+    def test_outputs_contains_cluster_id(self):
+        out = azure_cluster_outputs(self.mn)
+        self.assertIn('cluster_id', out)
+
+    def test_outputs_contains_ocid(self):
+        out = azure_cluster_outputs(self.mn)
+        self.assertIn('ocid', out)
+
+    def test_tfvars_contains_gi_version_value(self):
+        out = azure_cluster_tfvars(self.mn, self.d)
+        self.assertIn('19.0.0.0', out)
+
+    def test_tfvars_contains_license_model_value(self):
+        out = azure_cluster_tfvars(self.mn, self.d)
+        self.assertIn('LicenseIncluded', out)
+
+    def test_main_has_azurerm_provider(self):
+        out = azure_cluster_main(self.mn, self.d)
+        self.assertIn('hashicorp/azurerm', out)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  22. AZURE ROOT
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestAzureRoot(unittest.TestCase):
+
+    def _build(self, vnet_count=1, infra_count=1, cluster_count=1):
+        vnets    = [_azure_vnet_defaults(azure_vnet(f'avnet_{i}'))    for i in range(vnet_count)]
+        infras   = [_azure_infra_defaults(azure_infra(f'ainf_{i}'))   for i in range(infra_count)]
+        clusters = [_azure_cluster_defaults(
+                        azure_cluster(f'acl_{i}', 'avnet_0', 'ainf_0'),
+                        'avnet_0', 'ainf_0')
+                    for i in range(cluster_count)]
+        return vnets, infras, clusters
+
+    def test_root_main_contains_azurerm_provider(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('hashicorp/azurerm', out)
+
+    def test_root_main_does_not_contain_other_providers(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertNotIn('hashicorp/google', out)
+        self.assertNotIn('hashicorp/aws', out)
+
+    def test_root_main_has_vnet_module(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module "avnet_0"', out)
+
+    def test_root_main_has_infra_module(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module "ainf_0"', out)
+
+    def test_root_main_has_cluster_module(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module "acl_0"', out)
+
+    def test_root_main_cluster_wired_to_infra(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module.ainf_0.infra_id', out)
+
+    def test_root_main_cluster_wired_to_subnet(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module.avnet_0.subnet_id', out)
+
+    def test_root_main_cluster_wired_to_vnet(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module.avnet_0.vnet_id', out)
+
+    def test_root_main_cluster_has_depends_on(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('depends_on', out)
+
+    def test_root_main_multi_vnet(self):
+        vs, ins, cls = self._build(vnet_count=2)
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module "avnet_0"', out)
+        self.assertIn('module "avnet_1"', out)
+
+    def test_root_main_multi_infra(self):
+        vs, ins, cls = self._build(infra_count=2)
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module "ainf_0"', out)
+        self.assertIn('module "ainf_1"', out)
+
+    def test_root_main_multi_cluster(self):
+        vs, ins, cls = self._build(cluster_count=2)
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('module "acl_0"', out)
+        self.assertIn('module "acl_1"', out)
+
+    def test_root_tfvars_contains_subscription_id(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_tfvars(vs, ins, cls, subscription_id='sub-123')
+        self.assertIn('sub-123', out)
+
+    def test_root_vars_contains_subscription_id_var(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_vars(vs, ins, cls)
+        self.assertIn('subscription_id', out)
+
+    def test_root_main_outputs_vnet_id(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('vnet_id', out)
+
+    def test_root_main_outputs_infra_id(self):
+        vs, ins, cls = self._build()
+        out = azure_build_root_main(vs, ins, cls)
+        self.assertIn('infra_id', out)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  23. generate_all — Azure
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestGenerateAllAzure(unittest.TestCase):
+
+    def _base(self, vnet_count=1, infra_count=1, cluster_count=1):
+        return {
+            'cloud': 'azure',
+            'azure_vnets':    [azure_vnet(f'av{i}')    for i in range(vnet_count)],
+            'azure_infras':   [azure_infra(f'ai{i}')   for i in range(infra_count)],
+            'azure_clusters': [azure_cluster(f'ac{i}', 'av0', 'ai0') for i in range(cluster_count)],
+        }
+
+    def test_returns_root_main(self):
+        self.assertIn('main.tf', generate_all(self._base()))
+
+    def test_returns_root_tfvars(self):
+        self.assertIn('terraform.auto.tfvars', generate_all(self._base()))
+
+    def test_returns_root_variables(self):
+        self.assertIn('variables.tf', generate_all(self._base()))
+
+    def test_vnet_module_files_generated(self):
+        files = generate_all(self._base())
+        for f in ['main.tf', 'variables.tf', 'outputs.tf']:
+            self.assertIn(f'modules/av0/{f}', files)
+
+    def test_infra_module_files_generated(self):
+        files = generate_all(self._base())
+        for f in ['main.tf', 'variables.tf', 'outputs.tf']:
+            self.assertIn(f'modules/ai0/{f}', files)
+
+    def test_cluster_module_files_generated(self):
+        files = generate_all(self._base())
+        for f in ['main.tf', 'variables.tf', 'outputs.tf']:
+            self.assertIn(f'modules/ac0/{f}', files)
+
+    def test_file_count_one_of_each(self):
+        # 3 modules × 3 files + 3 root files = 12
+        self.assertEqual(len(generate_all(self._base())), 12)
+
+    def test_file_count_two_vnets(self):
+        # 4 modules × 3 files + 3 root = 15
+        self.assertEqual(len(generate_all(self._base(vnet_count=2))), 15)
+
+    def test_file_count_two_clusters(self):
+        self.assertEqual(len(generate_all(self._base(cluster_count=2))), 15)
+
+    def test_root_main_has_azurerm_provider(self):
+        files = generate_all(self._base())
+        self.assertIn('hashicorp/azurerm', files['main.tf'])
+
+    def test_root_main_has_no_other_provider(self):
+        files = generate_all(self._base())
+        self.assertNotIn('hashicorp/google', files['main.tf'])
+        self.assertNotIn('hashicorp/aws', files['main.tf'])
+
+    def test_infra_module_uses_correct_resource_type(self):
+        files = generate_all(self._base())
+        self.assertIn('azurerm_oracle_exadata_infrastructure', files['modules/ai0/main.tf'])
+        self.assertNotIn('azurerm_oracle_cloud_exadata_infrastructure', files['modules/ai0/main.tf'])
+
+    def test_cluster_module_uses_correct_resource_type(self):
+        files = generate_all(self._base())
+        self.assertIn('azurerm_oracle_cloud_vm_cluster', files['modules/ac0/main.tf'])
+
+    def test_vnet_module_has_oracle_delegation(self):
+        files = generate_all(self._base())
+        self.assertIn('Oracle.Database/networkAttachments', files['modules/av0/main.tf'])
+
+    def test_cluster_cross_wired_to_correct_infra(self):
+        files = generate_all({
+            'cloud': 'azure',
+            'azure_vnets':    [azure_vnet('vnet_a'), azure_vnet('vnet_b')],
+            'azure_infras':   [azure_infra('inf_prod'), azure_infra('inf_dev')],
+            'azure_clusters': [
+                azure_cluster('cl_prod', vnet_ref='vnet_a', infra_ref='inf_prod'),
+                azure_cluster('cl_dev',  vnet_ref='vnet_b', infra_ref='inf_dev'),
+            ],
+        })
+        root = files['main.tf']
+        self.assertIn('module.inf_prod.infra_id', root)
+        self.assertIn('module.inf_dev.infra_id', root)
+        self.assertIn('module.vnet_b.subnet_id', root)
+
+    def test_all_files_non_empty(self):
+        files = generate_all(self._base())
+        for path, content in files.items():
+            self.assertGreater(len(content.strip()), 0, f'{path} is empty')
+
+    def test_all_tf_files_have_braces(self):
+        files = generate_all(self._base())
+        for path, content in files.items():
+            if path.endswith('.tf'):
+                self.assertIn('{', content, f'{path} missing opening brace')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  24. AZURE DEFAULT NORMALISERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestAzureDefaultNormalisers(unittest.TestCase):
+
+    def test_vnet_defaults_location_fallback(self):
+        self.assertEqual(_azure_vnet_defaults({})['location'], 'eastus')
+
+    def test_vnet_defaults_address_space_fallback(self):
+        self.assertEqual(_azure_vnet_defaults({})['address_space'], '10.0.0.0/16')
+
+    def test_vnet_defaults_preserves_location(self):
+        d = _azure_vnet_defaults({'location': 'westeurope'})
+        self.assertEqual(d['location'], 'westeurope')
+
+    def test_infra_defaults_shape_fallback(self):
+        self.assertEqual(_azure_infra_defaults({})['shape'], 'Exadata.X11M')
+
+    def test_infra_defaults_compute_count_int(self):
+        d = _azure_infra_defaults({'compute_count': '4', 'storage_count': '5'})
+        self.assertEqual(d['compute_count'], 4)
+        self.assertEqual(d['storage_count'], 5)
+
+    def test_infra_defaults_fallback_counts(self):
+        d = _azure_infra_defaults({})
+        self.assertEqual(d['compute_count'], 2)
+        self.assertEqual(d['storage_count'], 3)
+
+    def test_cluster_defaults_infra_ref_fallback(self):
+        d = _azure_cluster_defaults({}, first_vnet_name='vnet_a', first_infra_name='inf_a')
+        self.assertEqual(d['infra_ref'], 'inf_a')
+        self.assertEqual(d['vnet_ref'],  'vnet_a')
+
+    def test_cluster_defaults_cpu_int(self):
+        d = _azure_cluster_defaults({'cpu_core_count': '8'})
+        self.assertEqual(d['cpu_core_count'], 8)
+
+    def test_cluster_defaults_storage_float(self):
+        d = _azure_cluster_defaults({'data_storage_size_in_tbs': '4'})
+        self.assertAlmostEqual(d['data_storage_size_in_tbs'], 4.0)
+
+    def test_cluster_defaults_ssh_keys_list(self):
+        d = _azure_cluster_defaults({'ssh_public_keys': ['ssh-rsa AAA']})
+        self.assertEqual(d['ssh_public_keys'], ['ssh-rsa AAA'])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  25. API ROUTES — Azure
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestApiRoutesAzure(unittest.TestCase):
+
+    def setUp(self):
+        app.config['TESTING'] = True
+        self.client = app.test_client()
+        self.base = {
+            'cloud': 'azure',
+            'azure_vnets':    [azure_vnet('av1')],
+            'azure_infras':   [azure_infra('ai1')],
+            'azure_clusters': [azure_cluster('ac1', 'av1', 'ai1')],
+        }
+
+    def test_azure_page_returns_200(self):
+        r = self.client.get('/azure')
+        self.assertEqual(r.status_code, 200)
+
+    def test_azure_page_contains_azurerm(self):
+        r = self.client.get('/azure')
+        self.assertIn(b'azurerm', r.data)
+
+    def test_azure_page_no_cache_header(self):
+        r = self.client.get('/azure')
+        self.assertIn('no-cache', r.headers.get('Cache-Control', ''))
+
+    def test_generate_azure_root_main_has_provider(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'main.tf'},
+            content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        d = r.get_json()
+        self.assertIn('hashicorp/azurerm', d['content'])
+
+    def test_generate_azure_root_tfvars(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'terraform.auto.tfvars'},
+            content_type='application/json')
+        self.assertIn('content', r.get_json())
+
+    def test_generate_azure_vnet_module_main(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'modules/av1/main.tf'},
+            content_type='application/json')
+        self.assertIn('azurerm_virtual_network', r.get_json()['content'])
+
+    def test_generate_azure_infra_module_main(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'modules/ai1/main.tf'},
+            content_type='application/json')
+        content = r.get_json()['content']
+        self.assertIn('azurerm_oracle_exadata_infrastructure', content)
+        self.assertNotIn('azurerm_oracle_cloud_exadata_infrastructure', content)
+
+    def test_generate_azure_cluster_module_main(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'modules/ac1/main.tf'},
+            content_type='application/json')
+        self.assertIn('azurerm_oracle_cloud_vm_cluster', r.get_json()['content'])
+
+    def test_generate_azure_module_variables(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'modules/av1/variables.tf'},
+            content_type='application/json')
+        self.assertIn('variable', r.get_json()['content'])
+
+    def test_generate_azure_module_outputs(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'modules/av1/outputs.tf'},
+            content_type='application/json')
+        self.assertIn('output', r.get_json()['content'])
+
+    def test_download_azure_returns_zip(self):
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('zip', r.content_type)
+        self.assertEqual(r.data[:4], b'PK\x03\x04')
+
+    def test_download_azure_filename_contains_azure(self):
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        self.assertIn('azure', r.headers.get('Content-Disposition', ''))
+
+    def test_download_azure_zip_contains_main_tf(self):
+        import io, zipfile as zf_mod
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        z = zf_mod.ZipFile(io.BytesIO(r.data))
+        self.assertTrue(any('main.tf' in n for n in z.namelist()))
+
+    def test_download_azure_main_tf_has_azurerm(self):
+        import io, zipfile as zf_mod
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        z = zf_mod.ZipFile(io.BytesIO(r.data))
+        main = next(n for n in z.namelist() if n.endswith('main.tf') and 'modules' not in n)
+        self.assertIn('hashicorp/azurerm', z.read(main).decode())
+
+    # /api/validate tab 20 — VNet
+    def test_validate_azure_tab20_pass(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 20,
+            'azure_vnets': [{'module_name': 'av', 'resource_group_name': 'rg',
+                              'location': 'eastus', 'vnet_name': 'v',
+                              'address_space': '10.0.0.0/16',
+                              'subnet_address_prefix': '10.0.1.0/24'}],
+        })
+        self.assertTrue(r.get_json()['valid'])
+
+    def test_validate_azure_tab20_missing_rg(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 20,
+            'azure_vnets': [{'module_name': 'av', 'location': 'eastus',
+                              'vnet_name': 'v', 'address_space': '10.0.0.0/16',
+                              'subnet_address_prefix': '10.0.1.0/24'}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('resource_group_name', d['errors'])
+
+    def test_validate_azure_tab20_bad_address_cidr(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 20,
+            'azure_vnets': [{'module_name': 'av', 'resource_group_name': 'rg',
+                              'location': 'eastus', 'vnet_name': 'v',
+                              'address_space': 'not-a-cidr',
+                              'subnet_address_prefix': '10.0.1.0/24'}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('address_space', d['errors'])
+
+    def test_validate_azure_tab20_bad_subnet_cidr(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 20,
+            'azure_vnets': [{'module_name': 'av', 'resource_group_name': 'rg',
+                              'location': 'eastus', 'vnet_name': 'v',
+                              'address_space': '10.0.0.0/16',
+                              'subnet_address_prefix': 'bad'}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('subnet_address_prefix', d['errors'])
+
+    # /api/validate tab 21 — Infra
+    def test_validate_azure_tab21_pass(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 21,
+            'azure_infras': [{'module_name': 'ai', 'resource_group_name': 'rg',
+                               'location': 'eastus', 'name': 'n', 'display_name': 'n',
+                               'shape': 'Exadata.X11M', 'compute_count': 2, 'storage_count': 3}],
+        })
+        self.assertTrue(r.get_json()['valid'])
+
+    def test_validate_azure_tab21_missing_name(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 21,
+            'azure_infras': [{'module_name': 'ai', 'resource_group_name': 'rg',
+                               'location': 'eastus', 'display_name': 'x',
+                               'shape': 'Exadata.X11M', 'compute_count': 2, 'storage_count': 3}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('name', d['errors'])
+
+    def test_validate_azure_tab21_low_compute(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 21,
+            'azure_infras': [{'module_name': 'ai', 'resource_group_name': 'rg',
+                               'location': 'eastus', 'name': 'n', 'display_name': 'n',
+                               'shape': 'Exadata.X11M', 'compute_count': 1, 'storage_count': 3}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('compute_count', d['errors'])
+
+    def test_validate_azure_tab21_low_storage(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 21,
+            'azure_infras': [{'module_name': 'ai', 'resource_group_name': 'rg',
+                               'location': 'eastus', 'name': 'n', 'display_name': 'n',
+                               'shape': 'Exadata.X11M', 'compute_count': 2, 'storage_count': 2}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('storage_count', d['errors'])
+
+    # /api/validate tab 22 — VM Cluster
+    def test_validate_azure_tab22_pass(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 22,
+            'azure_clusters': [{'module_name': 'ac', 'resource_group_name': 'rg',
+                                 'location': 'eastus', 'name': 'n', 'display_name': 'n',
+                                 'hostname': 'h', 'gi_version': '19.0.0.0',
+                                 'cpu_core_count': 4, 'data_storage_size_in_tbs': 2.0,
+                                 'ssh_public_keys': ['ssh-rsa AAA']}],
+        })
+        self.assertTrue(r.get_json()['valid'])
+
+    def test_validate_azure_tab22_missing_hostname(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 22,
+            'azure_clusters': [{'module_name': 'ac', 'resource_group_name': 'rg',
+                                 'location': 'eastus', 'name': 'n', 'display_name': 'n',
+                                 'gi_version': '19.0.0.0', 'cpu_core_count': 4,
+                                 'data_storage_size_in_tbs': 2.0, 'ssh_public_keys': ['k']}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('hostname', d['errors'])
+
+    def test_validate_azure_tab22_no_ssh_key(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 22,
+            'azure_clusters': [{'module_name': 'ac', 'resource_group_name': 'rg',
+                                 'location': 'eastus', 'name': 'n', 'display_name': 'n',
+                                 'hostname': 'h', 'gi_version': '19.0.0.0',
+                                 'cpu_core_count': 4, 'data_storage_size_in_tbs': 2.0,
+                                 'ssh_public_keys': []}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('ssh_public_keys', d['errors'])
+
+    def test_validate_azure_tab22_low_cpu(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 22,
+            'azure_clusters': [{'module_name': 'ac', 'resource_group_name': 'rg',
+                                 'location': 'eastus', 'name': 'n', 'display_name': 'n',
+                                 'hostname': 'h', 'gi_version': '19.0.0.0',
+                                 'cpu_core_count': 1, 'data_storage_size_in_tbs': 2.0,
+                                 'ssh_public_keys': ['k']}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('cpu_core_count', d['errors'])
+
+    def test_validate_azure_unrecognised_tab_passes(self):
+        # Tab 0 with cloud=azure hits _validate_azure → no matching elif → no errors
+        r = self.client.post('/api/validate', json={
+            'cloud': 'azure', 'tab': 0,
+            'azure_vnets': [{'module_name': 'av'}],
+        })
+        self.assertTrue(r.get_json()['valid'])
+
+    # /api/tf-validate — Azure
+    def test_tf_validate_azure_returns_200(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+
+    def test_tf_validate_azure_has_no_failures(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        d = r.get_json()
+        failures = [x for x in d.get('results', []) if x['status'] == 'fail']
+        self.assertEqual(failures, [],
+            msg='Failures:\n' + '\n'.join(f['name'] + ': ' + str(f['error']) for f in failures))
+
+    def test_tf_validate_azure_provider_check_passes(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        d = r.get_json()
+        row = next((x for x in d['results']
+                    if 'azurerm' in x['name'] and x['group'] == 'Provider'), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(row['status'], 'pass')
+
+    def test_tf_validate_azure_cloud_field(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        self.assertEqual(r.get_json()['cloud'], 'azure')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  26. MOCK tf_validator — Azure
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestTfValidateAzure(unittest.TestCase):
+    """Direct unit tests for validate_terraform() against Azure-generated files."""
+
+    def _gen(self, vnet_count=1, infra_count=1, cluster_count=1):
+        return generate_azure_tf({
+            'cloud': 'azure',
+            'azure_vnets':    [azure_vnet(f'tv{i}')    for i in range(vnet_count)],
+            'azure_infras':   [azure_infra(f'ti{i}')   for i in range(infra_count)],
+            'azure_clusters': [azure_cluster(f'tc{i}', 'tv0', 'ti0') for i in range(cluster_count)],
+        })
+
+    def _fails(self, files):
+        return [r for r in validate_terraform(files, 'azure') if r.status == 'fail']
+
+    def test_valid_azure_has_no_failures(self):
+        fails = self._fails(self._gen())
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.group} / {f.name}: {f.error}' for f in fails))
+
+    def test_valid_azure_passes_provider_check(self):
+        results = validate_terraform(self._gen(), 'azure')
+        ok = [r for r in results if r.group == 'Provider' and 'azurerm' in r.name and r.status == 'pass']
+        self.assertTrue(len(ok) > 0)
+
+    def test_valid_azure_passes_file_structure(self):
+        results = validate_terraform(self._gen(), 'azure')
+        fails = [r for r in results if r.group == 'File Structure' and r.status == 'fail']
+        self.assertEqual(fails, [])
+
+    def test_valid_azure_passes_hcl_syntax(self):
+        results = validate_terraform(self._gen(), 'azure')
+        fails = [r for r in results if r.group == 'HCL Syntax' and r.status == 'fail']
+        self.assertEqual(fails, [])
+
+    def test_valid_azure_passes_variable_resolution(self):
+        results = validate_terraform(self._gen(), 'azure')
+        fails = [r for r in results if r.group == 'Variable Resolution' and r.status == 'fail']
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.name}: {f.error}' for f in fails))
+
+    def test_valid_azure_passes_module_crossrefs(self):
+        results = validate_terraform(self._gen(), 'azure')
+        fails = [r for r in results if r.group == 'Module Cross-References' and r.status == 'fail']
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.name}: {f.error}' for f in fails))
+
+    def test_missing_root_main_detected(self):
+        files = self._gen()
+        del files['main.tf']
+        self.assertTrue(any('main.tf' in f.name for f in self._fails(files)))
+
+    def test_missing_module_file_detected(self):
+        files = self._gen()
+        del files['modules/tv0/main.tf']
+        self.assertTrue(any('tv0' in f.name for f in self._fails(files)))
+
+    def test_wrong_provider_detected(self):
+        files = self._gen()
+        files['main.tf'] = files['main.tf'].replace('hashicorp/azurerm', 'hashicorp/google')
+        self.assertTrue(any('azurerm' in f.name for f in self._fails(files)))
+
+    def test_infra_resource_type_recognised_by_schema(self):
+        results = validate_terraform(self._gen(), 'azure')
+        ok = [r for r in results
+              if 'azurerm_oracle_exadata_infrastructure' in r.name and r.status == 'pass']
+        self.assertTrue(len(ok) > 0,
+            msg='azurerm_oracle_exadata_infrastructure not recognised in mock validator schema')
+
+    def test_old_infra_resource_type_would_be_unknown(self):
+        files = self._gen()
+        files['modules/ti0/main.tf'] = files['modules/ti0/main.tf'].replace(
+            'azurerm_oracle_exadata_infrastructure',
+            'azurerm_oracle_cloud_exadata_infrastructure')
+        results = validate_terraform(files, 'azure')
+        warns = [r for r in results
+                 if 'azurerm_oracle_cloud_exadata_infrastructure' in r.name
+                 and r.status == 'warn']
+        self.assertTrue(len(warns) > 0,
+            msg='Expected validator to warn about unknown old resource type')
+
+    def test_multi_resource_has_no_failures(self):
+        fails = self._fails(self._gen(vnet_count=2, infra_count=2, cluster_count=2))
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.group} / {f.name}: {f.error}' for f in fails))
+
+    def test_summary_structure_complete(self):
+        s = summarise(validate_terraform(self._gen(), 'azure'))
+        for key in ('passed', 'failed', 'warned', 'total', 'results'):
+            self.assertIn(key, s)
+
+    def test_summary_failed_zero_for_valid_input(self):
+        s = summarise(validate_terraform(self._gen(), 'azure'))
+        self.assertEqual(s['failed'], 0)
+
+    def test_summary_passed_greater_than_zero(self):
+        s = summarise(validate_terraform(self._gen(), 'azure'))
+        self.assertGreater(s['passed'], 0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  27. generate_all — GCP
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestGenerateAllGcp(unittest.TestCase):
+
+    def _base(self, net_count=1, infra_count=1, cluster_count=1):
+        nets    = [gcp_net(f'gn{i}')    for i in range(net_count)]
+        infras  = [gcp_infra(f'gi{i}')  for i in range(infra_count)]
+        clusters = [gcp_cluster(f'gc{i}', f'gn0', f'gi0') for i in range(cluster_count)]
+        return {'cloud': 'gcp', 'gcp_networks': nets, 'gcp_infras': infras, 'gcp_clusters': clusters}
+
+    def test_returns_root_main(self):
+        self.assertIn('main.tf', generate_all(self._base()))
+
+    def test_returns_root_tfvars(self):
+        self.assertIn('terraform.auto.tfvars', generate_all(self._base()))
+
+    def test_returns_root_variables(self):
+        self.assertIn('variables.tf', generate_all(self._base()))
+
+    def test_net_module_files_generated(self):
+        files = generate_all(self._base())
+        for f in ['main.tf', 'variables.tf', 'outputs.tf']:
+            self.assertIn(f'modules/{_GCP_MOD_NET}/{f}', files)
+
+    def test_client_subnet_in_network_module(self):
+        files = generate_all(self._base())
+        self.assertIn('CLIENT_SUBNET', files[f'modules/{_GCP_MOD_NET}/main.tf'])
+        self.assertIn('BACKUP_SUBNET', files[f'modules/{_GCP_MOD_NET}/main.tf'])
+        self.assertIn('client_subnet_name', files[f'modules/{_GCP_MOD_NET}/outputs.tf'])
+
+    def test_infra_module_files_generated(self):
+        files = generate_all(self._base())
+        for f in ['main.tf', 'variables.tf', 'outputs.tf']:
+            self.assertIn(f'modules/{_GCP_MOD_INFRA}/{f}', files)
+
+    def test_cluster_module_files_generated(self):
+        files = generate_all(self._base())
+        for f in ['main.tf', 'variables.tf', 'outputs.tf']:
+            self.assertIn(f'modules/{_GCP_MOD_CLUSTER}/{f}', files)
+
+    def test_file_count_one_of_each(self):
+        # 3 shared modules (9 files) + 3 root files + README.md = 13, regardless of instance count
+        self.assertEqual(len(generate_all(self._base())), 13)
+
+    def test_file_count_two_networks(self):
+        # with for_each: additional networks are tfvars entries, not extra module files → still 13
+        self.assertEqual(len(generate_all(self._base(net_count=2))), 13)
+
+    def test_file_count_two_clusters(self):
+        # with for_each: additional clusters are tfvars entries, not extra module files → still 13
+        self.assertEqual(len(generate_all(self._base(cluster_count=2))), 13)
+
+    def test_root_main_has_google_provider(self):
+        files = generate_all(self._base())
+        self.assertIn('hashicorp/google', files['main.tf'])
+
+    def test_root_main_has_no_aws_provider(self):
+        files = generate_all(self._base())
+        self.assertNotIn('hashicorp/aws', files['main.tf'])
+        self.assertNotIn('hashicorp/azurerm', files['main.tf'])
+
+    def test_net_module_has_odb_network_resource(self):
+        files = generate_all(self._base())
+        self.assertIn('google_oracle_database_odb_network', files[f'modules/{_GCP_MOD_NET}/main.tf'])
+
+    def test_infra_module_has_exadata_resource(self):
+        files = generate_all(self._base())
+        self.assertIn('google_oracle_database_cloud_exadata_infrastructure',
+                      files[f'modules/{_GCP_MOD_INFRA}/main.tf'])
+
+    def test_cluster_module_has_vm_cluster_resource(self):
+        files = generate_all(self._base())
+        self.assertIn('google_oracle_database_cloud_vm_cluster',
+                      files[f'modules/{_GCP_MOD_CLUSTER}/main.tf'])
+
+    def test_cluster_cross_wired_to_correct_infra(self):
+        n1 = gcp_net('net_a')
+        n2 = gcp_net('net_b')
+        files = generate_all({
+            'cloud': 'gcp',
+            'gcp_networks':  [n1, n2],
+            'gcp_infras':    [gcp_infra('inf_prod'), gcp_infra('inf_dev')],
+            'gcp_clusters':  [
+                gcp_cluster('cl_prod', 'net_a', 'inf_prod'),
+                gcp_cluster('cl_dev',  'net_b', 'inf_dev'),
+            ],
+        })
+        # Cross-wiring expressed as network_key / infra_key in tfvars map entries
+        tfvars = files['terraform.auto.tfvars']
+        self.assertIn('net_a', tfvars)
+        self.assertIn('net_b', tfvars)
+        self.assertIn('inf_prod', tfvars)
+        self.assertIn('inf_dev', tfvars)
+        self.assertIn('for_each = var.gcp_vm_clusters', files['main.tf'])
+
+    def test_all_files_non_empty(self):
+        files = generate_all(self._base())
+        for path, content in files.items():
+            self.assertGreater(len(content.strip()), 0, f'{path} is empty')
+
+    def test_all_tf_files_have_braces(self):
+        files = generate_all(self._base())
+        for path, content in files.items():
+            if path.endswith('.tf'):
+                self.assertIn('{', content, f'{path} missing opening brace')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  28. GCP DEFAULT NORMALISERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestGcpDefaultNormalisers(unittest.TestCase):
+
+    def test_net_defaults_odb_network_id_fallback(self):
+        d = _gcp_net_defaults({})
+        self.assertEqual(d['odb_network_id'], 'my-odb-network')
+
+    def test_net_defaults_client_subnet_id_fallback(self):
+        d = _gcp_net_defaults({})
+        self.assertEqual(d['client_subnet_id'], 'client-subnet')
+
+    def test_net_defaults_backup_subnet_id_fallback(self):
+        d = _gcp_net_defaults({})
+        self.assertEqual(d['backup_subnet_id'], 'backup-subnet')
+
+    def test_net_defaults_preserves_location(self):
+        d = _gcp_net_defaults({'location': 'europe-west4'})
+        self.assertEqual(d['location'], 'europe-west4')
+
+    def test_net_defaults_client_cidr_fallback(self):
+        self.assertEqual(_gcp_net_defaults({})['client_cidr'], '10.0.1.0/24')
+
+    def test_infra_defaults_shape_fallback(self):
+        self.assertEqual(_gcp_infra_defaults({})['shape'], 'Exadata.X9M')
+
+    def test_infra_defaults_compute_count_int(self):
+        d = _gcp_infra_defaults({'compute_count': '4', 'storage_count': '6'})
+        self.assertEqual(d['compute_count'], 4)
+        self.assertEqual(d['storage_count'], 6)
+
+    def test_infra_defaults_fallback_counts(self):
+        d = _gcp_infra_defaults({})
+        self.assertEqual(d['compute_count'], 2)
+        self.assertEqual(d['storage_count'], 3)
+
+    def test_cluster_defaults_network_ref_fallback(self):
+        first_net = _gcp_net_defaults({'module_name': 'net1'})
+        d = _gcp_cluster_defaults({}, first_net=first_net)
+        self.assertEqual(d['network_ref'], 'net1')
+
+    def test_cluster_defaults_network_ref(self):
+        first_net = _gcp_net_defaults({'module_name': 'net1'})
+        d = _gcp_cluster_defaults({}, first_net=first_net)
+        self.assertEqual(d['network_ref'], 'net1')
+
+    def test_cluster_defaults_cpu_core_count_int(self):
+        d = _gcp_cluster_defaults({'cpu_core_count': '32'})
+        self.assertEqual(d['cpu_core_count'], 32)
+
+    def test_cluster_defaults_memory_size_gb_int(self):
+        d = _gcp_cluster_defaults({'memory_size_gb': '120'})
+        self.assertEqual(d['memory_size_gb'], 120)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  29. API ROUTES — GCP (dedicated)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestApiRoutesGcp(unittest.TestCase):
+
+    def setUp(self):
+        app.config['TESTING'] = True
+        self.client = app.test_client()
+        self.base = {
+            'cloud': 'gcp',
+            'gcp_networks':  [gcp_net('gn1')],
+            'gcp_infras':    [gcp_infra('gi1')],
+            'gcp_clusters':  [gcp_cluster('gc1', 'gn1', 'gi1')],
+        }
+
+    # /api/generate — shared module variables and outputs
+    def test_generate_gcp_net_variables(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': f'modules/{_GCP_MOD_NET}/variables.tf'},
+            content_type='application/json')
+        self.assertIn('variable', r.get_json()['content'])
+
+    def test_generate_gcp_net_outputs(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': f'modules/{_GCP_MOD_NET}/outputs.tf'},
+            content_type='application/json')
+        self.assertIn('output', r.get_json()['content'])
+
+    def test_generate_gcp_infra_variables(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': f'modules/{_GCP_MOD_INFRA}/variables.tf'},
+            content_type='application/json')
+        self.assertIn('variable', r.get_json()['content'])
+
+    def test_generate_gcp_cluster_variables(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': f'modules/{_GCP_MOD_CLUSTER}/variables.tf'},
+            content_type='application/json')
+        self.assertIn('variable', r.get_json()['content'])
+
+    def test_generate_gcp_root_variables(self):
+        r = self.client.post('/api/generate',
+            json={**self.base, 'file_key': 'variables.tf'},
+            content_type='application/json')
+        self.assertIn('variable', r.get_json()['content'])
+
+    # /api/download — GCP-specific assertions
+    def test_download_gcp_filename_contains_gcp(self):
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        self.assertIn('gcp', r.headers.get('Content-Disposition', ''))
+
+    def test_download_gcp_zip_magic_bytes(self):
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        self.assertEqual(r.data[:4], b'PK\x03\x04')
+
+    def test_download_gcp_zip_contains_main_tf(self):
+        import io, zipfile as zf_mod
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        z = zf_mod.ZipFile(io.BytesIO(r.data))
+        self.assertTrue(any('main.tf' in n for n in z.namelist()))
+
+    def test_download_gcp_main_tf_has_google_provider(self):
+        import io, zipfile as zf_mod
+        r = self.client.post('/api/download', json=self.base, content_type='application/json')
+        z = zf_mod.ZipFile(io.BytesIO(r.data))
+        main = next(n for n in z.namelist() if n.endswith('main.tf') and 'modules' not in n)
+        self.assertIn('hashicorp/google', z.read(main).decode())
+
+    # /api/validate tab 13 — GCP VM Cluster
+    def test_validate_gcp_tab13_pass(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'gcp', 'tab': 13,
+            'gcp_clusters': [{'module_name': 'gc', 'cloud_vm_cluster_id': 'cl',
+                               'location': 'us-east4', 'hostname_prefix': 'vm',
+                               'gi_version': '23.0.0.0', 'cpu_core_count': 16,
+                               'ssh_public_keys': ['ssh-rsa AAA']}],
+        })
+        self.assertTrue(r.get_json()['valid'])
+
+    def test_validate_gcp_tab13_missing_hostname(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'gcp', 'tab': 13,
+            'gcp_clusters': [{'module_name': 'gc', 'cloud_vm_cluster_id': 'cl',
+                               'location': 'us-east4', 'gi_version': '23.0.0.0',
+                               'cpu_core_count': 16,
+                               'ssh_public_keys': ['ssh-rsa AAA']}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('hostname_prefix', d['errors'])
+
+    def test_validate_gcp_tab13_no_ssh_key(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'gcp', 'tab': 13,
+            'gcp_clusters': [{'module_name': 'gc', 'cloud_vm_cluster_id': 'cl',
+                               'location': 'us-east4', 'hostname_prefix': 'vm',
+                               'gi_version': '23.0.0.0', 'cpu_core_count': 16,
+                               'ssh_public_keys': []}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('ssh_public_keys', d['errors'])
+
+    def test_validate_gcp_tab13_missing_cluster_id(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'gcp', 'tab': 13,
+            'gcp_clusters': [{'module_name': 'gc',
+                               'location': 'us-east4', 'hostname_prefix': 'vm',
+                               'gi_version': '23.0.0.0', 'cpu_core_count': 16,
+                               'ssh_public_keys': ['ssh-rsa AAA']}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('cloud_vm_cluster_id', d['errors'])
+
+    # /api/validate tab 14 — GCP OCI DB
+    def test_validate_gcp_tab14_pass(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'gcp', 'tab': 14,
+            'gcp_oci_databases': [{'module_name': 'ocidb', 'vmcluster_ref': 'gc1',
+                                    'db_version': '19.0.0.0', 'db_name': 'mydb'}],
+        })
+        self.assertTrue(r.get_json()['valid'])
+
+    def test_validate_gcp_tab14_missing_vmcluster_ref(self):
+        r = self.client.post('/api/validate', json={
+            'cloud': 'gcp', 'tab': 14,
+            'gcp_oci_databases': [{'module_name': 'ocidb'}],
+        })
+        d = r.get_json()
+        self.assertFalse(d['valid'])
+        self.assertIn('vmcluster_ref', d['errors'])
+
+    # /api/tf-validate — GCP
+    def test_tf_validate_gcp_returns_200(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        self.assertEqual(r.status_code, 200)
+
+    def test_tf_validate_gcp_has_no_failures(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        d = r.get_json()
+        failures = [x for x in d.get('results', []) if x['status'] == 'fail']
+        self.assertEqual(failures, [],
+            msg='Failures:\n' + '\n'.join(f['name'] + ': ' + str(f['error']) for f in failures))
+
+    def test_tf_validate_gcp_provider_check_passes(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        d = r.get_json()
+        row = next((x for x in d['results']
+                    if 'google' in x['name'] and x['group'] == 'Provider'), None)
+        self.assertIsNotNone(row)
+        self.assertEqual(row['status'], 'pass')
+
+    def test_tf_validate_gcp_cloud_field(self):
+        r = self.client.post('/api/tf-validate', json=self.base, content_type='application/json')
+        self.assertEqual(r.get_json()['cloud'], 'gcp')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  30. MOCK tf_validator — GCP
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestTfValidateGcp(unittest.TestCase):
+    """Direct unit tests for validate_terraform() against GCP-generated files."""
+
+    def _gen(self, net_count=1, infra_count=1, cluster_count=1):
+        nets    = [gcp_net(f'tn{i}')    for i in range(net_count)]
+        infras  = [gcp_infra(f'ti{i}')  for i in range(infra_count)]
+        clusters = [gcp_cluster(f'tc{i}', 'tn0', 'ti0') for i in range(cluster_count)]
+        return generate_gcp_tf({'cloud': 'gcp',
+                                 'gcp_networks': nets,
+                                 'gcp_infras':   infras,
+                                 'gcp_clusters': clusters})
+
+    def _fails(self, files):
+        return [r for r in validate_terraform(files, 'gcp') if r.status == 'fail']
+
+    def test_valid_gcp_has_no_failures(self):
+        fails = self._fails(self._gen())
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.group} / {f.name}: {f.error}' for f in fails))
+
+    def test_valid_gcp_passes_provider_check(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        ok = [r for r in results if r.group == 'Provider' and 'google' in r.name and r.status == 'pass']
+        self.assertTrue(len(ok) > 0)
+
+    def test_valid_gcp_passes_file_structure(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        fails = [r for r in results if r.group == 'File Structure' and r.status == 'fail']
+        self.assertEqual(fails, [])
+
+    def test_valid_gcp_passes_hcl_syntax(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        fails = [r for r in results if r.group == 'HCL Syntax' and r.status == 'fail']
+        self.assertEqual(fails, [])
+
+    def test_valid_gcp_passes_variable_resolution(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        fails = [r for r in results if r.group == 'Variable Resolution' and r.status == 'fail']
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.name}: {f.error}' for f in fails))
+
+    def test_valid_gcp_passes_module_crossrefs(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        fails = [r for r in results if r.group == 'Module Cross-References' and r.status == 'fail']
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.name}: {f.error}' for f in fails))
+
+    def test_missing_root_main_detected(self):
+        files = self._gen()
+        del files['main.tf']
+        self.assertTrue(any('main.tf' in f.name for f in self._fails(files)))
+
+    def test_missing_module_file_detected(self):
+        files = self._gen()
+        del files[f'modules/{_GCP_MOD_NET}/main.tf']
+        self.assertTrue(any(_GCP_MOD_NET in f.name or 'main.tf' in f.name
+                            for f in self._fails(files)))
+
+    def test_wrong_provider_detected(self):
+        files = self._gen()
+        files['main.tf'] = files['main.tf'].replace('hashicorp/google', 'hashicorp/aws')
+        self.assertTrue(any('google' in f.name for f in self._fails(files)))
+
+    def test_net_resource_recognised_by_schema(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        ok = [r for r in results
+              if 'google_oracle_database_odb_network' in r.name and r.status == 'pass']
+        self.assertTrue(len(ok) > 0,
+            msg='google_oracle_database_odb_network not recognised in mock validator schema')
+
+    def test_infra_resource_recognised_by_schema(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        ok = [r for r in results
+              if 'google_oracle_database_cloud_exadata_infrastructure' in r.name and r.status == 'pass']
+        self.assertTrue(len(ok) > 0,
+            msg='google_oracle_database_cloud_exadata_infrastructure not recognised in schema')
+
+    def test_cluster_resource_recognised_by_schema(self):
+        results = validate_terraform(self._gen(), 'gcp')
+        ok = [r for r in results
+              if 'google_oracle_database_cloud_vm_cluster' in r.name and r.status == 'pass']
+        self.assertTrue(len(ok) > 0,
+            msg='google_oracle_database_cloud_vm_cluster not recognised in schema')
+
+    def test_multi_resource_has_no_failures(self):
+        fails = self._fails(self._gen(net_count=2, infra_count=2, cluster_count=2))
+        self.assertEqual(fails, [],
+            msg='\n'.join(f'{f.group} / {f.name}: {f.error}' for f in fails))
+
+    def test_summary_structure_complete(self):
+        s = summarise(validate_terraform(self._gen(), 'gcp'))
+        for key in ('passed', 'failed', 'warned', 'total', 'results'):
+            self.assertIn(key, s)
+
+    def test_summary_failed_zero_for_valid_input(self):
+        s = summarise(validate_terraform(self._gen(), 'gcp'))
+        self.assertEqual(s['failed'], 0)
+
+    def test_summary_passed_greater_than_zero(self):
+        s = summarise(validate_terraform(self._gen(), 'gcp'))
+        self.assertGreater(s['passed'], 0)
