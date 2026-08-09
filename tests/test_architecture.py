@@ -189,6 +189,113 @@ class TestCloudPackagesAreIsolated(unittest.TestCase):
                                  f'{a} and {b} declare the same resource type')
 
 
+class TestRoutesAreOwnedByTheirCloud(unittest.TestCase):
+    """Page routes live in the cloud package, registered as blueprints."""
+
+    PAGES = {'/aws': 'aws.page', '/gcp': 'gcp.page', '/azure': 'azure.page',
+             '/oci': 'oci_pages.db_page', '/dg': 'oci_pages.dg_page'}
+
+    def test_pages_are_served_by_blueprints(self):
+        from app import app
+        rules = {str(r): r.endpoint for r in app.url_map.iter_rules()}
+        for path, endpoint in self.PAGES.items():
+            self.assertEqual(rules.get(path), endpoint, path)
+
+    def test_app_defines_no_cloud_page_route(self):
+        # A route added back into app.py would work, but puts cloud knowledge
+        # back where this refactor removed it.
+        src = (ROOT / 'app.py').read_text(encoding='utf-8')
+        for path in self.PAGES:
+            self.assertNotIn(f"@app.route('{path}')", src,
+                             f'{path} is defined in app.py again')
+
+    def test_all_pages_render(self):
+        from app import app
+        client = app.test_client()
+        for path in self.PAGES:
+            self.assertEqual(client.get(path).status_code, 200, path)
+
+    def test_pages_are_not_cacheable(self):
+        # These embed generated state; a cached copy shows a config the server
+        # would no longer produce.
+        from app import app
+        client = app.test_client()
+        for path in self.PAGES:
+            headers = client.get(path).headers
+            self.assertIn('no-store', headers.get('Cache-Control', ''), path)
+
+    def test_route_modules_are_not_imported_by_package_init(self):
+        # Importing a cloud for its validator must not drag in Flask. Checked via
+        # AST rather than a substring, so the docstring saying so does not count.
+        for pkg in ('clouds/aws', 'clouds/gcp', 'clouds/azure', 'oci'):
+            init = ROOT / pkg / '__init__.py'
+            tree = ast.parse(init.read_text(encoding='utf-8'), filename=str(init))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    self.assertNotEqual(node.module, 'routes',
+                                        f'{pkg}/__init__.py imports routes')
+                elif isinstance(node, ast.Import):
+                    for a in node.names:
+                        self.assertNotIn('routes', a.name.split('.'),
+                                         f'{pkg}/__init__.py imports routes')
+
+
+class TestCloudRegistry(unittest.TestCase):
+    """One table replaces the if/elif chains that used to select a cloud."""
+
+    def test_every_cloud_has_a_generator_and_zip_name(self):
+        from clouds.registry import REGISTRY
+        for name, spec in REGISTRY.items():
+            self.assertTrue(callable(spec.generate), name)
+            self.assertTrue(spec.zip_name, name)
+            self.assertEqual(spec.name, name)
+
+    def test_hyperscalers_have_validators_and_oci_products_do_not(self):
+        from clouds.registry import REGISTRY
+        for name in CLOUDS:
+            self.assertIsNotNone(REGISTRY[name].validate, name)
+        for name in ('oci', 'dg'):
+            self.assertIsNone(REGISTRY[name].validate,
+                              f'{name} is validated client-side only')
+
+    def test_unknown_cloud_falls_back_to_aws(self):
+        from clouds import registry
+        self.assertEqual(registry.get('no-such-cloud').name, 'aws')
+        self.assertEqual(registry.get(None).name, 'aws')
+
+    def test_zip_names_are_unique(self):
+        from clouds.registry import REGISTRY
+        names = [s.zip_name for s in REGISTRY.values()]
+        self.assertEqual(len(names), len(set(names)))
+
+    def test_no_cloud_package_imports_the_registry(self):
+        # The registry imports the clouds. The reverse would be a cycle, and
+        # would let one cloud reach another through it.
+        for cloud in CLOUDS:
+            for f in _py_files('clouds', cloud):
+                self.assertNotIn('registry', f.read_text(encoding='utf-8'),
+                                 f'clouds/{cloud}/{f.name} imports the registry')
+
+    def test_generation_and_download_use_the_registry(self):
+        # These two were if/elif chains over every cloud. Other branches remain
+        # in api_test, api_llm_ask, api_ai_security_review and _collect_cidrs -
+        # those are scenario and prompt building rather than cloud dispatch, and
+        # are a later stage. This test pins the two that are done so they cannot
+        # quietly regrow.
+        src = (ROOT / 'app.py').read_text(encoding='utf-8')
+        gen = src[src.index('def generate_all('):src.index('#  ROUTES')]
+        self.assertIn('cloud_registry.get', gen)
+        for cloud in CLOUDS + ('dg', 'oci'):
+            self.assertNotIn(f"cloud == '{cloud}'", gen,
+                             f'generate_all still branches on {cloud}')
+
+        dl = src[src.index('def api_download('):]
+        dl = dl[:dl.index('\n@app.route')]
+        self.assertIn('cloud_registry.get(cloud).zip_name', dl)
+        self.assertNotIn('terraflow-studio-', dl,
+                         'api_download still hardcodes zip names')
+
+
 class TestOciPublicSurface(unittest.TestCase):
     """oci/__init__ is the contract the clouds are allowed to depend on."""
 

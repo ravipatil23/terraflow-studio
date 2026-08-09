@@ -36,19 +36,11 @@ import llm as llm_module
 import github as github_module
 import rag as rag_module
 import regions
-import clouds.aws.validator as aws_validator
-import clouds.gcp.validator as gcp_validator
-import clouds.azure.validator as azure_validator
-
-# Payload validation lives with each cloud. dg and oci are validated in the
-# browser only, so they map to None rather than to a no-op module.
-_CLOUD_VALIDATORS = {
-    'aws':   aws_validator.validate,
-    'gcp':   gcp_validator.validate,
-    'azure': azure_validator.validate,
-    'dg':    None,
-    'oci':   None,
-}
+import clouds.registry as cloud_registry
+import clouds.aws.routes as aws_routes
+import clouds.gcp.routes as gcp_routes
+import clouds.azure.routes as azure_routes
+import oci.routes as oci_routes
 
 from core.helpers import render_tf, is_ref, parse_list, tf_bool
 from generators.aws_gen import (
@@ -79,20 +71,18 @@ from oci import generate_oci_dg_tf, generate_oci_db_tf
 
 app = Flask(__name__)
 
+# Each cloud owns its page route. Registering blueprints here is the only place
+# app.py needs to know which clouds exist.
+for _bp in (aws_routes.bp, gcp_routes.bp, azure_routes.bp, oci_routes.bp):
+    app.register_blueprint(_bp)
+
 
 def generate_all(data: dict) -> dict:
+    # CloudFormation is an output format rather than a cloud, so it is checked
+    # before the registry: it only applies to AWS and produces a single file.
     if data.get('iac_tool') == 'cloudformation':
         return {'cfn': generate_cfn(data)}
-    cloud = data.get('cloud', 'aws')
-    if cloud == 'azure':
-        return generate_azure_tf(data)
-    if cloud == 'gcp':
-        return generate_gcp_tf(data)
-    if cloud == 'dg':
-        return generate_oci_dg_tf(data)
-    if cloud == 'oci':
-        return generate_oci_db_tf(data)
-    return generate_aws_tf(data)
+    return cloud_registry.get(data.get('cloud', 'aws')).generate(data)
 
 # ─────────────────────────────────────────────
 #  ROUTES
@@ -611,52 +601,6 @@ def index():
     return resp
 
 
-@app.route('/aws')
-def aws_page():
-    # Region/AZ catalogue comes from config/aws_regions.json so it can be updated
-    # without touching code. Injected as JSON rather than fetched, so the
-    # dropdowns are populated on first paint.
-    resp = make_response(render_template(
-        'aws.html', aws_regions_json=regions.regions_json('aws')))
-    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    resp.headers['Pragma'] = 'no-cache'
-    return resp
-
-
-@app.route('/gcp')
-def gcp_page():
-    resp = make_response(render_template(
-        'gcp.html', gcp_regions_json=regions.regions_json('gcp')))
-    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    resp.headers['Pragma'] = 'no-cache'
-    return resp
-
-
-@app.route('/azure')
-def azure_page():
-    resp = make_response(render_template(
-        'azure.html', azure_regions_json=regions.regions_json('azure')))
-    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    resp.headers['Pragma'] = 'no-cache'
-    return resp
-
-
-@app.route('/oci')
-def oci_db_page():
-    resp = make_response(render_template('oci_db.html'))
-    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    resp.headers['Pragma'] = 'no-cache'
-    return resp
-
-
-@app.route('/dg')
-def dg_page():
-    resp = make_response(render_template('dg.html'))
-    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    resp.headers['Pragma'] = 'no-cache'
-    return resp
-
-
 @app.route('/cidr')
 def cidr_page():
     resp = make_response(render_template('cidr.html'))
@@ -754,16 +698,7 @@ def api_download():
         content = generate_cfn(data)
         buf = io.BytesIO(content.encode('utf-8'))
         return send_file(buf, mimetype='text/yaml', as_attachment=True, download_name='odb-stack.yaml')
-    if cloud == 'gcp':
-        zip_name = 'terraflow-studio-gcp'
-    elif cloud == 'azure':
-        zip_name = 'terraflow-studio-azure'
-    elif cloud == 'dg':
-        zip_name = 'terraflow-studio-dg'
-    elif cloud == 'oci':
-        zip_name = 'terraflow-studio-oci'
-    else:
-        zip_name = 'terraflow-studio-aws'
+    zip_name = cloud_registry.get(cloud).zip_name
     files = _fmt_files(generate_all(data), data.get('iac_tool', 'terraform'))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -855,8 +790,9 @@ def api_validate():
     data   = request.get_json(force=True)
     cloud  = data.get('cloud', 'aws')
     errors = {}
-    # Each cloud owns its own rules; dg and oci validate client-side only.
-    validator = _CLOUD_VALIDATORS.get(cloud, _CLOUD_VALIDATORS['aws'])
+    # Each cloud owns its own rules; dg and oci validate client-side only and
+    # carry no validator, which the registry represents as None.
+    validator = cloud_registry.get(cloud).validate
     if validator is not None:
         validator(data, errors)
     flat_errors = {}
