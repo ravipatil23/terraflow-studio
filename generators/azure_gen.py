@@ -1,6 +1,6 @@
 """Azure (DB@Azure) generators."""
-from .helpers import render_tf, tf_bool
-from .oci_dg_gen import generate_oci_dg_tf
+from core.helpers import render_tf, tf_bool
+from oci import generate_oci_dg_tf
 
 
 def _azure_vnet_defaults(d):
@@ -350,8 +350,8 @@ def generate_azure_tf(data: dict) -> dict:
         files[f'modules/{mn}/outputs.tf']       = azure_cluster_outputs(mn)
 
     files.update(generate_oci_dg_tf({
-        'aws_dg_multi_az':    data.get('azure_dg_multi_az', []),
-        'aws_dg_cross_region': data.get('azure_dg_cross_region', []),
+        'dg_multi_az':     data.get('azure_dg_multi_az', []),
+        'dg_cross_region': data.get('azure_dg_cross_region', []),
     }))
 
     return files

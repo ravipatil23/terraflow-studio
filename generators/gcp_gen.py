@@ -1,9 +1,9 @@
 """GCP (DB@GCP) generators."""
 import datetime
 import regions
-from .helpers import render_tf, parse_list, tf_bool, tf_num
-from .oci_dg_gen import generate_oci_dg_tf
-from .oci_gen import (
+from core.helpers import render_tf, parse_list, tf_bool, tf_num
+from oci import generate_oci_dg_tf
+from oci import (
     _ocidb_filled, _oci_db_defaults,
     _mn_dbhome, _mn_cdb, _mn_pdb,
     oci_dbhome_main, oci_dbhome_vars, oci_dbhome_outputs, oci_dbhome_tfvars,
@@ -235,8 +235,8 @@ def generate_gcp_tf(data: dict) -> dict:
             files[f'modules/{mn_p}/terraform.tfvars'] = oci_pdb_tfvars(mn_p, db, mn_c)
 
     files.update(generate_oci_dg_tf({
-        'aws_dg_multi_az':    data.get('gcp_dg_multi_az', []),
-        'aws_dg_cross_region': data.get('gcp_dg_cross_region', []),
+        'dg_multi_az':     data.get('gcp_dg_multi_az', []),
+        'dg_cross_region': data.get('gcp_dg_cross_region', []),
     }))
 
     return files

@@ -2,9 +2,9 @@
 import re
 import datetime
 import regions
-from .helpers import render_tf, is_ref, parse_list, tf_bool, tf_num
-from .oci_dg_gen import generate_oci_dg_tf
-from .oci_gen import (
+from core.helpers import render_tf, is_ref, parse_list, tf_bool, tf_num
+from oci import generate_oci_dg_tf
+from oci import (
     _avmc_filled, _ocidb_filled, _oci_db_defaults,
     _mn_dbhome, _mn_cdb, _mn_pdb,
     oci_dbhome_main, oci_dbhome_vars, oci_dbhome_outputs, oci_dbhome_tfvars,

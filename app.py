@@ -37,7 +37,7 @@ import github as github_module
 import rag as rag_module
 import regions
 
-from generators.helpers import render_tf, is_ref, parse_list, tf_bool
+from core.helpers import render_tf, is_ref, parse_list, tf_bool
 from generators.aws_gen import (
     mod0_main, mod0_vars, mod0_outputs, mod0_tfvars,
     mod1_main, mod1_vars, mod1_outputs, mod1_tfvars,
@@ -62,8 +62,7 @@ from generators.azure_gen import (
     _azure_vnet_defaults, _azure_infra_defaults, _azure_cluster_defaults,
     generate_azure_tf,
 )
-from generators.oci_dg_gen import generate_oci_dg_tf
-from generators.oci_gen import generate_oci_db_tf
+from oci import generate_oci_dg_tf, generate_oci_db_tf
 
 app = Flask(__name__)
 
