@@ -2,7 +2,14 @@
 
 Used by every cloud package and coupled to none of them.
 """
-from core.helpers import render_tf, tf_bool
+import os
+
+from core.helpers import make_renderer
+from core.helpers import tf_bool
+
+# This package renders only its own templates. Reaching for another cloud's
+# raises TemplateNotFound rather than quietly working.
+render_tf = make_renderer(os.path.join(os.path.dirname(__file__), 'templates'))
 
 
 def _mn_dbhome(base): return f'{base}_dbhome'

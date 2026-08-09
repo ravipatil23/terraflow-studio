@@ -6,7 +6,7 @@ module names and the content checks look for per-instance module blocks.
 """
 import re
 
-from generators.azure_gen import (
+from clouds.azure.generator import (
     _azure_vnet_defaults, _azure_infra_defaults, _azure_cluster_defaults,
 )
 

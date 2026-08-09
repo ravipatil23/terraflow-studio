@@ -11,9 +11,9 @@ That direction matters - it is what keeps the clouds unaware of each other.
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from generators.aws_gen import generate_aws_tf
-from generators.gcp_gen import generate_gcp_tf
-from generators.azure_gen import generate_azure_tf
+from clouds.aws.generator import generate_aws_tf
+from clouds.gcp.generator import generate_gcp_tf
+from clouds.azure.generator import generate_azure_tf
 from oci import generate_oci_db_tf, generate_oci_dg_tf
 
 import clouds.aws.validator as _aws_validator

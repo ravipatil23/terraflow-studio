@@ -1,0 +1,68 @@
+variable "display_name" {
+  description = "User-friendly name for the ODB network."
+  type        = string
+}
+
+variable "availability_zone_id" {
+  description = "AZ ID where the ODB network is located."
+  type        = string
+}
+
+variable "client_subnet_cidr" {
+  type = string
+}
+
+variable "backup_subnet_cidr" {
+  type = string
+}
+
+variable "s3_access" {
+  type    = string
+  default = "ENABLED"
+  validation {
+    condition     = contains(["ENABLED", "DISABLED"], var.s3_access)
+    error_message = "Must be ENABLED or DISABLED."
+  }
+}
+
+variable "zero_etl_access" {
+  type    = string
+  default = "ENABLED"
+  validation {
+    condition     = contains(["ENABLED", "DISABLED"], var.zero_etl_access)
+    error_message = "Must be ENABLED or DISABLED."
+  }
+}
+
+variable "availability_zone" {
+  type    = string
+  default = ""
+}
+
+variable "region" {
+  type    = string
+  default = ""
+}
+
+variable "custom_domain_name" {
+  description = "Custom domain for ODB network hostnames — mutually exclusive with default_dns_prefix."
+  type        = string
+  default     = ""
+}
+
+variable "default_dns_prefix" {
+  description = "DNS prefix for ODB network hostnames — mutually exclusive with custom_domain_name."
+  type        = string
+  default     = ""
+}
+
+variable "delete_associated_resources" {
+  type    = bool
+  default = false
+}
+
+variable "tags" {
+  description = "Resource tags."
+  type        = map(string)
+  default     = { "ManagedBy" = "Terraform" }
+}

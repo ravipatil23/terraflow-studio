@@ -6,7 +6,7 @@ what the root module should contain. app.py drives the run and knows none of it.
 """
 import re
 
-from generators.aws_gen import (
+from clouds.aws.generator import (
     _aws_net_defaults, _aws_infra_defaults, _aws_peer_defaults, _aws_cluster_defaults,
 )
 

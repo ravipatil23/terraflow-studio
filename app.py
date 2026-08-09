@@ -44,7 +44,7 @@ import clouds.azure.routes as azure_routes
 import oci.routes as oci_routes
 
 from core.helpers import render_tf, is_ref, parse_list, tf_bool
-from generators.aws_gen import (
+from clouds.aws.generator import (
     mod0_main, mod0_vars, mod0_outputs, mod0_tfvars,
     mod1_main, mod1_vars, mod1_outputs, mod1_tfvars,
     mod2_main, mod2_vars, mod2_outputs, mod2_tfvars,
@@ -55,12 +55,12 @@ from generators.aws_gen import (
     _aws_cluster_defaults, _aws_avmc_defaults,
     generate_aws_tf, generate_cfn,
 )
-from generators.gcp_gen import (
+from clouds.gcp.generator import (
     _gcp_net_defaults, _gcp_infra_defaults, _gcp_cluster_defaults,
     generate_gcp_tf,
     _GCP_MOD_NET, _GCP_MOD_INFRA, _GCP_MOD_CLUSTER,
 )
-from generators.azure_gen import (
+from clouds.azure.generator import (
     azure_vnet_main, azure_vnet_vars, azure_vnet_outputs, azure_vnet_tfvars,
     azure_infra_main, azure_infra_vars, azure_infra_outputs, azure_infra_tfvars,
     azure_cluster_main, azure_cluster_vars, azure_cluster_outputs, azure_cluster_tfvars,

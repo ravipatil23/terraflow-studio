@@ -1,6 +1,12 @@
 """OCI Data Guard generator — cross-region and multi-AZ networking."""
 import datetime
-from core.helpers import render_tf
+import os
+
+from core.helpers import make_renderer
+
+# This package renders only its own templates. Reaching for another cloud's
+# raises TemplateNotFound rather than quietly working.
+render_tf = make_renderer(os.path.join(os.path.dirname(__file__), 'templates'))
 
 
 # ── Defaults ──────────────────────────────────────────────────────────────────

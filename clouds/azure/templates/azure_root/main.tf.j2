@@ -1,0 +1,105 @@
+# DB@Azure: VNets → Exadata Infras → VM Clusters
+# Toolchain: {{ 'OpenTofu' if iac_tool == 'opentofu' else 'Terraform' }}
+
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 4.9.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+  subscription_id = var.subscription_id
+}
+
+{% for anc in anchors %}
+# ── Oracle Resource Anchor: {{ anc.module_name }} ─────────────────────────────
+module "{{ anc.module_name }}" {
+  source              = "./modules/{{ anc.module_name }}"
+  resource_group_name = var.resource_group_name
+  name                = var.{{ anc.module_name }}_name
+  tags                = var.tags
+}
+
+{% endfor %}
+{% for net in vnets %}
+# ── VNet + Delegated Subnet: {{ net.module_name }} ─────────────────────────────
+module "{{ net.module_name }}" {
+  source                = "./modules/{{ net.module_name }}"
+  resource_group_name   = var.resource_group_name
+  location              = var.location
+  vnet_name             = var.{{ net.module_name }}_vnet_name
+  address_space         = var.{{ net.module_name }}_address_space
+  subnet_name           = var.{{ net.module_name }}_subnet_name
+  subnet_address_prefix = var.{{ net.module_name }}_subnet_address_prefix
+  tags                  = var.tags
+}
+
+{% endfor %}
+{% for inf in infras %}
+# ── Exadata Infrastructure: {{ inf.module_name }} ─────────────────────────────
+module "{{ inf.module_name }}" {
+  source              = "./modules/{{ inf.module_name }}"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  name                = var.{{ inf.module_name }}_name
+  display_name        = var.{{ inf.module_name }}_display_name
+  shape               = var.{{ inf.module_name }}_shape
+  compute_count       = var.{{ inf.module_name }}_compute_count
+  storage_count       = var.{{ inf.module_name }}_storage_count
+  zone                = var.{{ inf.module_name }}_zone
+  tags                = var.tags
+}
+
+{% endfor %}
+{% for cl in clusters %}
+# ── VM Cluster: {{ cl.module_name }} ──────────────────────────────────────────
+module "{{ cl.module_name }}" {
+  source                          = "./modules/{{ cl.module_name }}"
+  resource_group_name             = var.resource_group_name
+  location                        = var.location
+  name                            = var.{{ cl.module_name }}_name
+  display_name                    = var.{{ cl.module_name }}_display_name
+  hostname                        = var.{{ cl.module_name }}_hostname
+  cpu_core_count                  = var.{{ cl.module_name }}_cpu_core_count
+  data_storage_size_in_tbs        = var.{{ cl.module_name }}_data_storage_size_in_tbs
+  memory_size_in_gbs              = var.{{ cl.module_name }}_memory_size_in_gbs
+  db_node_storage_size_in_gbs     = var.{{ cl.module_name }}_db_node_storage_size_in_gbs
+  gi_version                      = var.{{ cl.module_name }}_gi_version
+  license_model                   = var.{{ cl.module_name }}_license_model
+  ssh_public_keys                 = var.{{ cl.module_name }}_ssh_public_keys
+  local_backup_enabled            = var.{{ cl.module_name }}_local_backup_enabled
+  sparse_diskgroup_enabled        = var.{{ cl.module_name }}_sparse_diskgroup_enabled
+  cluster_name                    = var.{{ cl.module_name }}_cluster_name
+  time_zone                       = var.{{ cl.module_name }}_time_zone
+  scan_listener_port_tcp          = var.{{ cl.module_name }}_scan_listener_port_tcp
+  cloud_exadata_infrastructure_id = module.{{ cl.infra_ref }}.infra_id
+  subnet_id                       = module.{{ cl.vnet_ref }}.subnet_id
+  virtual_network_id              = module.{{ cl.vnet_ref }}.vnet_id
+  tags                            = var.tags
+
+  depends_on = [module.{{ cl.infra_ref }}, module.{{ cl.vnet_ref }}]
+}
+
+{% endfor %}
+# ── Outputs ────────────────────────────────────────────────────────────────────
+{% for anc in anchors %}
+output "{{ anc.module_name }}_resource_anchor_id" { value = module.{{ anc.module_name }}.resource_anchor_id }
+output "{{ anc.module_name }}_linked_compartment_id" { value = module.{{ anc.module_name }}.linked_compartment_id }
+{% endfor %}
+{% for net in vnets %}
+output "{{ net.module_name }}_vnet_id" { value = module.{{ net.module_name }}.vnet_id }
+output "{{ net.module_name }}_subnet_id" { value = module.{{ net.module_name }}.subnet_id }
+{% endfor %}
+{% for inf in infras %}
+output "{{ inf.module_name }}_infra_id" { value = module.{{ inf.module_name }}.infra_id }
+output "{{ inf.module_name }}_infra_name" { value = module.{{ inf.module_name }}.infra_name }
+{% endfor %}
+{% for cl in clusters %}
+output "{{ cl.module_name }}_cluster_id" { value = module.{{ cl.module_name }}.cluster_id }
+output "{{ cl.module_name }}_ocid" { value = module.{{ cl.module_name }}.ocid }
+{% endfor %}

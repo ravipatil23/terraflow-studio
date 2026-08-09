@@ -10,8 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import regions
 from regions import RegionConfigError
-from generators.aws_gen import _oci_region_for as aws_oci_region
-from generators.gcp_gen import _oci_region_for as gcp_oci_region
+from clouds.aws.generator import _oci_region_for as aws_oci_region
+from clouds.gcp.generator import _oci_region_for as gcp_oci_region
 from app import app
 
 CLOUDS = ('aws', 'azure', 'gcp')

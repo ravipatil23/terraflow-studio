@@ -1,5 +1,5 @@
 """GCP contribution to the /api/test self-check run."""
-from generators.gcp_gen import (
+from clouds.gcp.generator import (
     _gcp_net_defaults, _gcp_infra_defaults, _gcp_cluster_defaults,
     _GCP_MOD_NET, _GCP_MOD_INFRA, _GCP_MOD_CLUSTER,
 )

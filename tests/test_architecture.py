@@ -8,7 +8,7 @@ AWS edit breaks GCP output.
       ^
     oci             <- depends on core only
       ^
-    generators/*    <- each cloud depends on core + oci, never on another cloud
+    clouds/*        <- each cloud depends on core + oci, never on another cloud
 """
 import ast
 import os
@@ -51,9 +51,8 @@ class TestCoreIsIndependent(unittest.TestCase):
     def test_core_imports_no_cloud(self):
         for f in _py_files('core'):
             imported = _imports(f)
-            self.assertNotIn('generators', imported, f'{f.name} imports generators')
             for cloud in CLOUDS:
-                self.assertNotIn(f'{cloud}_gen', imported, f'{f.name} imports {cloud}')
+                self.assertNotIn(f'clouds.{cloud}', imported, f'{f.name} imports {cloud}')
 
     def test_core_does_not_import_app(self):
         for f in _py_files('core'):
@@ -65,10 +64,9 @@ class TestOciIsIndependentOfClouds(unittest.TestCase):
 
     def test_oci_imports_no_cloud_module(self):
         for f in _py_files('oci'):
-            imported = _imports(f)
-            self.assertNotIn('generators', imported, f'{f.name} imports generators')
+            src = f.read_text(encoding='utf-8')
             for cloud in CLOUDS:
-                self.assertNotIn(f'{cloud}_gen', imported, f'{f.name} imports {cloud}_gen')
+                self.assertNotIn(f'clouds.{cloud}', src, f'{f.name} imports clouds.{cloud}')
 
     def test_oci_renders_no_cloud_named_template(self):
         # The Data Guard templates were once called aws_dg_* despite containing
@@ -92,15 +90,15 @@ class TestOciIsIndependentOfClouds(unittest.TestCase):
                             f'{f.name} renders {cloud}-named template {tmpl!r}')
 
     def test_oci_templates_exist_under_oci_prefix(self):
-        tf = ROOT / 'templates' / 'tf'
+        tf = ROOT / 'oci' / 'templates'
         for d in ('oci_dg_multi_az', 'oci_dg_cross_region'):
-            self.assertTrue((tf / d).is_dir(), f'missing templates/tf/{d}')
+            self.assertTrue((tf / d).is_dir(), f'missing oci/templates/{d}')
         for cloud in CLOUDS:
             for d in (f'{cloud}_dg_multi_az', f'{cloud}_dg_cross_region'):
                 self.assertFalse((tf / d).exists(), f'{d} should have been renamed')
 
     def test_dg_templates_declare_only_the_oci_provider(self):
-        tf = ROOT / 'templates' / 'tf'
+        tf = ROOT / 'oci' / 'templates'
         for d in ('oci_dg_multi_az', 'oci_dg_cross_region'):
             main = tf / d / 'main.tf.j2'
             if not main.exists():
@@ -116,19 +114,19 @@ class TestCloudsDoNotImportEachOther(unittest.TestCase):
 
     def test_no_cross_cloud_imports(self):
         for cloud in CLOUDS:
-            f = ROOT / 'generators' / f'{cloud}_gen.py'
-            src = f.read_text(encoding='utf-8')
-            for other in CLOUDS:
-                if other == cloud:
-                    continue
-                self.assertNotIn(f'{other}_gen', src,
-                                 f'{cloud}_gen imports {other}_gen')
+            for f in _py_files('clouds', cloud):
+                src = f.read_text(encoding='utf-8')
+                for other in CLOUDS:
+                    if other == cloud:
+                        continue
+                    self.assertNotIn(f'clouds.{other}', src,
+                                     f'clouds/{cloud}/{f.name} imports {other}')
 
     def test_clouds_reach_oci_through_the_package(self):
         # Importing oci.database / oci.dataguard directly bypasses the declared
         # surface in oci/__init__.py, which is what keeps the contract visible.
         for cloud in CLOUDS:
-            src = (ROOT / 'generators' / f'{cloud}_gen.py').read_text(encoding='utf-8')
+            src = (ROOT / 'clouds' / cloud / 'generator.py').read_text(encoding='utf-8')
             self.assertNotIn('from oci.database import', src, cloud)
             self.assertNotIn('from oci.dataguard import', src, cloud)
 
@@ -139,8 +137,10 @@ class TestCloudPackagesAreIsolated(unittest.TestCase):
     def test_package_exists_per_cloud(self):
         for cloud in CLOUDS:
             pkg = ROOT / 'clouds' / cloud
-            self.assertTrue((pkg / 'validator.py').is_file(), f'{cloud}/validator.py')
-            self.assertTrue((pkg / 'schema.py').is_file(), f'{cloud}/schema.py')
+            for f in ('validator.py', 'schema.py', 'generator.py', 'selftest.py',
+                      'routes.py'):
+                self.assertTrue((pkg / f).is_file(), f'{cloud}/{f}')
+            self.assertTrue((pkg / 'templates').is_dir(), f'{cloud}/templates')
 
     def test_no_cross_cloud_imports(self):
         for cloud in CLOUDS:
@@ -296,6 +296,55 @@ class TestCloudRegistry(unittest.TestCase):
                          'api_download still hardcodes zip names')
 
 
+class TestTemplatesAreOwnedByTheirPackage(unittest.TestCase):
+    """Each package renders only its own templates, via its own Jinja loader.
+
+    A single shared search path would let one cloud render another's template and
+    let the two drift into each other. Separate loaders make that a
+    TemplateNotFound at the first attempt.
+    """
+
+    OWNERS = {'clouds/aws': 'aws_', 'clouds/gcp': 'gcp_',
+              'clouds/azure': 'azure_', 'oci': 'oci_'}
+
+    def test_every_package_has_its_own_template_dir(self):
+        for pkg in self.OWNERS:
+            self.assertTrue((ROOT / pkg / 'templates').is_dir(), pkg)
+
+    def test_template_dirs_carry_their_owner_prefix(self):
+        for pkg, prefix in self.OWNERS.items():
+            for d in (ROOT / pkg / 'templates').iterdir():
+                if d.is_dir():
+                    self.assertTrue(d.name.startswith(prefix),
+                                    f'{pkg}/templates/{d.name} is not {prefix}*')
+
+    def test_shared_template_tree_is_gone(self):
+        # Everything moved into a package; a file left behind would be rendered
+        # by nobody and silently rot.
+        self.assertFalse((ROOT / 'templates' / 'tf').exists(),
+                         'templates/tf still exists')
+
+    def test_a_package_cannot_render_another_packages_template(self):
+        from clouds.aws.generator import render_tf as aws_render
+        from clouds.gcp.generator import render_tf as gcp_render
+        from jinja2 import TemplateNotFound
+        with self.assertRaises(TemplateNotFound):
+            aws_render('gcp_root/main.tf.j2')
+        with self.assertRaises(TemplateNotFound):
+            gcp_render('aws_root/main.tf.j2')
+
+    def test_every_rendered_template_exists_in_the_owning_package(self):
+        # Catches a render_tf() call naming a template that moved elsewhere -
+        # which would otherwise only surface when that code path runs.
+        import re
+        for pkg, prefix in self.OWNERS.items():
+            root = ROOT / pkg / 'templates'
+            for f in _py_files(*pkg.split('/')):
+                for tmpl in re.findall(r"render_tf\(\s*'([^']+)'", f.read_text(encoding='utf-8')):
+                    self.assertTrue((root / tmpl).is_file(),
+                                    f'{f.name} renders {tmpl}, missing from {pkg}/templates')
+
+
 class TestOciPublicSurface(unittest.TestCase):
     """oci/__init__ is the contract the clouds are allowed to depend on."""
 
@@ -313,7 +362,7 @@ class TestOciPublicSurface(unittest.TestCase):
         import oci
         exported = set(oci.__all__)
         for cloud in CLOUDS:
-            src = (ROOT / 'generators' / f'{cloud}_gen.py').read_text(encoding='utf-8')
+            src = (ROOT / 'clouds' / cloud / 'generator.py').read_text(encoding='utf-8')
             tree = ast.parse(src)
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom) and node.module == 'oci':

@@ -32,7 +32,7 @@ from app import (
     _azure_vnet_defaults, _azure_infra_defaults, _azure_cluster_defaults,
     generate_azure_tf,
 )
-from generators.gcp_gen import (
+from clouds.gcp.generator import (
     gcp_build_root_main, gcp_build_root_vars, gcp_build_root_tfvars,
     _gcp_net_defaults, _gcp_infra_defaults, _gcp_cluster_defaults,
     _gcp_shared_module_files, generate_gcp_tf,

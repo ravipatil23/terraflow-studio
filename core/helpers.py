@@ -3,19 +3,38 @@ import os
 import re
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-_tf_env = Environment(
-    loader=FileSystemLoader(
-        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'tf')
-    ),
-    undefined=StrictUndefined,
-    trim_blocks=True,
-    lstrip_blocks=True,
-    keep_trailing_newline=True,
+
+def _env(template_root):
+    return Environment(
+        loader=FileSystemLoader(template_root),
+        undefined=StrictUndefined,   # a missing variable must fail, not render ''
+        trim_blocks=True,
+        lstrip_blocks=True,
+        keep_trailing_newline=True,
+    )
+
+
+def make_renderer(template_root):
+    """A render_tf bound to one directory of templates.
+
+    Each package owns its templates and gets its own loader, so a cloud can only
+    render its own: reaching for another cloud's template raises TemplateNotFound
+    rather than quietly working. That is the property that keeps the packages
+    independent - a shared search path would let them drift into each other.
+    """
+    env = _env(template_root)
+
+    def render_tf(template_path: str, **ctx) -> str:
+        return env.get_template(template_path).render(**ctx).rstrip('\n')
+
+    return render_tf
+
+
+#: Legacy shared renderer, rooted at the old templates/tf tree. Kept for anything
+#: not yet migrated to a package-local template directory.
+render_tf = make_renderer(
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates', 'tf')
 )
-
-
-def render_tf(template_path: str, **ctx) -> str:
-    return _tf_env.get_template(template_path).render(**ctx).rstrip('\n')
 
 
 def is_ref(s: str) -> bool:

@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import app, generate_all
-from generators.gcp_gen import (
+from clouds.gcp.generator import (
     _gcp_net_defaults, _gcp_infra_defaults, _gcp_cluster_defaults,
     _gcp_shared_module_files,
     gcp_build_root_main, gcp_build_root_vars, gcp_build_root_tfvars,
