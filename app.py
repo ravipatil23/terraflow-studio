@@ -22,6 +22,7 @@ except ImportError:
                 if _k: _os.environ[_k] = _v
 
 import io
+import ipaddress
 import json
 import os
 import re
@@ -34,6 +35,7 @@ from store import storage
 import llm as llm_module
 import github as github_module
 import rag as rag_module
+import regions
 
 from generators.helpers import render_tf, is_ref, parse_list, tf_bool
 from generators.aws_gen import (
@@ -61,6 +63,7 @@ from generators.azure_gen import (
     generate_azure_tf,
 )
 from generators.oci_dg_gen import generate_oci_dg_tf
+from generators.oci_gen import generate_oci_db_tf
 
 app = Flask(__name__)
 
@@ -75,6 +78,8 @@ def generate_all(data: dict) -> dict:
         return generate_gcp_tf(data)
     if cloud == 'dg':
         return generate_oci_dg_tf(data)
+    if cloud == 'oci':
+        return generate_oci_db_tf(data)
     return generate_aws_tf(data)
 
 # ─────────────────────────────────────────────
@@ -596,7 +601,11 @@ def index():
 
 @app.route('/aws')
 def aws_page():
-    resp = make_response(render_template('aws.html'))
+    # Region/AZ catalogue comes from config/aws_regions.json so it can be updated
+    # without touching code. Injected as JSON rather than fetched, so the
+    # dropdowns are populated on first paint.
+    resp = make_response(render_template(
+        'aws.html', aws_regions_json=regions.regions_json('aws')))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     return resp
@@ -604,7 +613,8 @@ def aws_page():
 
 @app.route('/gcp')
 def gcp_page():
-    resp = make_response(render_template('gcp.html'))
+    resp = make_response(render_template(
+        'gcp.html', gcp_regions_json=regions.regions_json('gcp')))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     return resp
@@ -612,7 +622,16 @@ def gcp_page():
 
 @app.route('/azure')
 def azure_page():
-    resp = make_response(render_template('azure.html'))
+    resp = make_response(render_template(
+        'azure.html', azure_regions_json=regions.regions_json('azure')))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+@app.route('/oci')
+def oci_db_page():
+    resp = make_response(render_template('oci_db.html'))
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     resp.headers['Pragma'] = 'no-cache'
     return resp
@@ -701,6 +720,20 @@ def api_generate():
         return jsonify({'error': str(e)})
 
 
+@app.route('/api/files', methods=['POST'])
+def api_files():
+    """Return the list of file paths generate_all() would produce for this payload.
+
+    The output-panel file tree is built from this list so it always mirrors the
+    real generated layout instead of guessing module directory names."""
+    data = request.get_json(force=True)
+    try:
+        files = generate_all(data)
+        return jsonify({'files': sorted(files.keys())})
+    except Exception as e:
+        return jsonify({'error': str(e), 'files': []})
+
+
 @app.route('/api/download', methods=['POST'])
 def api_download():
     data = request.get_json(force=True)
@@ -715,6 +748,8 @@ def api_download():
         zip_name = 'terraflow-studio-azure'
     elif cloud == 'dg':
         zip_name = 'terraflow-studio-dg'
+    elif cloud == 'oci':
+        zip_name = 'terraflow-studio-oci'
     else:
         zip_name = 'terraflow-studio-aws'
     files = _fmt_files(generate_all(data), data.get('iac_tool', 'terraform'))
@@ -726,6 +761,62 @@ def api_download():
     buf.seek(0)
     return send_file(buf, mimetype='application/zip',
                      as_attachment=True, download_name=f'{zip_name}.zip')
+
+
+@app.route('/api/diagram/drawio', methods=['POST'])
+def api_diagram_drawio():
+    """Render the current config as an editable draw.io diagram."""
+    data = request.get_json(force=True)
+    try:
+        from diagram.drawio import payload_to_drawio
+        xml = payload_to_drawio(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    cloud = data.get('cloud', 'aws')
+    buf = io.BytesIO(xml.encode('utf-8'))
+    return send_file(buf, mimetype='application/xml', as_attachment=True,
+                     download_name=f'terraflow-studio-{cloud}.drawio')
+
+
+@app.route('/api/import/spreadsheet', methods=['POST'])
+def api_import_spreadsheet():
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'error': 'No file uploaded'})
+    try:
+        from spreadsheet_importer import parse_spreadsheet
+        cloud_hint = request.form.get('cloud', '')
+        result = parse_spreadsheet(f.stream, f.filename or 'upload.xlsx', cloud_hint)
+        # Build import summary
+        counts = {
+            'Multi-AZ': len(result.get('dg_multi_az', [])),
+            'Cross-Region': len(result.get('dg_cross_region', [])),
+            'Networks': len(result.get('aws_networks', [])) or len(result.get('gcp_networks', [])) or len(result.get('azure_vnets', [])),
+            'Infra': len(result.get('aws_infras', [])) or len(result.get('gcp_infras', [])) or len(result.get('azure_infras', [])),
+            'VM Clusters': len(result.get('aws_clusters', [])) or len(result.get('gcp_clusters', [])) or len(result.get('azure_clusters', [])),
+        }
+        total = sum(counts.values())
+        if total == 0:
+            return jsonify({'error': 'No configuration rows found. Check column headers match the template — download via 📋 Download Template.'})
+        parts = [f'{v} {k}' for k, v in counts.items() if v]
+        result['_import_summary'] = f'Imported {", ".join(parts)}'
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
+@app.route('/api/import/template/<cloud>', methods=['GET'])
+def api_import_template(cloud):
+    try:
+        from spreadsheet_importer import generate_template
+        data = generate_template(cloud)
+        buf = io.BytesIO(data)
+        return send_file(buf,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                         as_attachment=True,
+                         download_name=f'terraflow-{cloud}-template.xlsx')
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 
 @app.route('/api/load-zip', methods=['POST'])
@@ -754,6 +845,11 @@ def _validate_aws(data, errors):
     if tab == 0:   # ODB Networks
         for net in data.get('aws_networks', [data.get('module_0', {})]):
             mn = net.get('module_name', 'odb_network')
+            # Externally provisioned: nothing is created, so only the ID matters.
+            if net.get('is_existing'):
+                if not net.get('existing_id'):
+                    _err(mn, 'existing_id', 'Required when already provisioned')
+                continue
             if not net.get('display_name'):            _err(mn, 'display_name',        'Required')
             if not net.get('availability_zone_id'):    _err(mn, 'availability_zone_id', 'Required')
             if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', net.get('client_subnet_cidr', '')):
@@ -764,6 +860,11 @@ def _validate_aws(data, errors):
     elif tab == 1:  # Exadata Infras
         for inf in data.get('aws_infras', [data.get('module_1', {})]):
             mn = inf.get('module_name', 'odb_exaInfra')
+            # Externally provisioned: nothing is created, so only the ID matters.
+            if inf.get('is_existing'):
+                if not inf.get('existing_id'):
+                    _err(mn, 'existing_id', 'Required when already provisioned')
+                continue
             if not inf.get('display_name'):             _err(mn, 'display_name',        'Required')
             if not inf.get('shape'):                    _err(mn, 'shape',               'Required')
             if not inf.get('availability_zone_id'):     _err(mn, 'availability_zone_id', 'Required')
@@ -864,7 +965,19 @@ def _validate_azure(data, errors):
             if int(inf.get('storage_count', 0) or 0) < 3: _err(mn, 'storage_count', 'Minimum 3')
 
     elif tab == 22:  # Azure VM Cluster
-        for cl in data.get('azure_clusters', []):
+        clusters = data.get('azure_clusters', [])
+        # Delegated subnet is shared by design — several VM clusters attach to the
+        # same one. The backup range is not: Oracle carves it inside the VNet per
+        # cluster, so two clusters on one delegated subnet must not collide.
+        vnets_by_name = {v.get('module_name'): v for v in data.get('azure_vnets', [])}
+        sharing = {}
+        for cl in clusters:
+            sharing.setdefault(cl.get('vnet_ref'), []).append(cl)
+        # Backup ranges are carved inside the VNet, so they can only collide
+        # with other clusters on that same VNet.
+        claimed = {}   # vnet_ref -> [(module_name, ip_network)] accepted so far
+
+        for cl in clusters:
             mn = cl.get('module_name', 'azure_vmcluster')
             if not cl.get('resource_group_name'): _err(mn, 'resource_group_name', 'Required')
             if not cl.get('location'):             _err(mn, 'location',            'Required')
@@ -879,6 +992,39 @@ def _validate_azure(data, errors):
             if not cl.get('ssh_public_keys'):
                 _err(mn, 'ssh_public_keys', 'At least one SSH key required')
 
+            vnet_ref = cl.get('vnet_ref')
+            backup   = (cl.get('backup_subnet_cidr') or '').strip()
+            if not backup:
+                # Only enforced when the delegated subnet is shared — a lone
+                # cluster can let Oracle pick the default backup range.
+                if len(sharing.get(vnet_ref, [])) > 1:
+                    _err(mn, 'backup_subnet_cidr',
+                         'Required when clusters share a delegated subnet - each needs its own range')
+                continue
+            if not re.match(r'^\d+\.\d+\.\d+\.\d+/\d+$', backup):
+                _err(mn, 'backup_subnet_cidr', 'Valid CIDR required')
+                continue
+            try:
+                backup_net = ipaddress.ip_network(backup, strict=False)
+            except ValueError:
+                _err(mn, 'backup_subnet_cidr', 'Valid CIDR required')
+                continue
+            delegated = (vnets_by_name.get(vnet_ref) or {}).get('subnet_address_prefix', '')
+            if delegated:
+                try:
+                    if backup_net.overlaps(ipaddress.ip_network(delegated, strict=False)):
+                        _err(mn, 'backup_subnet_cidr',
+                             f'Overlaps the delegated subnet {delegated}')
+                        continue
+                except ValueError:
+                    pass
+            peers = claimed.setdefault(vnet_ref, [])
+            clash = next((other for other, net in peers if net.overlaps(backup_net)), None)
+            if clash:
+                _err(mn, 'backup_subnet_cidr', f'Overlaps the backup subnet of {clash}')
+                continue
+            peers.append((mn, backup_net))
+
 
 @app.route('/api/validate', methods=['POST'])
 def api_validate():
@@ -891,6 +1037,8 @@ def api_validate():
         _validate_azure(data, errors)
     elif cloud == 'dg':
         pass  # DG has no server-side required fields
+    elif cloud == 'oci':
+        pass  # OCI DB validation is client-side only
     else:
         _validate_aws(data, errors)
     flat_errors = {}

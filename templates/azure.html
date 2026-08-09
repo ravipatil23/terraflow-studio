@@ -228,52 +228,14 @@
 // ── Product-specific: region/zone data, state arrays, card builders ───────────
 
 // ── DB@Azure Region + AZ data (source: Oracle DB@Azure Regions doc) ───────────
-// azs: valid availability zones for Oracle Database@Azure in that region.
-// Single-zone regions use ['1']. Source: docs.oracle.com/iaas/Content/database-at-azure/oaa_regions.htm
-const AZURE_REGIONS = [
-  // ── North America ────────────────────────────────────────────────────────────
-  { value:'canadacentral',      label:'Canada Central',        group:'North America', azs:['2','3'] },
-  { value:'canadaeast',         label:'Canada East',           group:'North America', azs:['1'] },
-  { value:'centralus',          label:'Central US',            group:'North America', azs:['1','2'] },
-  { value:'eastus',             label:'East US',               group:'North America', azs:['1','3'] },
-  { value:'eastus2',            label:'East US 2',             group:'North America', azs:['2','3'] },
-  { value:'northcentralus',     label:'North Central US',      group:'North America', azs:['1'] },
-  { value:'southcentralus',     label:'South Central US',      group:'North America', azs:['1','2'] },
-  { value:'westus',             label:'West US',               group:'North America', azs:['1'] },
-  { value:'westus2',            label:'West US 2',             group:'North America', azs:['1','2'] },
-  { value:'westus3',            label:'West US 3',             group:'North America', azs:['1','2'] },
-  // ── Latin America ────────────────────────────────────────────────────────────
-  { value:'brazilsouth',        label:'Brazil South',          group:'Latin America', azs:['2','3'] },
-  { value:'brazilsoutheast',    label:'Brazil Southeast',      group:'Latin America', azs:['1'] },
-  // ── Europe / Middle East / Africa ────────────────────────────────────────────
-  { value:'francecentral',      label:'France Central',        group:'Europe / ME / Africa', azs:['2','3'] },
-  { value:'francesouth',        label:'France South',          group:'Europe / ME / Africa', azs:['1'] },
-  { value:'germanynorth',       label:'Germany North',         group:'Europe / ME / Africa', azs:['1'] },
-  { value:'germanywestcentral', label:'Germany West Central',  group:'Europe / ME / Africa', azs:['2','3'] },
-  { value:'italynorth',         label:'Italy North',           group:'Europe / ME / Africa', azs:['1','2'] },
-  { value:'northeurope',        label:'North Europe',          group:'Europe / ME / Africa', azs:['1','3'] },
-  { value:'spaincentral',       label:'Spain Central',         group:'Europe / ME / Africa', azs:['1','3'] },
-  { value:'swedencentral',      label:'Sweden Central',        group:'Europe / ME / Africa', azs:['1','3'] },
-  { value:'switzerlandnorth',   label:'Switzerland North',     group:'Europe / ME / Africa', azs:['1','2'] },
-  { value:'uaecentral',         label:'UAE Central',           group:'Europe / ME / Africa', azs:['1'] },
-  { value:'uaenorth',           label:'UAE North',             group:'Europe / ME / Africa', azs:['1','2'] },
-  { value:'uksouth',            label:'UK South',              group:'Europe / ME / Africa', azs:['1','2'] },
-  { value:'ukwest',             label:'UK West',               group:'Europe / ME / Africa', azs:['1'] },
-  { value:'westeurope',         label:'West Europe',           group:'Europe / ME / Africa', azs:['1','3'] },
-  // ── Asia Pacific ─────────────────────────────────────────────────────────────
-  { value:'australiaeast',      label:'Australia East',        group:'Asia Pacific', azs:['2','3'] },
-  { value:'australiasoutheast', label:'Australia Southeast',   group:'Asia Pacific', azs:['1'] },
-  { value:'centralindia',       label:'Central India',         group:'Asia Pacific', azs:['1','3'] },
-  { value:'japaneast',          label:'Japan East',            group:'Asia Pacific', azs:['2','3'] },
-  { value:'japanwest',          label:'Japan West',            group:'Asia Pacific', azs:['3'] },
-  { value:'southindia',         label:'South India',           group:'Asia Pacific', azs:['1'] },
-  { value:'southeastasia',      label:'Southeast Asia',        group:'Asia Pacific', azs:['1','2'] },
-];
+// Injected from config/azure_regions.json by the /azure route — add regions and
+// zones there, not here.
+const AZURE_REGIONS = {{ azure_regions_json | safe }};
 
-const _AZURE_REGION_MAP = Object.fromEntries(AZURE_REGIONS.map(r => [r.value, r]));
+const _AZURE_REGION_MAP = Object.fromEntries(AZURE_REGIONS.map(r => [r.region, r]));
 
 function getAzureAZs(location) {
-  return (_AZURE_REGION_MAP[location] || {azs:['1','2','3']}).azs;
+  return (_AZURE_REGION_MAP[location] || {zones:['1','2','3']}).zones;
 }
 
 function azureZoneOptions(location, selected) {
@@ -286,7 +248,7 @@ function azureRegionSelectHTML(id, value, onchange) {
   const groups = [...new Set(AZURE_REGIONS.map(r => r.group))];
   const opts = groups.map(g => {
     const items = AZURE_REGIONS.filter(r => r.group === g).map(r =>
-      `<option value="${r.value}"${r.value === value ? ' selected' : ''}>${r.label}</option>`
+      `<option value="${r.region}"${r.region === value ? ' selected' : ''}>${r.label}</option>`
     ).join('');
     return `<optgroup label="${g}">${items}</optgroup>`;
   }).join('');

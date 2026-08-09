@@ -180,16 +180,14 @@
 <div class="output-panel">
   <div class="out-layout">
     <div class="file-tree" id="file-tree">
-      <div class="ft-section">Root</div>
-      <div class="ft-root-file active" id="ft-root-main" onclick="selFile('root-main')"><span>📄</span>main.tf</div>
-      <div class="ft-root-file" id="ft-root-tfvars" onclick="selFile('root-tfvars')"><span>📄</span>terraform.tfvars</div>
-      <div id="ft-modules-section"></div>
+      <div id="ft-body"></div>
     </div>
     <div class="editor-pane">
       <div class="editor-header">
         <div class="editor-filepath"><span class="live-dot"></span><span id="ep-path">main.tf</span></div>
         <div class="editor-actions">
           <button class="icon-btn green" id="btn-dl" onclick="dlZip()">⬇ Download ZIP</button>
+          <button class="icon-btn" onclick="dlDrawio()" title="Download an editable draw.io architecture diagram of this configuration">⬇ Diagram</button>
           <button class="icon-btn" onclick="loadZip()" title="Load a previously downloaded Terraflow ZIP to restore its configuration">⬆ Load ZIP</button>
           <input type="file" id="load-zip-input" accept=".zip" style="display:none" onchange="onLoadZipFile(this)">
           <button class="icon-btn muted" id="gh-push-btn" onclick="pushToGithub()" title="Set GITHUB_TOKEN and GITHUB_REPO in .env to enable Git push">⬆ Push to Git</button>
@@ -225,25 +223,10 @@
 // ── Product-specific: region/zone data, state arrays, card builders ───────────
 
 // ── ODB@GCP Region & Oracle Zone data ────────────────────────────────────────
-const GCP_REGIONS = [
-  { region:'us-east4',                label:'N. Virginia (us-east4)',                  zones:['us-east4-b-r1','us-east4-a-r2'],                         oci:'us-ashburn-1',   ociLabel:'US East (Ashburn)',               status:'live'    },
-  { region:'us-central1',             label:'Iowa / Council Bluffs (us-central1)',     zones:['us-central1-a-r1'],                                     oci:'us-desmoines-1', ociLabel:'US Midwest (Des Moines)',         status:'live'    },
-  { region:'us-west3',                label:'Salt Lake City (us-west3)',               zones:['us-west3-a-r1'],                                        oci:'us-saltlake-2',  ociLabel:'US West (Salt Lake City)',        status:'live'    },
-  { region:'northamerica-northeast1', label:'Montréal (northamerica-northeast1)',      zones:['northamerica-northeast1-a-r1'],                         oci:'ca-montreal-1',  ociLabel:'Canada Southeast (Montreal)',     status:'live'    },
-  { region:'northamerica-northeast2', label:'Toronto (northamerica-northeast2)',       zones:['northamerica-northeast2-a-r2'],                         oci:'ca-toronto-1',   ociLabel:'Canada Southeast (Toronto)',      status:'live'    },
-  { region:'europe-west3',            label:'Frankfurt (europe-west3)',                zones:['europe-west3-b-r1','europe-west3-a-r2'],                oci:'eu-frankfurt-1', ociLabel:'Germany Central (Frankfurt)',     status:'live'    },
-  { region:'europe-west2',            label:'London (europe-west2)',                   zones:['europe-west2-c-r2','europe-west2-a-r1'],                oci:'uk-london-1',    ociLabel:'UK South (London)',               status:'live'    },
-  { region:'europe-west8',            label:'Milan (europe-west8)',                    zones:['europe-west8-a-r1','europe-west8-b-r1'],                oci:'eu-milan-1',     ociLabel:'Italy Northwest (Milan)',         status:'live'    },
-  { region:'asia-south2',             label:'Delhi (asia-south2)',                     zones:['asia-south2-b-r1'],                                     oci:'ap-delhi-1',     ociLabel:'India North (Delhi)',             status:'live'    },
-  { region:'australia-southeast2',    label:'Melbourne (australia-southeast2)',        zones:['australia-southeast2-a-r2','australia-southeast2-b-r1'],oci:'ap-melbourne-1', ociLabel:'Australia Southeast (Melbourne)', status:'live'    },
-  { region:'asia-south1',             label:'Mumbai (asia-south1)',                    zones:['asia-south1-b-r1'],                                     oci:'ap-mumbai-1',    ociLabel:'India West (Mumbai)',             status:'live'    },
-  { region:'asia-northeast2',         label:'Osaka (asia-northeast2)',                 zones:['asia-northeast2-a-r1'],                                 oci:'ap-osaka-1',     ociLabel:'Japan Central (Osaka)',           status:'live'    },
-  { region:'australia-southeast1',    label:'Sydney (australia-southeast1)',           zones:['australia-southeast1-b-r1'],                            oci:'ap-sydney-1',    ociLabel:'Australia East (Sydney)',         status:'live'    },
-  { region:'asia-northeast1',         label:'Tokyo (asia-northeast1)',                 zones:['asia-northeast1-a-r1'],                                 oci:'ap-tokyo-1',     ociLabel:'Japan East (Tokyo)',              status:'live'    },
-  { region:'southamerica-east1',      label:'Osasco / São Paulo (southamerica-east1)', zones:['southamerica-east1-a-r1'],                              oci:'sa-saopaulo-1',  ociLabel:'Brazil East (Sao Paulo)',         status:'live'    },
-  { region:'northamerica-south1',     label:'Mexico (northamerica-south1)',            zones:[],                                                       oci:'TBD',            ociLabel:'TBD',                             status:'planned' },
-  { region:'europe-west6',            label:'Turin (europe-west6)',                    zones:[],                                                       oci:'TBD',            ociLabel:'TBD',                             status:'planned' },
-];
+// Injected from config/gcp_regions.json by the /gcp route — add regions and
+// zones there, not here. The same file feeds the generator's OCI provider
+// region, so the dropdown and the generated Terraform cannot disagree.
+const GCP_REGIONS = {{ gcp_regions_json | safe }};
 
 const GCP_ZONE_MAP = Object.fromEntries(GCP_REGIONS.map(r => [r.region, r.zones]));
 
@@ -264,9 +247,9 @@ function gcpRegionSelectHTML(id, value, onchange) {
 function gcpOciHintHTML(regionVal) {
   if (!regionVal) return '';
   const r = GCP_REGIONS.find(x => x.region === regionVal);
-  if (!r || r.oci === 'TBD') return '';
+  if (!r || !r.oci_region) return '';
   return `<div style="font-family:var(--font-m);font-size:10px;color:var(--ink3);margin-top:4px">
-    🔗 Paired OCI region: <strong>${r.ociLabel}</strong> <code style="font-size:10px">${r.oci}</code>
+    🔗 Paired OCI region: <strong>${r.oci_label}</strong> <code style="font-size:10px">${r.oci_region}</code>
   </div>`;
 }
 
@@ -665,13 +648,13 @@ function renderGcpNets() {
   _safeRender('gcp-net-list', gcpNets.map((d,i)=>gcpNetCardHTML(d,i)).join(''));
   const cl=document.getElementById('gcp-net-count'); if(cl) cl.textContent=`${gcpNets.length} network${gcpNets.length!==1?'s':''}`;
   updateTree(); injectTooltips();
-  _renderGcpClusterDropdowns();
+  syncRefDropdowns();
 }
 function renderGcpInfras() {
   _safeRender('gcp-infra-list', gcpInfras.map((d,i)=>gcpInfraCardHTML(d,i)).join(''));
   const cl=document.getElementById('gcp-infra-count'); if(cl) cl.textContent=`${gcpInfras.length} infra${gcpInfras.length!==1?'s':''}`;
   updateTree(); injectTooltips();
-  _renderGcpClusterDropdowns();
+  syncRefDropdowns();
 }
 function renderGcpClusters() {
   _safeRender('gcp-cluster-list', gcpClusters.map((d,i)=>gcpClusterCardHTML(d,i)).join(''));
@@ -801,26 +784,75 @@ function renderGcpDgCrs() {
   if (ct) ct.textContent = gcpDgCrs.length > 1 ? `${gcpDgCrs.length} configs` : '';
   updateTree(); injectTooltips();
 }
+// Rebuild from the state arrays, never from the <select>'s current value: once
+// the option list changes, a stale DOM value silently resolves to whatever ends
+// up first, leaving *_ref in state pointing somewhere else entirely.
+function _setRefSelect(id, html, empty) {
+  const sel = document.getElementById(id);
+  if (sel) sel.innerHTML = html || `<option value="">${empty}</option>`;
+}
 function _renderGcpClusterDropdowns() {
   gcpClusters.forEach((d,i) => {
-    const infSel = document.getElementById(`gc${i}_infra_ref`);
-    const netSel = document.getElementById(`gc${i}_net_ref`);
-    if (infSel) { const cur=infSel.value; infSel.innerHTML=gcpInfraOptions(cur)||'<option value="">— add infra first —</option>'; }
-    if (netSel) { const cur=netSel.value; netSel.innerHTML=gcpNetOptions(cur)||'<option value="">— add network first —</option>'; }
+    _setRefSelect(`gc${i}_infra_ref`, gcpInfraOptions(d.infra_ref),  '— add infra first —');
+    _setRefSelect(`gc${i}_net_ref`,   gcpNetOptions(d.network_ref),  '— add network first —');
   });
   _renderGcpOciDbClusterDropdowns();
 }
+
+// Reference dropdowns are built from the current network / infra module names,
+// so adding, removing, renaming or reordering one has to rebuild every dependent
+// <select> — otherwise it keeps stale options and *_ref names a module that no
+// longer exists, which fails at apply time with a missing map key.
+let _refNets = [], _refInfras = [], _refClusters = [];
+
+// Equal lengths means a rename rather than an add/remove, so refs can follow the
+// module by position and keep pointing at what the user actually picked.
+function _refRenameMap(before, after) {
+  const map = {};
+  if (before.length === after.length) {
+    before.forEach((b, i) => { if (after[i] !== b) map[b] = after[i]; });
+  }
+  return map;
+}
+function _retargetRefs(rows, key, renames, valid) {
+  let changed = false;
+  rows.forEach(r => {
+    if (renames[r[key]]) { r[key] = renames[r[key]]; changed = true; }
+    if (valid.length && valid.indexOf(r[key]) < 0) { r[key] = valid[0]; changed = true; }
+  });
+  return changed;
+}
+function syncRefDropdowns() {
+  if (typeof gcpNets === 'undefined' || typeof gcpInfras === 'undefined') return;
+  const nets     = gcpNets.map(n => n.module_name);
+  const infras   = gcpInfras.map(n => n.module_name);
+  // OCI DB cards reference a VM cluster, so cluster renames matter here too.
+  const clusters = (typeof gcpClusters === 'undefined' ? [] : gcpClusters).map(c => c.module_name);
+  const listsChanged = nets.join(',')     !== _refNets.join(',')
+                    || infras.join(',')   !== _refInfras.join(',')
+                    || clusters.join(',') !== _refClusters.join(',');
+  const netMap     = _refRenameMap(_refNets, nets);
+  const infraMap   = _refRenameMap(_refInfras, infras);
+  const clusterMap = _refRenameMap(_refClusters, clusters);
+  _refNets = nets; _refInfras = infras; _refClusters = clusters;
+
+  let retargeted = false;
+  if (_retargetRefs(gcpClusters, 'network_ref', netMap,   nets))   retargeted = true;
+  if (_retargetRefs(gcpClusters, 'infra_ref',   infraMap, infras)) retargeted = true;
+  if (typeof gcpOciDbs !== 'undefined'
+      && _retargetRefs(gcpOciDbs, 'vmcluster_ref', clusterMap, clusters)) retargeted = true;
+
+  if (listsChanged || retargeted) _renderGcpClusterDropdowns();
+}
 function _renderGcpOciDbClusterDropdowns() {
   gcpOciDbs.forEach((d,i) => {
-    const sel = document.getElementById(`go${i}_vcref`);
-    if (sel) {
-      const cur = sel.value || d.vmcluster_ref;
-      sel.innerHTML = gcpClusters.map(c=>`<option value="${c.module_name}"${c.module_name===cur?' selected':''}>${c.module_name}</option>`).join('') || '<option value="">— add VM Cluster first —</option>';
-    }
+    _setRefSelect(`go${i}_vcref`,
+      gcpClusters.map(c=>`<option value="${c.module_name}"${c.module_name===d.vmcluster_ref?' selected':''}>${c.module_name}</option>`).join(''),
+      '— add VM Cluster first —');
   });
 }
 function renderRefDropdowns() {
-  _renderGcpClusterDropdowns();
+  syncRefDropdowns();
 }
 
 
@@ -873,8 +905,8 @@ function switchTab(i) {
   });
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('gcp-page-'+i).classList.add('active');
-  activeFile = 'root-main';
-  updateTree(); renderEditor();
+  activeFile = 'main.tf';
+  refreshOutput();
 }
 
 function buildPayload() {
@@ -923,7 +955,11 @@ function applyConfig(doc) {
 }
 
 function renderAll() {
-  renderGcpNets(); renderGcpInfras(); renderGcpClusters(); renderGcpOciDbs();
+  // No renderGcpOciDbs(): the GCP page has no OCI DB card list, so calling it
+  // threw a ReferenceError and took down every applyConfig() caller with it
+  // (Load, Load ZIP, Import Spreadsheet). gcpOciDbs still feeds the VM cluster
+  // reference dropdowns via _renderGcpOciDbClusterDropdowns().
+  renderGcpNets(); renderGcpInfras(); renderGcpClusters();
   renderGcpDgMazs(); renderGcpDgCrs();
   updateTree();
 }
@@ -1065,6 +1101,18 @@ function addCidrToPeer(i) {
   renderAwsPeerings(); refresh();
 }
 
+// Server-side validation reports Terraform field names (odb_network_id,
+// location, ...) but the form inputs use short ids (netid, loc, ...). Without
+// this map the "highlight the offending field" lookup below silently matches
+// nothing, so errors show in the card banner but no field turns red.
+const VALIDATION_FIELD_INPUT = {
+  gn: {odb_network_id:'netid', location:'loc', client_cidr:'ccidr', backup_cidr:'bcidr'},
+  gi: {cloud_exadata_infrastructure_id:'infraid', location:'loc', shape:'shape',
+       compute_count:'cc', storage_count:'sc'},
+  gc: {cloud_vm_cluster_id:'clid', location:'loc', hostname_prefix:'hp',
+       cpu_core_count:'cpu', ssh_public_keys:'sshin'},
+};
+
 // ── Validate & Generate ───────────────────────────────────────────────────────
 async function vgen(tab, isGcp){
   const p=buildPayload(); p.tab=tab;
@@ -1091,8 +1139,16 @@ async function vgen(tab, isGcp){
               banner.innerHTML = '⚠ ' + Object.entries(errs).map(([k,v])=>`<strong>${k}</strong>: ${v}`).join(' &nbsp;·&nbsp; ');
               body.insertBefore(banner, body.firstChild);
             }
+            // Card id prefix + index come from the module-name input (e.g. "ai2_mn").
+            const idm = (mnInput.id || '').match(/^([a-z]+)(\d+)_mn$/i);
             for(const field of Object.keys(errs)){
-              const inp = card.querySelector(`input[id*="${field}"], select[id*="${field}"], textarea[id*="${field}"]`);
+              let inp = null;
+              if(idm){
+                const suffix = (VALIDATION_FIELD_INPUT[idm[1]] || {})[field];
+                if(suffix) inp = document.getElementById(`${idm[1]}${idm[2]}_${suffix}`);
+              }
+              // Fall back to the old guess for anything not in the map.
+              if(!inp) inp = card.querySelector(`input[id*="${field}"], select[id*="${field}"], textarea[id*="${field}"]`);
               if(inp){
                 const fieldDiv = inp.closest('.field');
                 if(fieldDiv) fieldDiv.classList.add('invalid');
@@ -1111,8 +1167,8 @@ async function vgen(tab, isGcp){
     showToast('Error: '+e.message, true);
     return;
   }
-  activeFile='root-main';
-  updateTree(); renderEditor();
+  activeFile='main.tf';
+  refreshOutput();
 }
 
 function copyFile(){const text=document.getElementById('code-out').innerText;navigator.clipboard.writeText(text).then(()=>{const btn=document.getElementById('copybtn');btn.classList.add('copied');btn.textContent='✓ Copied!';setTimeout(()=>{btn.classList.remove('copied');btn.textContent='⎘ Copy';},2000);});}
@@ -1126,79 +1182,85 @@ function switchTool(t) {
   if(cfnBtn) cfnBtn.className = 'tsw-btn cfn-btn' + (t==='cloudformation' ? ' sel-cfn' : '');
   const dlBtn = document.getElementById('btn-dl');
   if(dlBtn) dlBtn.textContent = (t==='cloudformation') ? '⬇ Download YAML' : '⬇ Download ZIP';
-  if(t==='cloudformation') { activeFile='cfn-main'; }
+  if(t==='cloudformation') { activeFile='cfn'; }
+  else if(activeFile==='cfn')  { activeFile='main.tf'; }
   refresh();
 }
 
 // ── File key helpers ──────────────────────────────────────────────────────────
-function fkToPath(k){
-  if(k==='root-main')return'<span class="ep-file">main.tf</span>';
-  if(k==='root-tfvars')return'<span class="ep-file">terraform.tfvars</span>';
-  if(k==='cfn-main')return'<span class="ep-file">odb-stack.yaml</span>';
-  const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'<span class="ep-dir">modules/'+m2[1]+'/</span><span class="ep-file">'+f+'</span>';}
-  const m3=k.match(/^dg_maz:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m3){const f=m3[2]==='tfvars'?'terraform.tfvars':m3[2]+'.tf';return'<span class="ep-dir">dg_multi_az_'+m3[1]+'/</span><span class="ep-file">'+f+'</span>';}
-  const m4=k.match(/^dg_cr:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m4){const f=m4[2]==='tfvars'?'terraform.tfvars':m4[2]+'.tf';return'<span class="ep-dir">dg_cross_region_'+m4[1]+'/</span><span class="ep-file">'+f+'</span>';}
-  return k;
-}
-function fkToApiPath(k){
-  if(k==='root-main')return'main.tf';
-  if(k==='root-tfvars')return'terraform.tfvars';
-  if(k==='cfn-main')return'cfn';
-  const m2=k.match(/^mod:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m2){const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf';return'modules/'+m2[1]+'/'+f;}
-  const m3=k.match(/^dg_maz:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m3){const f=m3[2]==='tfvars'?'terraform.tfvars':m3[2]+'.tf';return'dg_multi_az_'+m3[1]+'/'+f;}
-  const m4=k.match(/^dg_cr:([^:]+):(main|variables|outputs|tfvars)$/);
-  if(m4){const f=m4[2]==='tfvars'?'terraform.tfvars':m4[2]+'.tf';return'dg_cross_region_'+m4[1]+'/'+f;}
-  return k;
-}
+// A file key IS the generated file's path (e.g. 'main.tf',
+// 'modules/<module>/variables.tf'), exactly as /api/files reports it and
+// /api/generate expects it. 'cfn' is the single CloudFormation pseudo-path.
+const FT_ICONS={'main.tf':'📄','variables.tf':'📋','outputs.tf':'📤','README.md':'📖'};
+function ftIcon(f){return FT_ICONS[f]||(/\.tfvars$/.test(f)?'⚙':'📄');}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-function updateTree(){
-  const sec=document.getElementById('ft-modules-section');
-  if(!sec) return;
+function fkToPath(k){
+  if(k==='cfn')return'<span class="ep-file">odb-stack.yaml</span>';
+  const i=k.lastIndexOf('/');
+  if(i<0)return'<span class="ep-file">'+esc(k)+'</span>';
+  return'<span class="ep-dir">'+esc(k.slice(0,i+1))+'</span><span class="ep-file">'+esc(k.slice(i+1))+'</span>';
+}
+function fkToApiPath(k){return k;}
+
+// Real generated paths, refreshed from the server by updateTree().
+let fileList=[];
+
+function renderTree(){
+  const body=document.getElementById('ft-body');
+  if(!body) return;
   if(iacTool==='cloudformation'){
-    sec.innerHTML='<div class="ft-section" style="margin-top:8px">CloudFormation</div>'
-      +'<div class="ft-file'+(activeFile==='cfn-main'?' active':'')+'" onclick="selFile(\'cfn-main\')"><span>📄</span>odb-stack.yaml</div>';
-    ['root-main','root-tfvars'].forEach(k=>{const el=document.getElementById('ft-'+k);if(el)el.className='ft-root-file';});
+    body.innerHTML='<div class="ft-section">CloudFormation</div>'
+      +'<div class="ft-root-file'+(activeFile==='cfn'?' active':'')+'" onclick="selFile(\'cfn\')"><span>📄</span>odb-stack.yaml</div>';
     return;
   }
-  const names=getAllModuleNames();
-  let h='<div class="ft-section" style="margin-top:8px">Modules</div>';
-  names.forEach(n=>{
-    h+='<div class="ft-dir">'+n+'/</div>';
-    [['main','main.tf','📄'],['variables','variables.tf','📋'],['outputs','outputs.tf','📤'],['tfvars','terraform.tfvars','⚙']].forEach(([kt,f,ic])=>{
-      const fk='mod:'+n+':'+kt;
-      const sid='ft-mod-'+n.replace(/[^a-z0-9]/gi,'_')+'-'+kt;
-      h+='<div class="ft-file '+(activeFile===fk?'active':'')+'" id="'+sid+'" onclick="selFile(\''+fk+'\')"><span>'+ic+'</span>'+f+'</div>';
-    });
+  const roots=fileList.filter(f=>f.indexOf('/')<0);
+  const dirs={};
+  fileList.filter(f=>f.indexOf('/')>=0).forEach(f=>{
+    const i=f.lastIndexOf('/');
+    (dirs[f.slice(0,i)]=dirs[f.slice(0,i)]||[]).push(f.slice(i+1));
   });
-  if(gcpDgMazs.length){
-    h+='<div class="ft-section" style="margin-top:8px">DG Multi-AZ</div>';
-    gcpDgMazs.forEach(dg=>{
-      const dn='dg_multi_az_'+dg.module_name;
-      h+='<div class="ft-dir">'+dn+'/</div>';
-      [['main','main.tf','📄'],['variables','variables.tf','📋'],['outputs','outputs.tf','📤'],['tfvars','terraform.tfvars','⚙']].forEach(([kt,f,ic])=>{
-        const fk='dg_maz:'+dg.module_name+':'+kt;
-        h+='<div class="ft-file '+(activeFile===fk?'active':'')+'" onclick="selFile(\''+fk+'\')"><span>'+ic+'</span>'+f+'</div>';
+  let h='';
+  if(roots.length){
+    h+='<div class="ft-section">Root</div>';
+    roots.forEach(f=>{
+      h+='<div class="ft-root-file'+(activeFile===f?' active':'')+'" onclick="selFile(\''+f+'\')"><span>'+ftIcon(f)+'</span>'+esc(f)+'</div>';
+    });
+  }
+  const dirNames=Object.keys(dirs);
+  if(dirNames.length){
+    h+='<div class="ft-section" style="margin-top:8px">Modules</div>';
+    dirNames.forEach(d=>{
+      h+='<div class="ft-dir">'+esc(d)+'/</div>';
+      dirs[d].forEach(f=>{
+        const fk=d+'/'+f;
+        h+='<div class="ft-file '+(activeFile===fk?'active':'')+'" onclick="selFile(\''+fk+'\')"><span>'+ftIcon(f)+'</span>'+esc(f)+'</div>';
       });
     });
   }
-  if(gcpDgCrs.length){
-    h+='<div class="ft-section" style="margin-top:8px">DG Cross-Region</div>';
-    gcpDgCrs.forEach(dg=>{
-      const dn='dg_cross_region_'+dg.module_name;
-      h+='<div class="ft-dir">'+dn+'/</div>';
-      [['main','main.tf','📄'],['variables','variables.tf','📋'],['outputs','outputs.tf','📤'],['tfvars','terraform.tfvars','⚙']].forEach(([kt,f,ic])=>{
-        const fk='dg_cr:'+dg.module_name+':'+kt;
-        h+='<div class="ft-file '+(activeFile===fk?'active':'')+'" onclick="selFile(\''+fk+'\')"><span>'+ic+'</span>'+f+'</div>';
-      });
-    });
+  body.innerHTML=h||'<div class="ft-section">No files yet</div>';
+}
+
+async function updateTree(){
+  if(iacTool==='cloudformation'){
+    fileList=['cfn'];
+    if(activeFile!=='cfn') activeFile='cfn';
+    renderTree();
+    return;
   }
-  sec.innerHTML=h;
-  ['root-main','root-tfvars'].forEach(k=>{const el=document.getElementById('ft-'+k);if(el)el.className='ft-root-file'+(activeFile===k?' active':'');});
+  let p; try{p=buildPayload();}catch(e){p=null;}
+  if(p){
+    try{
+      const r=await fetch('/api/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+      const d=await r.json();
+      if(Array.isArray(d.files)) fileList=d.files;
+    }catch(e){/* keep the previous list on a transient failure */}
+  }
+  // The active file may have vanished (module removed, cloud switched).
+  if(fileList.length && fileList.indexOf(activeFile)<0){
+    activeFile=fileList.indexOf('main.tf')>=0?'main.tf':fileList[0];
+  }
+  renderTree();
 }
 
 async function fetchFile(fk){
@@ -1213,37 +1275,51 @@ async function renderEditor(){
   const c=await fetchFile(fkToApiPath(activeFile));
   document.getElementById('code-out').innerHTML=hl(c);
 }
-function selFile(k){activeFile=k;updateTree();renderEditor();}
+// Selecting a file does not change the payload, so repaint from the cached list.
+function selFile(k){activeFile=k;renderTree();renderEditor();}
+// Re-list then re-render: updateTree() may retarget activeFile if it disappeared.
+async function refreshOutput(){await updateTree();renderEditor();}
 function refresh(){
+  syncRefDropdowns();
   document.querySelectorAll('.inst-body .field.invalid').forEach(f=>f.classList.remove('invalid'));
   document.querySelectorAll('.card-err-banner').forEach(b=>b.remove());
-  clearTimeout(rtimer);rtimer=setTimeout(()=>{updateTree();renderEditor();},300);
+  clearTimeout(rtimer);rtimer=setTimeout(refreshOutput,300);
+}
+
+// Highlight spans are emitted as sentinel markers (\x01class\x02 … \x03) and only
+// turned into real <span> tags at the very end. Emitting the tags inline made
+// later rules match their own markup — e.g. class="hcmt" matched the string rule
+// and printed literal `hcmt"` into the output.
+const _HS = '\u0001', _HE = '\u0002', _HC = '\u0003';
+function _mk(cls, txt){ return _HS + cls + _HE + txt + _HC; }
+function _spans(s){
+  return s.replace(/\u0001([a-z]+)\u0002/g, '<span class="$1">').replace(/\u0003/g, '</span>');
 }
 
 function hl(code){
   let s=code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   if(iacTool==='cloudformation'){
-    return s
-      .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
-      .replace(/^(\s*)(AWSTemplateFormatVersion|Description|Resources|Outputs|Parameters|Conditions|Mappings|Transform):/gm,'$1<span class="hkw">$2</span>:')
-      .replace(/^(\s*)(Type|Properties|DependsOn|Value|Export|Name):/gm,'$1<span class="hkw">$2</span>:')
-      .replace(/(AWS::ODB::[A-Za-z]+)/g,'<span class="hres">$1</span>')
-      .replace(/(!GetAtt|!Sub|!Ref|!Join|!Select|!If)\b/g,'<span class="href">$1</span>')
-      .replace(/:\s*'([^'<>]*)'/g,': <span class="hstr">\'$1\'</span>')
-      .replace(/:\s*(true|false)\b/g,': <span class="hbol">$1</span>')
-      .replace(/:\s*(-?\d+\.?\d*)(\s|$)/gm,': <span class="hnum">$1</span>$2');
+    return _spans(s
+      .replace(/^(#[^\n]*)/gm,(m,c)=>_mk('hcmt',c))
+      .replace(/^(\s*)(AWSTemplateFormatVersion|Description|Resources|Outputs|Parameters|Conditions|Mappings|Transform):/gm,(m,i,k)=>i+_mk('hkw',k)+':')
+      .replace(/^(\s*)(Type|Properties|DependsOn|Value|Export|Name):/gm,(m,i,k)=>i+_mk('hkw',k)+':')
+      .replace(/(AWS::ODB::[A-Za-z]+)/g,(m,r)=>_mk('hres',r))
+      .replace(/(!GetAtt|!Sub|!Ref|!Join|!Select|!If)\b/g,(m,f)=>_mk('href',f))
+      .replace(/:\s*'([^'\u0001-\u0003]*)'/g,(m,v)=>': '+_mk('hstr',"'"+v+"'"))
+      .replace(/:\s*(true|false)\b/g,(m,b)=>': '+_mk('hbol',b))
+      .replace(/:\s*(-?\d+\.?\d*)(\s|$)/gm,(m,n,t)=>': '+_mk('hnum',n)+t));
   }
-  return s
-    .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
-    .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|validation|condition|error_message|description|type|default|value|properties)\b(?=[^(])/g,'<span class="hkw">$1</span>')
-    .replace(/"(aws_odb_[a-z_]+)"/g,'"<span class="hres">$1</span>"')
-    .replace(/"(google_oracle_database_[a-z_]+)"/g,'"<span class="hgres">$1</span>"')
-    .replace(/\b(string|number|bool|list|map|any|null)\b/g,'<span class="htype">$1</span>')
-    .replace(/var\.([a-z_][a-z0-9_.]*)/g,'<span class="hvar">var.$1</span>')
-    .replace(/module\.([a-z_][a-z0-9_.]*)/g,'<span class="href">module.$1</span>')
-    .replace(/=\s*"([^"<>]+)"/g,(m,v)=>'= <span class="hstr">"'+v+'"</span>')
-    .replace(/=\s*(true|false)\b/g,'= <span class="hbol">$1</span>')
-    .replace(/=\s*(-?\d+\.?\d*)\b/g,'= <span class="hnum">$1</span>');
+  return _spans(s
+    .replace(/^(#[^\n]*)/gm,(m,c)=>_mk('hcmt',c))
+    .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|validation|condition|error_message|description|type|default|value|properties)\b(?=[^(])/g,(m,k)=>_mk('hkw',k))
+    .replace(/"(aws_odb_[a-z_]+)"/g,(m,r)=>'"'+_mk('hres',r)+'"')
+    .replace(/"(google_oracle_database_[a-z_]+)"/g,(m,r)=>'"'+_mk('hgres',r)+'"')
+    .replace(/\b(string|number|bool|list|map|any|null)\b/g,(m,t)=>_mk('htype',t))
+    .replace(/var\.([a-z_][a-z0-9_.]*)/g,(m,v)=>_mk('hvar','var.'+v))
+    .replace(/module\.([a-z_][a-z0-9_.]*)/g,(m,v)=>_mk('href','module.'+v))
+    .replace(/=\s*"([^"\u0001-\u0003]+)"/g,(m,v)=>'= '+_mk('hstr','"'+v+'"'))
+    .replace(/=\s*(true|false)\b/g,(m,b)=>'= '+_mk('hbol',b))
+    .replace(/=\s*(-?\d+\.?\d*)\b/g,(m,n)=>'= '+_mk('hnum',n)));
 }
 
 // ── Terraform Explain ─────────────────────────────────────────────────────────
@@ -1845,6 +1921,49 @@ async function dlZip(){
   a.click();
 }
 
+async function dlDrawio(){
+  const p=buildPayload();
+  const r=await fetch('/api/diagram/drawio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+  if(!r.ok){ let m='Diagram export failed'; try{m=(await r.json()).error||m;}catch(e){} showToast(m,true); return; }
+  const b=await r.blob();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  const cust=getCustName().replace(/[^a-z0-9_-]/gi,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  a.download='terraflow-studio-'+cloud+(cust?'-'+cust:'')+'.drawio';
+  a.click();
+}
+
+// ── Spreadsheet import ────────────────────────────────────────────
+async function onImportSpreadsheet(inp) {
+  const file = inp.files[0]; if (!file) return; inp.value = '';
+  const btn   = document.getElementById('import-sheet-btn');
+  const reply = document.getElementById('import-reply');
+  reply.style.display = 'inline';
+  reply.style.color = '#555'; reply.textContent = '⏳ Parsing…';
+  if (btn) btn.disabled = true;
+  const fd = new FormData(); fd.append('file', file); fd.append('cloud', cloud);
+  try {
+    const r = await fetch('/api/import/spreadsheet', { method: 'POST', body: fd });
+    const doc = await r.json();
+    if (doc.error) {
+      reply.style.color = '#c0392b';
+      reply.textContent = '✗ ' + doc.error;
+      return;
+    }
+    const summary = doc._import_summary || 'Imported';
+    delete doc._import_summary;
+    applyConfig(doc);
+    reply.style.color = '#1a7a4a';
+    reply.textContent = '✓ ' + summary;
+    setTimeout(() => { reply.style.display = 'none'; }, 4000);
+  } catch (e) {
+    reply.style.color = '#c0392b';
+    reply.textContent = '✗ ' + e.message;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function loadZip() { document.getElementById('load-zip-input').click(); }
 async function onLoadZipFile(inp) {
   const file = inp.files[0];
@@ -2277,13 +2396,12 @@ document.addEventListener('DOMContentLoaded', () => { setTimeout(injectTooltips,
 
 // ── Runtime state ─────────────────────────────────────────────────────────────
 let rtimer = null;
-let activeFile = 'root-main';
+let activeFile = 'main.tf';
 let iacTool = 'terraform';
 
 // ── Init on load ─────────────────────────────────────────────────────────────
 initStorage();
-updateTree();
-renderEditor();
+refreshOutput();
 
 // ── Product-specific initial state seed ──────────────────────────────────────
 

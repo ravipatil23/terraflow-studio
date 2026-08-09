@@ -1,6 +1,7 @@
 """GCP (DB@GCP) generators."""
 import datetime
-from .helpers import render_tf, parse_list, tf_bool
+import regions
+from .helpers import render_tf, parse_list, tf_bool, tf_num
 from .oci_dg_gen import generate_oci_dg_tf
 from .oci_gen import (
     _ocidb_filled, _oci_db_defaults,
@@ -10,23 +11,9 @@ from .oci_gen import (
     oci_pdb_main, oci_pdb_vars, oci_pdb_outputs, oci_pdb_tfvars,
 )
 
-_GCP_TO_OCI_REGION = {
-    'us-east4':                'us-ashburn-1',
-    'us-central1':             'us-desmoines-1',
-    'us-west3':                'us-saltlake-2',
-    'northamerica-northeast1': 'ca-montreal-1',
-    'northamerica-northeast2': 'ca-toronto-1',
-    'europe-west3':            'eu-frankfurt-1',
-    'europe-west2':            'uk-london-1',
-    'europe-west8':            'eu-milan-1',
-    'asia-south2':             'ap-delhi-1',
-    'australia-southeast2':    'ap-melbourne-1',
-    'asia-south1':             'ap-mumbai-1',
-    'asia-northeast2':         'ap-osaka-1',
-    'australia-southeast1':    'ap-sydney-1',
-    'asia-northeast1':         'ap-tokyo-1',
-    'southamerica-east1':      'sa-saopaulo-1',
-}
+# Sourced from config/gcp_regions.json — edit that file, not this module.
+def _oci_region_for(gcp_region):
+    return regions.to_oci_region('gcp').get(gcp_region, regions.default_oci_region('gcp'))
 
 # Shared module directory names (fixed, not per-instance)
 _GCP_MOD_NET     = 'gcp-odb-network'
@@ -165,6 +152,17 @@ def _gcp_cluster_defaults(d, first_net=None, first_infra=None):
         'network_ref':  d.get('network_ref') or first_net.get('module_name') or 'gcp-odb-network',
         'infra_ref':    d.get('infra_ref')   or first_infra.get('module_name') or 'gcp-exadata-infra',
         'labels':       d.get('labels', {}),
+        # Optional attributes — the root module and gcp-vm-cluster module already
+        # accept all of these, so they must reach terraform.auto.tfvars or the
+        # form values silently fall back to the optional() defaults.
+        'location':               d.get('location') or '',
+        'project':                d.get('project') or '',
+        'cluster_name':           d.get('cluster_name') or '',
+        'time_zone':              d.get('time_zone') or '',
+        'scan_listener_port_tcp': tf_num(d.get('scan_listener_port_tcp')),
+        'dco_diagnostics':        bool(d.get('dco_diagnostics', True)),
+        'dco_health':             bool(d.get('dco_health', True)),
+        'dco_incident_logs':      bool(d.get('dco_incident_logs', True)),
     }
 
 
@@ -202,7 +200,7 @@ def generate_gcp_tf(data: dict) -> dict:
     gcp_region = 'us-east4'
     for n in networks:
         if n.get('location'): gcp_region = n['location']; break
-    oci_region = _GCP_TO_OCI_REGION.get(gcp_region, 'us-ashburn-1')
+    oci_region = _oci_region_for(gcp_region)
 
     iac_tool = data.get('iac_tool', 'terraform')
 

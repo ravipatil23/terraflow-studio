@@ -1,7 +1,8 @@
 """AWS (ODB@AWS) and CloudFormation generators."""
 import re
 import datetime
-from .helpers import render_tf, is_ref, parse_list, tf_bool
+import regions
+from .helpers import render_tf, is_ref, parse_list, tf_bool, tf_num
 from .oci_dg_gen import generate_oci_dg_tf
 from .oci_gen import (
     _avmc_filled, _ocidb_filled, _oci_db_defaults,
@@ -11,16 +12,11 @@ from .oci_gen import (
     oci_pdb_main, oci_pdb_vars, oci_pdb_outputs, oci_pdb_tfvars,
 )
 
-_AWS_TO_OCI_REGION = {
-    'us-east-1':      'us-ashburn-1',
-    'us-east-2':      'us-chicago-1',
-    'us-west-1':      'us-sanjose-1',
-    'us-west-2':      'us-portland-1',
-    'eu-west-1':      'eu-frankfurt-1',
-    'eu-central-1':   'eu-frankfurt-1',
-    'ap-southeast-1': 'ap-singapore-1',
-    'ap-northeast-1': 'ap-tokyo-1',
-}
+# Sourced from config/aws_regions.json — edit that file, not this module.
+# Regions with no oci_region set are absent here and fall back to the default,
+# which is what the hand-maintained dict this replaced did implicitly.
+def _oci_region_for(aws_region):
+    return regions.to_oci_region('aws').get(aws_region, regions.default_oci_region('aws'))
 
 
 # ── AWS MODULE 0 — aws_odb_network ────────────────────────────────────────────
@@ -225,10 +221,14 @@ def mod3_tfvars(mn, d, mn0, mn1):
 # ── AWS MODULE 4 — aws_odb_cloud_autonomous_vm_cluster ───────────────────────
 
 def _mod4_ctx(d, mn0='', mn1='', defaults=False):
-    infra_arn = d.get('cloud_exadata_infrastructure_arn', '') or (f'module.{mn1}.infra_arn' if mn1 else '')
-    net_arn   = d.get('odb_network_arn', '') or (f'module.{mn0}.network_arn' if mn0 else '')
-    infra_id  = d.get('cloud_exadata_infrastructure_id', '') or (f'module.{mn1}.infra_id' if mn1 else '')
-    net_id    = d.get('odb_network_id', '') or (f'module.{mn0}.network_id' if mn0 else '')
+    # No module.* fallbacks: the root wires the id pair into this module, and a
+    # non-empty arn default would send both pairs, which the provider rejects
+    # ("either odb_network_id & cloud_exadata_infrastructure_id combination or
+    # odb_network_arn & cloud_exadata_infrastructure_arn combination").
+    infra_arn = d.get('cloud_exadata_infrastructure_arn', '')
+    net_arn   = d.get('odb_network_arn', '')
+    infra_id  = d.get('cloud_exadata_infrastructure_id', '')
+    net_id    = d.get('odb_network_id', '')
     has_sched = any([d.get('mw_days_of_week'), d.get('mw_hours_of_day'),
                      d.get('mw_months'), d.get('mw_weeks_of_month'), d.get('mw_lead_time_week')])
     return dict(
@@ -247,6 +247,7 @@ def _mod4_ctx(d, mn0='', mn1='', defaults=False):
         odb_network_id=net_id,
         cloud_exadata_infrastructure_arn=infra_arn,
         odb_network_arn=net_arn,
+        use_arn_pair=bool(infra_arn and net_arn),
         db_servers=d.get('db_servers', []),
         db_servers_mode=d.get('db_servers_mode', 'auto'),
         mw_preference=d.get('mw_preference', 'NO_PREFERENCE'),
@@ -260,7 +261,8 @@ def _mod4_ctx(d, mn0='', mn1='', defaults=False):
 
 
 def mod4_main(mn, d=None, mn0='', mn1=''):
-    ctx = _mod4_ctx(d, mn0, mn1) if d else {'db_servers_mode': 'auto', 'db_servers': [], 'vm_mode': 'arn'}
+    ctx = _mod4_ctx(d, mn0, mn1) if d else {'db_servers_mode': 'auto', 'db_servers': [], 'vm_mode': 'arn',
+                                            'use_arn_pair': False}
     return render_tf('aws_avmcluster/main.tf.j2', module_name=mn, **ctx)
 
 
@@ -278,28 +280,46 @@ def mod4_tfvars(mn, d, mn0, mn1):
 
 # ── AWS ROOT ──────────────────────────────────────────────────────────────────
 
-def build_root_main(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None, iac_tool='terraform'):
+def _infra_id_expr(external_infras, key='each.value.infra_ref'):
+    return (f'local.infra_ids[{key}]' if external_infras
+            else f'module.aws_exadata_infra[{key}].infra_id')
+
+
+def _network_id_expr(external_networks, key='each.value.network_ref'):
+    return (f'local.odb_network_ids[{key}]' if external_networks
+            else f'module.aws_odb_network[{key}].network_id')
+
+
+def build_root_main(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None, iac_tool='terraform',
+                    external_networks=None, external_infras=None):
     aws_region = 'us-east-1'
     for n in (networks or []):
         if n.get('region'): aws_region = n['region']; break
-    oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
+    oci_region = _oci_region_for(aws_region)
+    external_networks = external_networks or []
+    external_infras   = external_infras or []
     return render_tf('aws_root/main.tf.j2',
         networks=networks, infras=infras, peerings=peerings,
         clusters=clusters, avmclusters=avmclusters or [],
         oci_databases=oci_databases or [],
         oci_region=oci_region,
+        external_networks=external_networks, external_infras=external_infras,
+        infra_id_expr=_infra_id_expr(external_infras),
+        network_id_expr=_network_id_expr(external_networks),
         iac_tool=iac_tool)
 
 
-def build_root_vars(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None):
+def build_root_vars(networks, infras, peerings, clusters, avmclusters=None, oci_databases=None,
+                    external_networks=None, external_infras=None):
     aws_region = 'us-east-1'
     for n in (networks or []):
         if n.get('region'): aws_region = n['region']; break
-    oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
+    oci_region = _oci_region_for(aws_region)
     return render_tf('aws_root/variables.tf.j2',
         aws_region=aws_region, oci_region=oci_region,
         networks=networks, infras=infras, peerings=peerings,
         clusters=clusters, avmclusters=avmclusters or [],
+        external_networks=external_networks or [], external_infras=external_infras or [],
         oci_databases=oci_databases or [])
 
 
@@ -309,7 +329,7 @@ def build_readme(networks, infras, peerings, clusters, avmclusters=None, oci_dat
     oci_region = 'us-ashburn-1'
     for n in (networks or []):
         if n.get('region'): aws_region = n['region']; break
-    oci_region = _AWS_TO_OCI_REGION.get(aws_region, 'us-ashburn-1')
+    oci_region = _oci_region_for(aws_region)
     return render_tf('aws_root/README.md.j2',
         aws_region=aws_region, oci_region=oci_region,
         networks=networks, infras=infras, peerings=peerings,
@@ -320,7 +340,8 @@ def build_readme(networks, infras, peerings, clusters, avmclusters=None, oci_dat
         generated_date=datetime.date.today().isoformat())
 
 
-def build_root_tfvars(networks, infras, peerings, clusters, avmclusters=None, iac_tool='terraform'):
+def build_root_tfvars(networks, infras, peerings, clusters, avmclusters=None, iac_tool='terraform',
+                      external_networks=None, external_infras=None):
     avmclusters = avmclusters or []
     all_tags = {}
     for items in [networks, infras, peerings, clusters, avmclusters]:
@@ -334,15 +355,28 @@ def build_root_tfvars(networks, infras, peerings, clusters, avmclusters=None, ia
         aws_region=region,
         networks=networks, infras=infras, peerings=peerings,
         clusters=clusters, avmclusters=avmclusters,
+        external_networks=external_networks or [], external_infras=external_infras or [],
         tags=all_tags if all_tags else {'ManagedBy': 'Terraform'},
     )
 
 
 # ── Default normalizers ───────────────────────────────────────────────────────
 
+def _is_external(d) -> bool:
+    """True when the user flagged this network/infra as provisioned elsewhere.
+
+    External entries are dropped from the aws_networks / aws_infras maps (so
+    Terraform creates nothing) and surface as existing_*_ids instead, keyed by
+    the same module name the clusters and peerings already reference."""
+    return bool(d.get('is_existing'))
+
+
 def _aws_net_defaults(d):
     cdn = d.get('custom_domain_name', '')
     return {**d,
+        'is_existing': bool(d.get('is_existing', False)),
+        'existing_id': d.get('existing_id') or ('CHANGEME' if d.get('is_existing') else ''),
+        'existing_arn': d.get('existing_arn', ''),
         'display_name': d.get('display_name') or 'odb-network',
         'availability_zone_id': d.get('availability_zone_id') or 'use1-az6',
         'client_subnet_cidr': d.get('client_subnet_cidr') or '10.2.0.0/24',
@@ -359,6 +393,9 @@ def _aws_net_defaults(d):
 
 def _aws_infra_defaults(d):
     return {**d,
+        'is_existing': bool(d.get('is_existing', False)),
+        'existing_id': d.get('existing_id') or ('CHANGEME' if d.get('is_existing') else ''),
+        'existing_arn': d.get('existing_arn', ''),
         'display_name': d.get('display_name') or 'odb-exadata-infra',
         'shape': d.get('shape') or 'Exadata.X11M',
         'compute_count': int(d.get('compute_count') or 2),
@@ -393,6 +430,20 @@ def _aws_cluster_defaults(d, first_network_name='', first_infra_name=''):
         'vm_mode': d.get('vm_mode') or 'arn',
         'network_ref': d.get('network_ref') or first_network_name,
         'infra_ref': d.get('infra_ref') or first_infra_name,
+        # Optional attributes — the root module and aws-vm-cluster module already
+        # accept all of these, so they must reach terraform.auto.tfvars or the
+        # form values silently fall back to the optional() defaults.
+        'dco_is_diagnostics_events_enabled': bool(d.get('dco_is_diagnostics_events_enabled', True)),
+        'dco_is_health_monitoring_enabled': bool(d.get('dco_is_health_monitoring_enabled', True)),
+        'dco_is_incident_logs_enabled': bool(d.get('dco_is_incident_logs_enabled', True)),
+        'cluster_name': d.get('cluster_name') or '',
+        'timezone': d.get('timezone') or '',
+        'data_storage_size_in_tbs': tf_num(d.get('data_storage_size_in_tbs')),
+        'db_node_storage_size_in_gbs': tf_num(d.get('db_node_storage_size_in_gbs')),
+        'memory_size_in_gbs': tf_num(d.get('memory_size_in_gbs')),
+        'scan_listener_port_tcp': tf_num(d.get('scan_listener_port_tcp')),
+        'is_local_backup_enabled': bool(d.get('is_local_backup_enabled', False)),
+        'is_sparse_diskgroup_enabled': bool(d.get('is_sparse_diskgroup_enabled', False)),
     }
 
 
@@ -632,11 +683,24 @@ def generate_aws_tf(data: dict) -> dict:
 
     first_net_name  = raw_nets[0].get('module_name', 'odb_network')
     first_inf_name  = raw_infras[0].get('module_name', 'odb_exadata_infra')
-    networks    = [_aws_net_defaults(n) for n in raw_nets]
-    infras      = [_aws_infra_defaults(i) for i in raw_infras]
+    all_networks = [_aws_net_defaults(n) for n in raw_nets]
+    all_infras   = [_aws_infra_defaults(i) for i in raw_infras]
+    # Externally provisioned entries create nothing; they only contribute an ID
+    # under their module name. Refs (infra_ref / network_ref) are unaffected.
+    external_networks = [n for n in all_networks if _is_external(n)]
+    external_infras   = [i for i in all_infras   if _is_external(i)]
+    networks    = [n for n in all_networks if not _is_external(n)]
+    infras      = [i for i in all_infras   if not _is_external(i)]
     peerings    = [_aws_peer_defaults(p, first_net_name) for p in raw_peerings]
     clusters    = [_aws_cluster_defaults(c, first_net_name, first_inf_name) for c in raw_clusters]
     avmclusters = [_aws_avmc_defaults(a, first_net_name, first_inf_name) for a in raw_avmc if _avmc_filled(a)]
+    # Autonomous VM clusters reference their infra/network by literal key rather
+    # than each.value, so their wiring expressions are resolved per instance.
+    for av in avmclusters:
+        ikey = '"%s"' % av.get('infra_ref', '')
+        nkey = '"%s"' % av.get('network_ref', '')
+        av['infra_id_expr']   = _infra_id_expr(external_infras, ikey)
+        av['network_id_expr'] = _network_id_expr(external_networks, nkey)
 
     raw_oci_dbs   = [db for db in data.get('aws_oci_databases', []) if _ocidb_filled(db)]
     first_cl_name = clusters[0]['module_name'] if clusters else (avmclusters[0]['module_name'] if avmclusters else '')
@@ -646,9 +710,12 @@ def generate_aws_tf(data: dict) -> dict:
 
     customer_name = data.get('customer_name', '')
     files = {
-        'main.tf':          build_root_main(networks, infras, peerings, clusters, avmclusters, oci_dbs, iac_tool),
-        'variables.tf':     build_root_vars(networks, infras, peerings, clusters, avmclusters, oci_dbs),
-        'terraform.auto.tfvars': build_root_tfvars(networks, infras, peerings, clusters, avmclusters),
+        'main.tf':          build_root_main(networks, infras, peerings, clusters, avmclusters, oci_dbs, iac_tool,
+                                              external_networks, external_infras),
+        'variables.tf':     build_root_vars(networks, infras, peerings, clusters, avmclusters, oci_dbs,
+                                            external_networks, external_infras),
+        'terraform.auto.tfvars': build_root_tfvars(networks, infras, peerings, clusters, avmclusters, iac_tool,
+                                                   external_networks, external_infras),
         'README.md':        build_readme(networks, infras, peerings, clusters, avmclusters, oci_dbs, iac_tool, customer_name),
     }
     # Shared static modules — one directory per resource type regardless of instance count
