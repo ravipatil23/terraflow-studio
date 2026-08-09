@@ -94,3 +94,25 @@ def check_content(d, files, t):
         mn = cl['module_name']
         t.check(f'cluster "{mn}" entry in tfvars',
                 lambda m=mn: f'"{m}"' in tfvars, f'"{mn}" not in tfvars')
+
+
+# ── Security review ───────────────────────────────────────────────────────────
+
+def collect_cidrs(data):
+    """(label, cidr) for every CIDR the payload carries."""
+    entries = []
+    for i, net in enumerate(data.get('gcp_networks', [])):
+        nname = net.get('module_name') or net.get('odb_network_id') or f'gcp_net[{i}]'
+        for j, sub in enumerate(net.get('subnets', [])):
+            v = (sub.get('cidr_range') or '').strip()
+            if v:
+                label = f'{nname}.subnet[{j}]({sub.get("purpose", "")}).cidr_range'
+                entries.append((label, v))
+    return entries
+
+
+#: Cloud-specific line in the security-review prompt.
+SECURITY_PROMPT_LINE = (
+    "- deletion_protection disabled on prod-like resources"
+    " (GCP: google_oracle_database_* resources support this field)\n"
+)

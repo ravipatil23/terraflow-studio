@@ -127,3 +127,33 @@ def check_content(d, files, t):
             t.check(f'Cluster "{mn}" wired to network "{nr}"',
                     lambda n2=nr: f'"{n2}"' in tfvars,
                     f'network_ref "{nr}" missing in tfvars')
+
+
+# ── Security review ───────────────────────────────────────────────────────────
+
+def collect_cidrs(data):
+    """(label, cidr) for every CIDR the payload carries.
+
+    Feeds the deterministic overlap check that /api/ai/security-review merges
+    into the model's findings, so overlaps are detected rather than guessed at.
+    """
+    entries = []
+    for i, net in enumerate(data.get('aws_networks', [])):
+        name = net.get('module_name') or net.get('display_name') or f'aws_net[{i}]'
+        for field in ('client_subnet_cidr', 'backup_subnet_cidr'):
+            v = (net.get(field) or '').strip()
+            if v:
+                entries.append((f'{name}.{field}', v))
+    for i, peer in enumerate(data.get('aws_peerings', [])):
+        pname = peer.get('module_name') or peer.get('display_name') or f'peering[{i}]'
+        for j, cidr in enumerate(peer.get('peer_network_cidrs', [])):
+            if cidr and cidr.strip():
+                entries.append((f'{pname}.peer_cidrs[{j}]', cidr.strip()))
+    return entries
+
+
+#: Cloud-specific line in the security-review prompt.
+SECURITY_PROMPT_LINE = (
+    "- delete_associated_resources enabled on ODB networks"
+    " (AWS: setting this true deletes VPCs/subnets on network destroy - risky for prod)\n"
+)

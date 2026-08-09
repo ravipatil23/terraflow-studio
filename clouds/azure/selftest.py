@@ -88,3 +88,48 @@ def check_content(d, files, t):
         if vr:
             t.check(f'Cluster "{mn}" wired to VNet "{vr}"',
                     lambda v=vr: f'module.{v}.subnet_id' in root, 'subnet_id ref missing')
+
+
+# ── Security review ───────────────────────────────────────────────────────────
+
+def collect_cidrs(data):
+    """(label, cidr) for the Azure ranges that must not overlap each other.
+
+    Azure previously returned nothing here: the collector branched aws/else, so an
+    Azure payload fell into the GCP branch and was searched for gcp_networks it
+    does not have. Overlapping Azure ranges passed the security review silently.
+
+    Only mutually-exclusive ranges are offered, because the shared checker
+    compares every pair for overlap and cannot express containment:
+
+    - subnet_address_prefix - the delegated subnet, carved from the VNet.
+    - backup_subnet_cidr    - carved inside the VNet too, so it must not collide
+      with the delegated subnet or with another cluster's backup range. The
+      provider only reports such a collision at apply time, and the attribute is
+      ForceNew, so catching it here is worth doing.
+
+    address_space is deliberately excluded. Subnets are *supposed* to sit inside
+    it, so including it would report a high-severity overlap for every correct
+    configuration - noise that would train people to ignore the finding.
+    """
+    entries = []
+    for i, vnet in enumerate(data.get('azure_vnets', [])):
+        name = vnet.get('module_name') or vnet.get('vnet_name') or f'azure_vnet[{i}]'
+        v = (vnet.get('subnet_address_prefix') or '').strip()
+        if v:
+            entries.append((f'{name}.subnet_address_prefix', v))
+    for i, cl in enumerate(data.get('azure_clusters', [])):
+        name = cl.get('module_name') or cl.get('name') or f'azure_cluster[{i}]'
+        v = (cl.get('backup_subnet_cidr') or '').strip()
+        if v:
+            entries.append((f'{name}.backup_subnet_cidr', v))
+    return entries
+
+
+#: Cloud-specific line in the security-review prompt. Azure previously received
+#: the AWS line, which named a field azurerm does not have.
+SECURITY_PROMPT_LINE = (
+    "- backup_subnet_cidr overlapping the VNet address space or another cluster's"
+    " backup range (Azure: carved inside the VNet, and ForceNew - a collision"
+    " surfaces only at apply time)\n"
+)

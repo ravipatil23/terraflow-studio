@@ -345,6 +345,89 @@ class TestTemplatesAreOwnedByTheirPackage(unittest.TestCase):
                                     f'{f.name} renders {tmpl}, missing from {pkg}/templates')
 
 
+class TestSecurityReviewIsPerCloud(unittest.TestCase):
+    """CIDR collection and the prompt's provider line come from the cloud package.
+
+    Both used to branch aws/else, so Azure was handed the GCP collector - which
+    looks for gcp_networks an Azure payload does not have - and the AWS prompt
+    line, which names a field azurerm has no equivalent of. Azure configs got no
+    overlap findings at all, in a review whose whole point is that those findings
+    are deterministic rather than guessed at.
+    """
+
+    AZURE = {
+        'cloud': 'azure',
+        'azure_vnets': [{'module_name': 'v1', 'address_space': '10.0.0.0/16',
+                         'subnet_address_prefix': '10.0.1.0/24'}],
+        'azure_clusters': [{'module_name': 'c1',
+                            'backup_subnet_cidr': '192.168.252.0/22'}],
+    }
+
+    def test_every_cloud_supplies_a_collector(self):
+        from clouds.registry import REGISTRY
+        for name, spec in REGISTRY.items():
+            self.assertIsInstance(spec.collect_cidrs({}), list, name)
+
+    def test_azure_collects_its_cidrs(self):
+        from app import _collect_cidrs
+        labels = dict(_collect_cidrs(self.AZURE))
+        self.assertIn('v1.subnet_address_prefix', labels)
+        self.assertIn('c1.backup_subnet_cidr', labels)
+
+    def test_valid_azure_config_reports_nothing(self):
+        # address_space is excluded on purpose: subnets belong inside it, so
+        # including it would flag every correct config as a high-severity overlap.
+        from app import _check_cidr_overlaps
+        self.assertEqual(_check_cidr_overlaps(self.AZURE), [])
+
+    def test_azure_backup_range_clashing_with_the_subnet_is_caught(self):
+        from app import _check_cidr_overlaps
+        clash = {**self.AZURE,
+                 'azure_clusters': [{'module_name': 'c1',
+                                     'backup_subnet_cidr': '10.0.1.128/25'}]}
+        found = _check_cidr_overlaps(clash)
+        self.assertTrue(found)
+        self.assertEqual(found[0]['severity'], 'high')
+
+    def test_two_azure_clusters_sharing_a_backup_range_is_caught(self):
+        from app import _check_cidr_overlaps
+        shared = {**self.AZURE, 'azure_clusters': [
+            {'module_name': 'c1', 'backup_subnet_cidr': '192.168.252.0/22'},
+            {'module_name': 'c2', 'backup_subnet_cidr': '192.168.252.0/22'},
+        ]}
+        self.assertTrue(_check_cidr_overlaps(shared))
+
+    def test_aws_and_gcp_collection_is_unchanged(self):
+        from app import _collect_cidrs
+        aws = {'cloud': 'aws', 'aws_networks': [
+            {'module_name': 'n1', 'client_subnet_cidr': '10.2.0.0/24',
+             'backup_subnet_cidr': '10.2.1.0/24'}]}
+        self.assertEqual(_collect_cidrs(aws),
+                         [('n1.client_subnet_cidr', '10.2.0.0/24'),
+                          ('n1.backup_subnet_cidr', '10.2.1.0/24')])
+        gcp = {'cloud': 'gcp', 'gcp_networks': [
+            {'module_name': 'g1', 'subnets': [
+                {'cidr_range': '10.3.0.0/24', 'purpose': 'CLIENT_SUBNET'}]}]}
+        self.assertEqual(_collect_cidrs(gcp),
+                         [('g1.subnet[0](CLIENT_SUBNET).cidr_range', '10.3.0.0/24')])
+
+    def test_each_cloud_has_its_own_prompt_line(self):
+        from clouds.registry import REGISTRY
+        lines = {c: REGISTRY[c].security_prompt_line for c in CLOUDS}
+        self.assertEqual(len(set(lines.values())), len(CLOUDS),
+                         'two clouds share a security-review prompt line')
+        for cloud, line in lines.items():
+            self.assertTrue(line.endswith('\n'), f'{cloud} line must end with a newline')
+        # The specific mix-up that prompted this: Azure naming an AWS-only field.
+        self.assertNotIn('delete_associated_resources', lines['azure'])
+
+    def test_oci_products_collect_nothing(self):
+        from clouds.registry import REGISTRY
+        for name in ('oci', 'dg'):
+            self.assertEqual(REGISTRY[name].collect_cidrs({'cloud': name}), [])
+            self.assertEqual(REGISTRY[name].security_prompt_line, '')
+
+
 class TestOciPublicSurface(unittest.TestCase):
     """oci/__init__ is the contract the clouds are allowed to depend on."""
 

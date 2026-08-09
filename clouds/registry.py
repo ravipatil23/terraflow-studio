@@ -36,8 +36,18 @@ class CloudSpec:
     #: no-op so "nothing to check here" cannot be confused with a missing entry.
     validate: Optional[Callable[[dict, dict], None]] = None
     #: Module supplying this cloud's /api/test checks - derive, check_inputs,
-    #: module_keys and check_content. See clouds/aws/selftest.py.
+    #: module_keys and check_content - plus its security-review contributions.
+    #: See clouds/aws/selftest.py.
     selftest: object = None
+
+    def collect_cidrs(self, data):
+        """(label, cidr) pairs this cloud's payload carries, for overlap checks."""
+        return self.selftest.collect_cidrs(data)
+
+    @property
+    def security_prompt_line(self):
+        """Provider-specific risk to name in the security-review prompt."""
+        return getattr(self.selftest, 'SECURITY_PROMPT_LINE', '')
 
 
 REGISTRY = {

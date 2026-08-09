@@ -222,31 +222,13 @@ def api_llm_explain():
 # ─────────────────────────────────────────────
 
 def _collect_cidrs(data: dict) -> list[tuple[str, str]]:
-    """Return list of (label, cidr_string) from every CIDR field in the payload."""
-    entries = []
-    cloud = data.get('cloud', 'aws')
+    """Return list of (label, cidr_string) from every CIDR field in the payload.
 
-    if cloud == 'aws':
-        for i, net in enumerate(data.get('aws_networks', [])):
-            name = net.get('module_name') or net.get('display_name') or f'aws_net[{i}]'
-            for field in ('client_subnet_cidr', 'backup_subnet_cidr'):
-                v = net.get(field, '').strip()
-                if v:
-                    entries.append((f'{name}.{field}', v))
-        for i, peer in enumerate(data.get('aws_peerings', [])):
-            pname = peer.get('module_name') or peer.get('display_name') or f'peering[{i}]'
-            for j, cidr in enumerate(peer.get('peer_network_cidrs', [])):
-                if cidr and cidr.strip():
-                    entries.append((f'{pname}.peer_cidrs[{j}]', cidr.strip()))
-    else:
-        for i, net in enumerate(data.get('gcp_networks', [])):
-            nname = net.get('module_name') or net.get('odb_network_id') or f'gcp_net[{i}]'
-            for j, sub in enumerate(net.get('subnets', [])):
-                v = sub.get('cidr_range', '').strip()
-                if v:
-                    label = f'{nname}.subnet[{j}]({sub.get("purpose","")}).cidr_range'
-                    entries.append((label, v))
-    return entries
+    Which keys hold CIDRs is per-cloud knowledge, so each cloud package supplies
+    its own collector. This used to branch aws/else, which silently handed Azure
+    payloads to the GCP collector and produced no findings for them at all.
+    """
+    return cloud_registry.get(data.get('cloud', 'aws')).collect_cidrs(data)
 
 
 def _check_cidr_overlaps(data: dict) -> list[dict]:

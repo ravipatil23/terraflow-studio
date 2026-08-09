@@ -24,3 +24,14 @@ def module_keys(d):
 
 def check_content(d, files, t):
     return None
+
+
+# ── Security review ───────────────────────────────────────────────────────────
+
+def collect_cidrs(data):
+    """No CIDRs to collect: these products consume existing OCIDs rather than
+    defining address space."""
+    return []
+
+
+SECURITY_PROMPT_LINE = ''
