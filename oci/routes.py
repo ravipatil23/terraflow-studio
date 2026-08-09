@@ -10,7 +10,8 @@ from flask import Blueprint
 
 from core.pages import render_page
 
-bp = Blueprint('oci_pages', __name__)
+# template_folder puts these pages next to the routes that serve them.
+bp = Blueprint('oci_pages', __name__, template_folder='pages')
 
 
 @bp.route('/oci')

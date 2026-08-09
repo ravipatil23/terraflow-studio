@@ -26,7 +26,7 @@ body.dg .cfn-btn{display:none;}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{font-size:14px;}
 body{background:linear-gradient(150deg,#f4f2ee 0%,#e8e5dc 100%);color:var(--ink);font-family:var(--font-b);height:100vh;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;}
-header{background:linear-gradient(180deg,#252320 0%,#1a1916 100%);padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:300;box-shadow:0 2px 16px rgba(0,0,0,0.45),0 1px 0 rgba(255,255,255,0.04) inset;}
+header{background:#000000;padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:300;box-shadow:0 2px 16px rgba(0,0,0,0.45),0 1px 0 rgba(255,255,255,0.04) inset;}
 .logo{display:flex;align-items:baseline;gap:14px;cursor:pointer;color:inherit;}
 .logo-name{font-family:var(--font-d);font-weight:800;font-size:22px;color:var(--white);line-height:1;}
 .logo-name .ac{color:var(--accent2);}
@@ -44,20 +44,20 @@ header{background:linear-gradient(180deg,#252320 0%,#1a1916 100%);padding:0 28px
 .tsw-btn.sel-tf{color:#7b42bc;background:rgba(123,66,188,.15);}
 .tsw-btn.sel-tofu{color:#f5a623;background:rgba(245,166,35,.15);}
 .tsw-btn:hover:not(.sel-tf):not(.sel-tofu){color:#999;}
-.cust-bar{background:#0e0e0c;border-bottom:1px solid #1e1e1a;padding:0 28px;height:44px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
-.llm-bar{background:#0a0a09;border-bottom:2px solid #1e1e1a;padding:0 28px;height:40px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
-.llm-bar-label{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#555;white-space:nowrap;flex-shrink:0;}
-.llm-bar-input{flex:1;background:#111;border:1.5px solid #2a2a2a;border-radius:var(--radius);color:#ccc;font-family:var(--font-m);font-size:11px;padding:5px 12px;outline:none;transition:border-color .15s;min-width:0;}
+.cust-bar{background:#000000;border-bottom:1px solid #4e4840;padding:0 28px;height:44px;display:flex;align-items:center;gap:14px;flex-shrink:0;}
+.llm-bar{background:#000000;border-bottom:2px solid #4e4840;padding:0 28px;height:40px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.llm-bar-label{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#999;white-space:nowrap;flex-shrink:0;}
+.llm-bar-input{flex:1;background:#1c1916;border:1.5px solid #5a5248;border-radius:var(--radius);color:#eee;font-family:var(--font-m);font-size:11px;padding:5px 12px;outline:none;transition:border-color .15s;min-width:0;}
 .llm-bar-input:focus{border-color:#555;}.llm-bar-input::placeholder{color:#444;}
 .llm-bar-btn{font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:0 14px;height:28px;border-radius:var(--radius);cursor:pointer;border:1.5px solid;white-space:nowrap;flex-shrink:0;transition:all .15s;}
 .llm-bar-btn.send{background:rgba(123,66,188,.15);border-color:#7b42bc;color:#b080e0;}
 .llm-bar-btn.send:hover{background:#7b42bc;color:#fff;}
 .llm-bar-btn.send:disabled{opacity:.35;cursor:not-allowed;}
-.llm-prov{font-family:var(--font-m);font-size:9px;color:#333;letter-spacing:.04em;flex-shrink:0;white-space:nowrap;}
+.llm-prov{font-family:var(--font-m);font-size:9px;color:#888;letter-spacing:.04em;flex-shrink:0;white-space:nowrap;}
 .llm-prov.ok{color:#2a7a4a;}.llm-prov.err{color:#7a2a2a;}
-.llm-reply{font-family:var(--font-m);font-size:10px;color:#666;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.llm-reply{font-family:var(--font-m);font-size:10px;color:#aaa;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .cust-label{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#C9A227;white-space:nowrap;}
-.cust-input{font-family:var(--font-b);font-size:13px;background:#1a1a17;border:1.5px solid #2a2a26;border-radius:var(--radius);color:var(--white);padding:5px 12px;min-width:220px;outline:none;transition:border-color .15s;}
+.cust-input{font-family:var(--font-b);font-size:13px;background:#1c1916;border:1.5px solid #5a5248;border-radius:var(--radius);color:var(--white);padding:5px 12px;min-width:220px;outline:none;transition:border-color .15s;}
 .cust-input:focus{border-color:var(--accent2);}
 .cust-input::placeholder{color:#444;}
 .cust-btn{font-family:var(--font-d);font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:5px 14px;cursor:pointer;border:1.5px solid;border-radius:var(--radius);transition:all .15s;white-space:nowrap;}
@@ -71,11 +71,11 @@ header{background:linear-gradient(180deg,#252320 0%,#1a1916 100%);padding:0 28px
 .cust-btn.del:disabled,.cust-btn.test:disabled{opacity:.35;cursor:not-allowed;}
 .cust-btn.test{background:rgba(180,100,255,0.12);border-color:#b464ff;color:#b464ff;}
 .cust-btn.test:hover{background:rgba(180,100,255,0.22);}
-.cust-sep{width:1px;height:22px;background:#2a2a26;flex-shrink:0;}
-.cust-select{font-family:var(--font-b);font-size:12px;background:#1a1a17;border:1.5px solid #2a2a26;border-radius:var(--radius);color:#aaa;padding:5px 10px;cursor:pointer;outline:none;}
+.cust-sep{width:1px;height:22px;background:#5a5248;flex-shrink:0;}
+.cust-select{font-family:var(--font-b);font-size:12px;background:#1c1916;border:1.5px solid #5a5248;border-radius:var(--radius);color:#ccc;padding:5px 10px;cursor:pointer;outline:none;}
 .save-toast{font-family:var(--font-m);font-size:11px;color:#4aaf79;white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none;}
 .save-toast.show{opacity:1;}
-.backend-pill{font-family:var(--font-m);font-size:9px;color:#333;letter-spacing:.04em;margin-left:auto;white-space:nowrap;}
+.backend-pill{font-family:var(--font-m);font-size:9px;color:#777;letter-spacing:.04em;margin-left:auto;white-space:nowrap;}
 .test-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10000;align-items:center;justify-content:center;}
 .test-modal-overlay.open{display:flex;}
 .test-modal{background:var(--white);border-radius:var(--radius-lg);box-shadow:0 8px 48px rgba(0,0,0,0.3);width:min(720px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;}
@@ -264,6 +264,7 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
       <a class="csw-btn" href="/gcp">GCP</a>
       <a class="csw-btn" href="/azure">Azure</a>
       <a class="csw-btn sel-dg" href="/dg">OCI DG</a>
+      <a class="csw-btn" href="/oci">OCI DB</a>
     </div>
     <div class="tool-sw">
       <button class="tsw-btn sel-tf" id="btn-tf"   onclick="switchTool('terraform')"  title="Generate for Terraform">⬡ Terraform</button>
@@ -298,6 +299,24 @@ pre.code-editor::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3
   <span class="llm-prov" id="llm-prov-badge">checking…</span>
   <div style="width:1px;height:20px;background:#2a2a2a;margin:0 4px;flex-shrink:0;"></div>
   <button class="llm-bar-btn" onclick="openAiTool('troubleshoot')" style="background:rgba(192,57,43,.1);border-color:#5a2020;color:#e07060;">🔧 Fix Error</button>
+</div>
+
+<!-- ── Spreadsheet Import Bar ── -->
+<div style="background:#000000;border-bottom:1px solid #4e4840;padding:0 28px;height:38px;display:flex;align-items:center;gap:14px;flex-shrink:0;">
+  <span style="font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#1B6FAB;white-space:nowrap;flex-shrink:0;">📊 Spreadsheet</span>
+  <button id="import-sheet-btn" onclick="document.getElementById('import-sheet-input').click()"
+    style="font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:0 14px;height:24px;border-radius:4px;cursor:pointer;border:1.5px solid #1B6FAB;background:rgba(27,111,171,.18);color:#2e8fd4;white-space:nowrap;transition:all .15s;"
+    title="Upload .xlsx or .csv to populate all form fields automatically">
+    📥 Import Spreadsheet
+  </button>
+  <input type="file" id="import-sheet-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="onImportSpreadsheet(this)">
+  <a href="/api/import/template/dg"
+    style="font-family:var(--font-d);font-weight:700;font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:0 14px;height:24px;border-radius:4px;cursor:pointer;border:1.5px solid #2a3a45;background:rgba(27,111,171,.08);color:#2e8fd4;white-space:nowrap;display:flex;align-items:center;text-decoration:none;transition:all .15s;"
+    title="Download blank Excel template — fill in your OCIDs and CIDRs then import">
+    📋 Download Template
+  </a>
+  <span style="font-family:var(--font-m);font-size:10px;color:#444;flex:1;">Fill the form from a spreadsheet — or download the template first, fill it in, and import.</span>
+  <span id="import-reply" style="font-family:var(--font-m);font-size:11px;white-space:nowrap;display:none;"></span>
 </div>
 
 <!-- Test Modal -->
@@ -466,7 +485,7 @@ function ociRegionSelectHTML(id, val, onchange) {
 const cloud = 'dg';
 let dgMazs = [], dgCrs = [];
 let iacTool = 'terraform';
-let activeFile = 'dg_maz:primary:main';
+let activeFile = null;
 let cur = 0;
 let rtimer;
 
@@ -474,14 +493,15 @@ let rtimer;
 function defDgMaz(i) {
   return {module_name: i===0?'primary':`primary_${i+1}`, prefix:'dg', oci_region:'', compartment_id:'',
     primary_vcn_id:'', primary_nsg_id:'', primary_client_cidr:'10.10.1.0/24', primary_route_table_id:'',
-    standby_vcn_id:'', standby_nsg_id:'', standby_client_cidr:'10.20.1.0/24', standby_route_table_id:'', add_ssh:false};
+    standby_vcn_id:'', standby_nsg_id:'', standby_client_cidr:'10.20.1.0/24', standby_route_table_id:'',
+    add_ssh:false, manage_route_table:false};
 }
 function defDgCr(i) {
   return {module_name: i===0?'primary':`primary_${i+1}`, prefix:'dg', primary_oci_region:'', standby_oci_region:'',
     compartment_id:'', primary_vcn_id:'', primary_nsg_id:'', primary_client_cidr:'10.10.1.0/24',
     primary_route_table_id:'', primary_hub_cidr:'10.15.0.0/24',
     standby_vcn_id:'', standby_nsg_id:'', standby_client_cidr:'10.30.1.0/24',
-    standby_route_table_id:'', standby_hub_cidr:'10.16.0.0/24', add_ssh:false};
+    standby_route_table_id:'', standby_hub_cidr:'10.16.0.0/24', add_ssh:false, manage_route_table:false};
 }
 
 // ── Add helpers ───────────────────────────────────────────────────────────────
@@ -505,6 +525,7 @@ function readDgMaz(i) {
     standby_client_cidr:    fv(`${p}scc`),
     standby_route_table_id: fv(`${p}srt`),
     add_ssh:                fcb(`${p}ssh`),
+    manage_route_table:     fcb(`${p}mrt`),
   };
 }
 function readDgCr(i) {
@@ -526,6 +547,7 @@ function readDgCr(i) {
     standby_route_table_id: fv(`${p}srt`),
     standby_hub_cidr:       fv(`${p}shub`),
     add_ssh:                fcb(`${p}ssh`),
+    manage_route_table:     fcb(`${p}mrt`),
   };
 }
 
@@ -569,7 +591,8 @@ function dgMazCardHTML(d, i) {
         <div class="field"><div class="field-lbl">standby_route_table_id</div><div class="field-hint">Import before apply</div><input type="text" id="${p}srt" value="${d.standby_route_table_id||''}" placeholder="ocid1.routetable.oc1.." oninput="readDgMaz(${i});refresh()"></div>
       </div>
     </div>
-    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional NSG Rules</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Route Table &amp; NSG Options</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+      <div class="field"><div class="field-lbl">Route table</div><div class="field-hint"><strong>Skip (default):</strong> Terraform ignores the cluster VCN route table — add the DG route manually after apply. <strong>Terraform-managed:</strong> Terraform owns the route table, requires <code>terraform import</code> first to avoid wiping existing routes.</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}mrt" ${d.manage_route_table?'checked':''} onchange="readDgMaz(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.manage_route_table?'Terraform-managed (import required)':'Skip — handle manually (default)'}</span></div></div>
       <div class="field"><div class="field-lbl">add SSH (port 22) rules</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}ssh" ${d.add_ssh?'checked':''} onchange="readDgMaz(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.add_ssh?'yes':'no'}</span></div></div>
     </div>
   </div>
@@ -620,7 +643,8 @@ function dgCrCardHTML(d, i) {
       </div>
       <div class="field"><div class="field-lbl">standby_route_table_id</div><div class="field-hint">Import before apply — see README.md</div><input type="text" id="${p}srt" value="${d.standby_route_table_id||''}" placeholder="ocid1.routetable.oc1.." oninput="readDgCr(${i});refresh()"></div>
     </div>
-    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Optional NSG Rules</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+    <div class="section collapsed"><div class="section-head clickable" onclick="toggleOptSection(this)"><div class="section-title">Route Table &amp; NSG Options</div><span class="badge-opt">optional</span><div class="section-line"></div><span class="opt-chevron">▼</span></div>
+      <div class="field"><div class="field-lbl">Route table</div><div class="field-hint"><strong>Skip (default):</strong> Terraform ignores the cluster VCN route tables — add DG routes manually after apply. <strong>Terraform-managed:</strong> Terraform owns both route tables, requires <code>terraform import</code> for each to avoid wiping existing routes.</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}mrt" ${d.manage_route_table?'checked':''} onchange="readDgCr(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.manage_route_table?'Terraform-managed (import required)':'Skip — handle manually (default)'}</span></div></div>
       <div class="field"><div class="field-lbl">add SSH (port 22) rules</div><div class="tog-row"><label class="tog-sw"><input type="checkbox" id="${p}ssh" ${d.add_ssh?'checked':''} onchange="readDgCr(${i});refresh()"><div class="tog-track"></div><div class="tog-thumb"></div></label><span class="tog-lbl">${d.add_ssh?'yes':'no'}</span></div></div>
     </div>
   </div>
@@ -712,9 +736,14 @@ function buildPayload() {
 function applyConfig(doc) {
   const cust = document.getElementById('cust-name');
   if (cust && doc.customer_name) cust.value = doc.customer_name;
-  if (doc.dg_multi_az    && doc.dg_multi_az.length)    dgMazs = doc.dg_multi_az.map((d,i)    => ({...defDgMaz(i),...d}));
-  if (doc.dg_cross_region && doc.dg_cross_region.length) dgCrs = doc.dg_cross_region.map((d,i) => ({...defDgCr(i),...d}));
+  // Accept current dg_* keys or legacy aws_dg_*/gcp_dg_*/azure_dg_* from old ZIPs
+  const mazs = doc.dg_multi_az || doc.aws_dg_multi_az || doc.gcp_dg_multi_az || doc.azure_dg_multi_az || [];
+  const crs  = doc.dg_cross_region || doc.aws_dg_cross_region || doc.gcp_dg_cross_region || doc.azure_dg_cross_region || [];
+  if (mazs.length) dgMazs = mazs.map((d, i) => ({...defDgMaz(i), ...d}));
+  if (crs.length)  dgCrs  = crs.map((d, i)  => ({...defDgCr(i),  ...d}));
+  activeFile = null;  // reset so updateTree auto-selects the first available file
   renderAll();
+  renderEditor();
 }
 
 function renderAll() {
@@ -724,35 +753,50 @@ function renderAll() {
 }
 
 // ── File tree ─────────────────────────────────────────────────────────────────
+// Check if a Multi-AZ entry has the minimum required field (oci_region)
+function _mazFilled(dg) { return !!(dg.oci_region||'').trim(); }
+// Check if a Cross-Region entry has the minimum required fields (both regions)
+function _crFilled(dg)  { return !!(dg.primary_oci_region||'').trim() && !!(dg.standby_oci_region||'').trim(); }
+
 function updateTree() {
   const sec = document.getElementById('ft-modules-section');
   if (!sec) return;
   let h = '';
+  let firstFile = null;  // track first available file to auto-select
 
-  if (dgMazs.length) {
+  const filledMazs = dgMazs.filter(_mazFilled);
+  if (filledMazs.length) {
     h += '<div class="ft-section">DG Multi-AZ</div>';
-    dgMazs.forEach(dg => {
+    filledMazs.forEach(dg => {
       const dn = 'dg_multi_az_' + dg.module_name;
       h += '<div class="ft-dir">' + dn + '/</div>';
       [['main','main.tf','📄'],['variables','variables.tf','📋'],['outputs','outputs.tf','📤'],['tfvars','terraform.tfvars','⚙'],['readme','README.md','📖']].forEach(([kt,f,ic]) => {
         const fk = 'dg_maz:' + dg.module_name + ':' + kt;
+        if (!firstFile) firstFile = fk;
         h += '<div class="ft-file ' + (activeFile===fk?'active':'') + '" onclick="selFile(\'' + fk + '\')"><span>' + ic + '</span>' + f + '</div>';
       });
     });
   }
 
-  if (dgCrs.length) {
+  const filledCrs = dgCrs.filter(_crFilled);
+  if (filledCrs.length) {
     h += '<div class="ft-section" style="margin-top:8px">DG Cross-Region</div>';
-    dgCrs.forEach(dg => {
+    filledCrs.forEach(dg => {
       const dn = 'dg_cross_region_' + dg.module_name;
       h += '<div class="ft-dir">' + dn + '/</div>';
       [['main','main.tf','📄'],['variables','variables.tf','📋'],['tfvars','terraform.tfvars','⚙'],['readme','README.md','📖']].forEach(([kt,f,ic]) => {
         const fk = 'dg_cr:' + dg.module_name + ':' + kt;
+        if (!firstFile) firstFile = fk;
         h += '<div class="ft-file ' + (activeFile===fk?'active':'') + '" onclick="selFile(\'' + fk + '\')"><span>' + ic + '</span>' + f + '</div>';
       });
-      // Module subdirs
-      h += '<div class="ft-dir" style="padding-left:24px">modules/oci-dg-region/</div>';
-      [['region:main','main.tf','📄'],['region:variables','variables.tf','📋'],['region:outputs','outputs.tf','📤']].forEach(([kt,f,ic]) => {
+      // Separate module dirs — primary and DR each have their own main.tf
+      h += '<div class="ft-dir" style="padding-left:24px">modules/oci-dg-primary/</div>';
+      [['primary:main','main.tf','📄'],['primary:variables','variables.tf','📋'],['primary:outputs','outputs.tf','📤']].forEach(([kt,f,ic]) => {
+        const fk = 'dg_cr:' + dg.module_name + ':' + kt;
+        h += '<div class="ft-file sub ' + (activeFile===fk?'active':'') + '" onclick="selFile(\'' + fk + '\')"><span>' + ic + '</span>' + f + '</div>';
+      });
+      h += '<div class="ft-dir" style="padding-left:24px">modules/oci-dg-dr/</div>';
+      [['dr:main','main.tf','📄'],['dr:variables','variables.tf','📋'],['dr:outputs','outputs.tf','📤']].forEach(([kt,f,ic]) => {
         const fk = 'dg_cr:' + dg.module_name + ':' + kt;
         h += '<div class="ft-file sub ' + (activeFile===fk?'active':'') + '" onclick="selFile(\'' + fk + '\')"><span>' + ic + '</span>' + f + '</div>';
       });
@@ -764,7 +808,12 @@ function updateTree() {
     });
   }
 
-  if (!h) h = '<div style="padding:18px 14px;font-family:var(--font-m);font-size:10px;color:var(--ink4);font-style:italic">Fill in the form to see files</div>';
+  // Auto-select first available file when nothing is selected yet
+  if (!activeFile && firstFile) { activeFile = firstFile; }
+  // If activeFile points to a config that was cleared, reset it
+  if (activeFile && !h.includes("onclick=\"selFile('" + activeFile + "')\"")) { activeFile = firstFile || null; }
+
+  if (!h) h = '<div style="padding:18px 14px;font-family:var(--font-m);font-size:10px;color:var(--ink4);font-style:italic">Select a region to see generated output</div>';
   sec.innerHTML = h;
 }
 
@@ -779,8 +828,8 @@ function fkToPath(k) {
   if (m2) { const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf'; return '<span class="ep-dir">dg_cross_region_'+m2[1]+'/</span><span class="ep-file">'+f+'</span>'; }
   const m3 = k.match(/^dg_cr:([^:]+):readme$/);
   if (m3) { return '<span class="ep-dir">dg_cross_region_'+m3[1]+'/</span><span class="ep-file">README.md</span>'; }
-  const m4 = k.match(/^dg_cr:([^:]+):region:(main|variables|outputs)$/);
-  if (m4) { return '<span class="ep-dir">dg_cross_region_'+m4[1]+'/modules/oci-dg-region/</span><span class="ep-file">'+m4[2]+'.tf</span>'; }
+  const m4 = k.match(/^dg_cr:([^:]+):(primary|dr):(main|variables|outputs)$/);
+  if (m4) { return '<span class="ep-dir">dg_cross_region_'+m4[1]+'/modules/oci-dg-'+m4[2]+'/</span><span class="ep-file">'+m4[3]+'.tf</span>'; }
   const m5 = k.match(/^dg_cr:([^:]+):peering:(main|variables|outputs)$/);
   if (m5) { return '<span class="ep-dir">dg_cross_region_'+m5[1]+'/modules/oci-dg-peering/</span><span class="ep-file">'+m5[2]+'.tf</span>'; }
   return k;
@@ -796,8 +845,8 @@ function fkToApiPath(k) {
   if (m2) { const f=m2[2]==='tfvars'?'terraform.tfvars':m2[2]+'.tf'; return 'dg_cross_region_'+m2[1]+'/'+f; }
   const m3 = k.match(/^dg_cr:([^:]+):readme$/);
   if (m3) { return 'dg_cross_region_'+m3[1]+'/README.md'; }
-  const m4 = k.match(/^dg_cr:([^:]+):region:(main|variables|outputs)$/);
-  if (m4) { return 'dg_cross_region_'+m4[1]+'/modules/oci-dg-region/'+m4[2]+'.tf'; }
+  const m4 = k.match(/^dg_cr:([^:]+):(primary|dr):(main|variables|outputs)$/);
+  if (m4) { return 'dg_cross_region_'+m4[1]+'/modules/oci-dg-'+m4[2]+'/'+m4[3]+'.tf'; }
   const m5 = k.match(/^dg_cr:([^:]+):peering:(main|variables|outputs)$/);
   if (m5) { return 'dg_cross_region_'+m5[1]+'/modules/oci-dg-peering/'+m5[2]+'.tf'; }
   return k;
@@ -814,6 +863,11 @@ async function fetchFile(fk) {
 }
 
 async function renderEditor() {
+  if (!activeFile) {
+    document.getElementById('ep-path').innerHTML = '';
+    document.getElementById('code-out').innerHTML = '<span style="color:var(--ink4);font-style:italic"># Fill in the form and select a region to see generated output.</span>';
+    return;
+  }
   document.getElementById('ep-path').innerHTML = fkToPath(activeFile);
   document.getElementById('code-out').innerHTML = '<span style="color:var(--ink4);font-style:italic"># Generating…</span>';
   const c = await fetchFile(activeFile);
@@ -829,16 +883,25 @@ function refresh() {
 }
 
 // ── Syntax highlighter ────────────────────────────────────────────────────────
+// Spans are emitted as sentinel markers and only turned into real <span> tags at
+// the very end — emitting tags inline made later rules match their own markup
+// (class="hcmt" hit the string rule and printed literal `hcmt"` into the output).
+const _HS = '\\u0001', _HE = '\\u0002', _HC = '\\u0003';
+function _mk(cls, txt){ return _HS + cls + _HE + txt + _HC; }
+function _spans(s){
+  return s.replace(/\\u0001([a-z]+)\\u0002/g, '<span class="$1">').replace(/\\u0003/g, '</span>');
+}
+
 function hl(code) {
-  return code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/^(#[^\n]*)/gm,'<span class="hcmt">$1</span>')
-    .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|description|type|default|value|sensitive)\b(?=[^(])/g,'<span class="hkw">$1</span>')
-    .replace(/\b(string|number|bool|list|map|any|null)\b/g,'<span class="htype">$1</span>')
-    .replace(/var\.([a-z_][a-z0-9_.]*)/g,'<span class="hvar">var.$1</span>')
-    .replace(/module\.([a-z_][a-z0-9_.]*)/g,'<span class="href">module.$1</span>')
-    .replace(/=\s*"([^"<>]+)"/g,(m,v)=>'= <span class="hstr">"'+v+'"</span>')
-    .replace(/=\s*(true|false)\b/g,'= <span class="hbol">$1</span>')
-    .replace(/=\s*(-?\d+\.?\d*)\b/g,'= <span class="hnum">$1</span>');
+  return _spans(code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^(#[^\n]*)/gm,(m,c)=>_mk('hcmt',c))
+    .replace(/\b(resource|module|output|variable|terraform|provider|required_providers|required_version|dynamic|content|for_each|depends_on|source|version|description|type|default|value|sensitive)\b(?=[^(])/g,(m,k)=>_mk('hkw',k))
+    .replace(/\b(string|number|bool|list|map|any|null)\b/g,(m,t)=>_mk('htype',t))
+    .replace(/var\.([a-z_][a-z0-9_.]*)/g,(m,v)=>_mk('hvar','var.'+v))
+    .replace(/module\.([a-z_][a-z0-9_.]*)/g,(m,v)=>_mk('href','module.'+v))
+    .replace(/=\s*"([^"\\u0001-\\u0003]+)"/g,(m,v)=>'= '+_mk('hstr','"'+v+'"'))
+    .replace(/=\s*(true|false)\b/g,(m,b)=>'= '+_mk('hbol',b))
+    .replace(/=\s*(-?\d+\.?\d*)\b/g,(m,n)=>'= '+_mk('hnum',n)));
 }
 
 // ── Tool switcher ─────────────────────────────────────────────────────────────
@@ -858,8 +921,6 @@ async function vgen(tab) {
     if (!d.valid) { showToast((d.errors||[]).join(', ') || 'Validation errors', true); return; }
     showToast('Valid — generating…');
   } catch(e) { showToast('Error: '+e.message, true); return; }
-  if (tab === 0 && dgMazs.length) activeFile = 'dg_maz:' + dgMazs[0].module_name + ':main';
-  else if (tab === 1 && dgCrs.length) activeFile = 'dg_cr:' + dgCrs[0].module_name + ':main';
   updateTree(); renderEditor();
 }
 
@@ -887,6 +948,37 @@ async function explainCurrentFile() {
 function closeExplain() { document.getElementById('explain-panel').style.display='none'; }
 
 // ── Download ZIP ──────────────────────────────────────────────────────────────
+// ── Spreadsheet import ────────────────────────────────────────────────────────
+async function onImportSpreadsheet(inp) {
+  const file = inp.files[0]; if (!file) return; inp.value = '';
+  const btn = document.getElementById('import-sheet-btn');
+  const reply = document.getElementById('import-reply');
+  reply.style.display = 'inline';
+  reply.style.color = '#555'; reply.textContent = '⏳ Parsing…';
+  btn.disabled = true;
+  const fd = new FormData(); fd.append('file', file); fd.append('cloud', cloud);
+  try {
+    const r = await fetch('/api/import/spreadsheet', { method: 'POST', body: fd });
+    const doc = await r.json();
+    if (doc.error) {
+      reply.style.color = '#c0392b';
+      reply.textContent = '✗ ' + doc.error;
+      return;
+    }
+    const summary = doc._import_summary || '';
+    delete doc._import_summary;
+    applyConfig(doc);
+    reply.style.color = '#1a7a4a';
+    reply.textContent = '✓ ' + summary;
+    setTimeout(() => { reply.style.display = 'none'; }, 4000);
+  } catch(e) {
+    reply.style.color = '#c0392b';
+    reply.textContent = '✗ ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 async function dlZip() {
   const p = buildPayload();
   const r = await fetch('/api/download', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(p)});
@@ -909,7 +1001,15 @@ async function onLoadZipFile(inp) {
     const doc = await r.json();
     if (doc.error) { showToast(doc.error, true); return; }
     const cld = doc.cloud || cloud;
-    if (cld !== cloud) { showToast(`This ZIP is for ${cld.toUpperCase()} — open that product page`, true); return; }
+    // Accept 'dg' cloud, or any cloud that has dg_* / aws_dg_* / gcp_dg_* keys
+    const hasDgData = doc.dg_multi_az || doc.dg_cross_region ||
+                      doc.aws_dg_multi_az || doc.aws_dg_cross_region ||
+                      doc.gcp_dg_multi_az || doc.gcp_dg_cross_region ||
+                      doc.azure_dg_multi_az || doc.azure_dg_cross_region;
+    if (cld !== cloud && !hasDgData) {
+      showToast(`This ZIP is for ${cld.toUpperCase()} and has no Data Guard config — open that product page`, true);
+      return;
+    }
     applyConfig(doc); showToast('ZIP loaded ✓');
   } catch(e) { showToast('Load failed: '+e.message, true); }
 }
@@ -1140,8 +1240,6 @@ async function pushToGithub() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 initStorage();
-dgMazs.push(defDgMaz(0));
-dgCrs.push(defDgCr(0));
 renderAll();
 renderEditor();
 initLlmBar();

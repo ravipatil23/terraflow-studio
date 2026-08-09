@@ -4,7 +4,9 @@ from flask import Blueprint
 import regions
 from core.pages import render_page
 
-bp = Blueprint('aws', __name__)
+# template_folder puts this cloud's page next to the route that serves
+# it, rather than in a shared templates/ directory.
+bp = Blueprint('aws', __name__, template_folder='pages')
 
 
 @bp.route('/aws')

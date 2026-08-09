@@ -2015,8 +2015,19 @@ class TestValidationFieldMap(unittest.TestCase):
 
     ROOT = Path(__file__).resolve().parent.parent
 
+    # Cloud pages moved from templates/ into their package, next to the blueprint
+    # that serves them. Shared pages (home, cidr, config, hub, rag) stayed put.
+    PAGE_DIRS = {
+        'aws.html':   'clouds/aws/pages',
+        'gcp.html':   'clouds/gcp/pages',
+        'azure.html': 'clouds/azure/pages',
+        'oci_db.html': 'oci/pages',
+        'dg.html':     'oci/pages',
+    }
+
     def _page(self, page):
-        return (self.ROOT / 'templates' / page).read_text(encoding='utf-8')
+        folder = self.PAGE_DIRS.get(page, 'templates')
+        return (self.ROOT / folder / page).read_text(encoding='utf-8')
 
     def _field_map(self, page):
         """Parse VALIDATION_FIELD_INPUT out of the page."""

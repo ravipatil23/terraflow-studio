@@ -428,6 +428,77 @@ class TestSecurityReviewIsPerCloud(unittest.TestCase):
             self.assertEqual(REGISTRY[name].security_prompt_line, '')
 
 
+class TestPagesAreOwnedByTheirPackage(unittest.TestCase):
+    """Each product page lives with the route that serves it.
+
+    Two Jinja trees per package, kept apart because they render different
+    languages for different consumers:
+
+        <pkg>/templates/  Terraform, via core.helpers.make_renderer
+        <pkg>/pages/      HTML, via Flask's blueprint template_folder
+    """
+
+    OWNERS = {'clouds/aws': ['aws.html'], 'clouds/gcp': ['gcp.html'],
+              'clouds/azure': ['azure.html'],
+              'oci': ['oci_db.html', 'dg.html']}
+    #: Pages that belong to no cloud - the chooser, tools and settings.
+    SHARED = ('home.html', 'cidr.html', 'config.html', 'hub.html', 'rag.html')
+
+    def test_each_package_holds_its_own_pages(self):
+        for pkg, pages in self.OWNERS.items():
+            for page in pages:
+                self.assertTrue((ROOT / pkg / 'pages' / page).is_file(),
+                                f'{pkg}/pages/{page}')
+
+    def test_cloud_pages_are_gone_from_the_shared_tree(self):
+        for pages in self.OWNERS.values():
+            for page in pages:
+                self.assertFalse((ROOT / 'templates' / page).exists(),
+                                 f'templates/{page} should have moved')
+
+    def test_shared_pages_stay_shared(self):
+        # These serve no single cloud; moving them into one would be wrong.
+        for page in self.SHARED:
+            self.assertTrue((ROOT / 'templates' / page).is_file(), page)
+
+    def test_pages_and_terraform_templates_stay_separate(self):
+        # A .html under templates/ would be rendered as Terraform; a .j2 under
+        # pages/ would be served as a page. Both are silent mistakes.
+        for pkg in self.OWNERS:
+            tf = ROOT / pkg / 'templates'
+            if tf.is_dir():
+                self.assertEqual([p.name for p in tf.rglob('*.html')], [], f'{pkg}/templates')
+            pages = ROOT / pkg / 'pages'
+            self.assertEqual([p.name for p in pages.rglob('*.j2')], [], f'{pkg}/pages')
+
+    def test_blueprints_declare_their_template_folder(self):
+        # Without template_folder the page is only found if it is still in the
+        # shared tree, so this is what makes the move work.
+        import importlib
+        for mod_name in ('clouds.aws.routes', 'clouds.gcp.routes',
+                         'clouds.azure.routes', 'oci.routes'):
+            mod = importlib.import_module(mod_name)
+            self.assertEqual(mod.bp.template_folder, 'pages', mod_name)
+
+    def test_every_page_renders(self):
+        from app import app
+        client = app.test_client()
+        for path in ('/', '/aws', '/gcp', '/azure', '/oci', '/dg',
+                     '/cidr', '/hub', '/rag', '/config'):
+            self.assertEqual(client.get(path).status_code, 200, path)
+
+    def test_pages_are_standalone(self):
+        # None of them extends or includes another, which is why they could be
+        # split across packages at all. If that changes, the shared parent has to
+        # stay reachable from every blueprint.
+        import re
+        for pkg, pages in self.OWNERS.items():
+            for page in pages:
+                src = (ROOT / pkg / 'pages' / page).read_text(encoding='utf-8')
+                self.assertIsNone(re.search(r'\{%\s*(extends|include)\s', src),
+                                  f'{pkg}/pages/{page} now depends on another template')
+
+
 class TestOciPublicSurface(unittest.TestCase):
     """oci/__init__ is the contract the clouds are allowed to depend on."""
 
